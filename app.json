@@ -9,7 +9,8 @@
     "plugins": [
       "expo-router",
       "expo-status-bar",
-      "expo-font"
+      "expo-font",
+      "expo-video"
     ],
     "ios": {
       "supportsTablet": true,

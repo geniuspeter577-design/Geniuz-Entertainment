@@ -1,5 +1,5 @@
-import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   Pressable,
   SafeAreaView,
@@ -10,32 +10,60 @@ import {
   View,
 } from 'react-native';
 
+import { ContentNotice } from '../../src/components/ContentNotice';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
-import { mockMedia } from '../../src/data/mockData';
+import { useContentQuery } from '../../src/hooks/useContentQuery';
+import { contentService } from '../../src/services/createContentService';
+import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { theme } from '../../src/theme';
 
-const categories = ['All', 'Sci‑Fi', 'Action', 'Drama', 'Live', 'Thriller'];
+const categories = ['All', 'Science Fiction', 'Action', 'Drama', 'Live', 'Thriller'];
 
 export default function SearchScreen() {
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
 
-  const results = useMemo(() => {
-    const cleanQuery = query.trim().toLowerCase();
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350);
+    return () => clearTimeout(timer);
+  }, [query]);
 
-    return mockMedia.filter((item) => {
-      const matchesCategory =
-        selectedCategory === 'All' || item.genres.some((genre) => genre.toLowerCase() === selectedCategory.toLowerCase());
-      const queryMatches =
-        !cleanQuery ||
-        item.title.toLowerCase().includes(cleanQuery) ||
-        item.tag.toLowerCase().includes(cleanQuery) ||
-        item.genres.some((genre) => genre.toLowerCase().includes(cleanQuery));
-
-      return matchesCategory && queryMatches;
-    });
-  }, [query, selectedCategory]);
+  const searchContent = useCallback(
+    () =>
+      contentService.search(debouncedQuery, {
+        ...(selectedCategory === 'All' ? {} : { genre: selectedCategory }),
+      }),
+    [debouncedQuery, selectedCategory],
+  );
+  const search = useContentQuery(
+    `search:${debouncedQuery}:${selectedCategory}`,
+    searchContent,
+  );
+  const searchUploaded = useCallback(
+    async () => ({
+      data: supabaseMovieRepository
+        ? await supabaseMovieRepository.searchPublished(
+            debouncedQuery,
+            selectedCategory === 'All' ? undefined : selectedCategory,
+          )
+        : [],
+      source: 'supabase' as const,
+    }),
+    [debouncedQuery, selectedCategory],
+  );
+  const uploadedSearch = useContentQuery(
+    `uploaded-search:${debouncedQuery}:${selectedCategory}`,
+    searchUploaded,
+  );
+  const retryUploadedSearch = uploadedSearch.retry;
+  useFocusEffect(
+    useCallback(() => {
+      retryUploadedSearch();
+    }, [retryUploadedSearch]),
+  );
+  const results = [...(search.data ?? []), ...(uploadedSearch.data ?? [])];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -49,6 +77,8 @@ export default function SearchScreen() {
             placeholder="Search movies, shows, genres"
             placeholderTextColor={theme.secondaryText}
             style={styles.input}
+            accessibilityLabel="Search movies, shows, and genres"
+            returnKeyType="search"
           />
         </View>
 
@@ -58,6 +88,8 @@ export default function SearchScreen() {
               key={category}
               onPress={() => setSelectedCategory(category)}
               style={[styles.chip, selectedCategory === category && styles.activeChip]}
+              accessibilityRole="button"
+              accessibilityState={{ selected: selectedCategory === category }}
             >
               <Text style={[styles.chipText, selectedCategory === category && styles.activeChipText]}>
                 {category}
@@ -66,21 +98,59 @@ export default function SearchScreen() {
           ))}
         </ScrollView>
 
-        <SectionHeader title={query ? 'Results' : 'Popular now'} />
+        {search.warning ? (
+          <ContentNotice
+            message={search.warning}
+            tone="warning"
+            actionLabel="Retry"
+            onAction={search.retry}
+          />
+        ) : null}
+        {!search.isLoading &&
+        search.source === 'mock' &&
+        !search.warning &&
+        uploadedSearch.data?.length === 0 ? (
+          <ContentNotice message="Preview catalog — search results are sample content." />
+        ) : null}
+        <SectionHeader title={debouncedQuery ? 'Results' : 'Popular now'} />
+
+        {search.isLoading || uploadedSearch.isLoading ? (
+          <ContentNotice message="Searching the catalog…" />
+        ) : null}
+        {search.error ? (
+          <ContentNotice
+            message={search.error}
+            tone="error"
+            actionLabel="Retry"
+            onAction={search.retry}
+          />
+        ) : null}
+        {!search.isLoading &&
+        !uploadedSearch.isLoading &&
+        !search.error &&
+        !uploadedSearch.error &&
+        results.length === 0 ? (
+          <ContentNotice message="No titles match your search. Try another title or genre." />
+        ) : null}
+
+        {uploadedSearch.error ? (
+          <ContentNotice
+            message={uploadedSearch.error}
+            tone="error"
+            actionLabel="Retry"
+            onAction={uploadedSearch.retry}
+          />
+        ) : null}
 
         <View style={styles.grid}>
-          {results.length ? (
-            results.map((item) => (
-              <PosterCard
-                key={item.id}
-                item={item}
-                compact
-                onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: item.slug } })}
-              />
-            ))
-          ) : (
-            <Text style={styles.emptyState}>No titles match your search.</Text>
-          )}
+          {results.map((item) => (
+            <PosterCard
+              key={item.id}
+              item={item}
+              compact
+              onPress={() => router.push({ pathname: '/content/[id]', params: { id: item.id } })}
+            />
+          ))}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -147,10 +217,5 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     rowGap: 16,
-  },
-  emptyState: {
-    color: theme.secondaryText,
-    fontSize: 15,
-    marginTop: 8,
   },
 });

@@ -1,13 +1,16 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ContentNotice } from '../../src/components/ContentNotice';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
-import { mockMedia } from '../../src/data/mockData';
+import { useLibrary } from '../../src/state/LibraryContext';
 import { theme } from '../../src/theme';
 
 export default function LibraryScreen() {
+  const { continueWatching, error, isLoading, retryLoad, watchlist } = useLibrary();
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
@@ -16,41 +19,66 @@ export default function LibraryScreen() {
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Watchlist</Text>
-            <Text style={styles.summaryValue}>12</Text>
+            <Text style={styles.summaryValue}>{watchlist.length}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Finished</Text>
-            <Text style={styles.summaryValue}>8</Text>
+            <Text style={styles.summaryLabel}>In progress</Text>
+            <Text style={styles.summaryValue}>{continueWatching.length}</Text>
           </View>
           <View style={styles.summaryCard}>
-            <Text style={styles.summaryLabel}>Saved</Text>
-            <Text style={styles.summaryValue}>5</Text>
+            <Text style={styles.summaryLabel}>Offline</Text>
+            <Text style={styles.summaryValue}>0</Text>
           </View>
         </View>
 
-        <SectionHeader title="Saved to your library" />
+        {isLoading ? <ContentNotice message="Loading your device library…" /> : null}
+        {error ? (
+          <ContentNotice message={error} tone="error" actionLabel="Retry" onAction={retryLoad} />
+        ) : null}
+
+        <SectionHeader title="My watchlist" />
         <View style={styles.grid}>
-          {mockMedia.slice(0, 4).map((item) => (
+          {watchlist.map((item) => (
             <PosterCard
               key={item.id}
               item={item}
               compact
-              onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: item.slug } })}
+              onPress={() => router.push({ pathname: '/content/[id]', params: { id: item.id } })}
             />
           ))}
         </View>
+        {!isLoading && !error && watchlist.length === 0 ? (
+          <Text style={styles.emptyText}>Add titles to My List and they’ll be saved on this device.</Text>
+        ) : null}
 
         <SectionHeader title="Recently watched" />
-        {mockMedia.slice(1, 4).map((item) => (
-          <Pressable key={item.id} style={styles.rowItem}>
-            <View style={styles.rowCover} />
+        {continueWatching.map((entry) => (
+          <Pressable
+            key={entry.item.id}
+            style={styles.rowItem}
+            onPress={() =>
+              router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
+            }
+          >
+            <Image
+              source={
+                entry.item.posterUrl
+                  ? { uri: entry.item.posterUrl }
+                  : require('../../assets/icon.png')
+              }
+              style={styles.rowCover}
+              resizeMode="cover"
+            />
             <View style={styles.rowInfo}>
-              <Text style={styles.rowTitle}>{item.title}</Text>
-              <Text style={styles.rowMeta}>{item.type} • {item.duration}</Text>
+              <Text style={styles.rowTitle}>{entry.item.title}</Text>
+              <Text style={styles.rowMeta}>{entry.item.type} • {entry.progress}% complete</Text>
             </View>
-            <Text style={styles.rowProgress}>{item.progress ?? 0}%</Text>
+            <Text style={styles.rowProgress}>{entry.progress}%</Text>
           </Pressable>
         ))}
+        {!continueWatching.length ? (
+          <Text style={styles.emptyText}>Viewing progress will be saved here when playback is available.</Text>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -138,5 +166,11 @@ const styles = StyleSheet.create({
     color: theme.accent,
     fontWeight: '800',
     fontSize: 12,
+  },
+  emptyText: {
+    color: theme.secondaryText,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 4,
   },
 });

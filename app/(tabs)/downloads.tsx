@@ -1,13 +1,8 @@
 import React from 'react';
 import { SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { ContentNotice } from '../../src/components/ContentNotice';
 import { theme } from '../../src/theme';
-
-const downloads = [
-  { title: 'The Last Horizon', size: '1.8 GB', percent: 82, status: 'Downloading' },
-  { title: 'Night of Ember', size: '960 MB', percent: 46, status: 'Queued' },
-  { title: 'Midnight Bloom', size: '1.1 GB', percent: 100, status: 'Ready to watch' },
-];
 
 export default function DownloadsScreen() {
   return (
@@ -17,22 +12,9 @@ export default function DownloadsScreen() {
 
         <View style={styles.banner}>
           <Text style={styles.bannerEyebrow}>Offline mode</Text>
-          <Text style={styles.bannerTitle}>4 titles ready for travel</Text>
+          <Text style={styles.bannerTitle}>Downloads are not available yet</Text>
         </View>
-
-        {downloads.map((item) => (
-          <View key={item.title} style={styles.itemCard}>
-            <View style={styles.cover} />
-            <View style={styles.infoWrap}>
-              <Text style={styles.itemTitle}>{item.title}</Text>
-              <Text style={styles.itemMeta}>{item.size}</Text>
-              <View style={styles.barTrack}>
-                <View style={[styles.barFill, { width: `${item.percent}%` }]} />
-              </View>
-              <Text style={styles.status}>{item.status}</Text>
-            </View>
-          </View>
-        ))}
+        <ContentNotice message="Offline downloads require licensed content and a secure playback service. No titles have been downloaded." />
       </ScrollView>
     </SafeAreaView>
   );
@@ -74,54 +56,6 @@ const styles = StyleSheet.create({
   bannerTitle: {
     color: theme.text,
     fontSize: 20,
-    fontWeight: '700',
-  },
-  itemCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.border,
-    borderRadius: 18,
-    padding: 12,
-    marginBottom: 12,
-  },
-  cover: {
-    width: 82,
-    height: 96,
-    borderRadius: 14,
-    backgroundColor: theme.surfaceAlt,
-  },
-  infoWrap: {
-    flex: 1,
-    marginLeft: 14,
-    justifyContent: 'center',
-  },
-  itemTitle: {
-    color: theme.text,
-    fontWeight: '700',
-    fontSize: 16,
-    marginBottom: 5,
-  },
-  itemMeta: {
-    color: theme.secondaryText,
-    fontSize: 12,
-    marginBottom: 10,
-  },
-  barTrack: {
-    height: 8,
-    backgroundColor: '#2A2F38',
-    borderRadius: 999,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  barFill: {
-    height: '100%',
-    backgroundColor: theme.accent,
-    borderRadius: 999,
-  },
-  status: {
-    color: theme.text,
-    fontSize: 12,
     fontWeight: '700',
   },
 });

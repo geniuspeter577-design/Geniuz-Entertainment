@@ -1,80 +1,285 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import React, { useCallback } from 'react';
 import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { PosterCard } from '../../src/components/PosterCard';
+import { ContentNotice } from '../../src/components/ContentNotice';
+import { ContentRail } from '../../src/components/ContentRail';
 import { SectionHeader } from '../../src/components/SectionHeader';
-import { continueWatching, mockMedia, premiumPicks, trendingTitles } from '../../src/data/mockData';
+import { useContentQuery } from '../../src/hooks/useContentQuery';
+import type { ContentItem } from '../../src/models/content';
+import { contentService } from '../../src/services/createContentService';
+import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
+import { useLibrary } from '../../src/state/LibraryContext';
 import { theme } from '../../src/theme';
+import { formatGenres, formatRating, formatRuntime } from '../../src/utils/contentPresentation';
 
 export default function HomeScreen() {
-  const featured = mockMedia[0];
+  const trendingQuery = useContentQuery('home-trending', contentService.getTrending);
+  const popularQuery = useContentQuery('home-popular', contentService.getPopular);
+  const upcomingQuery = useContentQuery('home-upcoming', contentService.getUpcoming);
+  const nowPlayingQuery = useContentQuery('home-now-playing', contentService.getNowPlaying);
+  const moviesQuery = useContentQuery('home-movies', contentService.getMovies);
+  const seriesQuery = useContentQuery('home-series', contentService.getSeries);
+  const animeQuery = useContentQuery('home-anime', contentService.getAnime);
+  const loadUploadedMovies = useCallback(
+    async () => ({
+      data: supabaseMovieRepository ? await supabaseMovieRepository.getPublished() : [],
+      source: 'supabase' as const,
+    }),
+    [],
+  );
+  const uploadedMoviesQuery = useContentQuery('uploaded-movies', loadUploadedMovies);
+  const retryUploadedMovies = uploadedMoviesQuery.retry;
+  useFocusEffect(
+    useCallback(() => {
+      retryUploadedMovies();
+    }, [retryUploadedMovies]),
+  );
+  const {
+    continueWatching,
+    error: libraryError,
+    isInWatchlist,
+    isLoading: libraryLoading,
+    isSaving: librarySaving,
+    toggleWatchlist,
+  } = useLibrary();
+  const trending = trendingQuery.data ?? [];
+  const popular = popularQuery.data ?? [];
+  const upcoming = upcomingQuery.data ?? [];
+  const nowPlaying = nowPlayingQuery.data ?? [];
+  const movies = moviesQuery.data ?? [];
+  const series = seriesQuery.data ?? [];
+  const anime = animeQuery.data ?? [];
+  const uploadedMovies = uploadedMoviesQuery.data ?? [];
+  const featured: ContentItem | undefined = trending[0];
+  const premiumPicks = popular.filter((item) => item.availability.premium);
+  const retries = [
+    trendingQuery.retry,
+    popularQuery.retry,
+    upcomingQuery.retry,
+    nowPlayingQuery.retry,
+    moviesQuery.retry,
+    seriesQuery.retry,
+    animeQuery.retry,
+  ];
+  const warnings = [
+    {
+      message:
+        trendingQuery.warning ??
+        popularQuery.warning ??
+        upcomingQuery.warning ??
+        nowPlayingQuery.warning ??
+        moviesQuery.warning ??
+        seriesQuery.warning ??
+        animeQuery.warning,
+      onAction: () => {
+        retries.forEach((retry) => retry());
+      },
+    },
+    ...(libraryError ? [{ message: libraryError }] : []),
+  ].filter((warning) => Boolean(warning.message));
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.headerRow}>
           <Text style={styles.brand}>Geniuz+</Text>
-          <Pressable accessibilityRole="button" style={styles.iconButton}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+            style={styles.iconButton}
+            disabled
+            accessibilityState={{ disabled: true }}
+          >
             <Ionicons name="notifications-outline" size={22} color={theme.text} />
           </Pressable>
         </View>
 
-        <Pressable
-          style={styles.heroCard}
-          onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: featured.slug } })}
-        >
-          <Image source={{ uri: featured.backdrop }} style={styles.heroImage} />
-          <View style={styles.heroOverlay} />
-          <View style={styles.heroMeta}>
-            <Text style={styles.heroTag}>Premium pick</Text>
-            <Text style={styles.heroTitle}>{featured.title}</Text>
-            <Text style={styles.heroSubtitle}>{featured.tag} • {featured.rating}</Text>
-            <View style={styles.heroActions}>
-              <Pressable style={styles.primaryAction}>
-                <Text style={styles.primaryActionText}>Play now</Text>
+        {warnings.map((warning) => (
+          <ContentNotice
+            key={warning.message}
+            message={warning.message!}
+            tone={warning.onAction ? 'warning' : 'error'}
+            actionLabel={warning.onAction ? 'Retry' : undefined}
+            onAction={warning.onAction}
+          />
+        ))}
+        {!trendingQuery.isLoading && trendingQuery.source === 'mock' && !trendingQuery.warning ? (
+          <ContentNotice message="Preview catalog — titles shown here are sample content, not playable streams." />
+        ) : null}
+
+        {trendingQuery.isLoading ? (
+          <ContentNotice message="Loading featured titles…" />
+        ) : trendingQuery.error ? (
+          <ContentNotice message={trendingQuery.error} tone="error" actionLabel="Retry" onAction={trendingQuery.retry} />
+        ) : featured ? (
+          <View style={styles.heroCard}>
+            <Image
+              source={
+                featured.backdropUrl
+                  ? { uri: featured.backdropUrl }
+                  : require('../../assets/icon.png')
+              }
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+            <View style={styles.heroOverlay} />
+            <View style={styles.heroMeta}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`View details for ${featured.title}`}
+                onPress={() => router.push({ pathname: '/content/[id]', params: { id: featured.id } })}
+              >
+                <Text style={styles.heroTag}>
+                  {featured.availability.premium ? 'Premium pick' : 'Featured'}
+                </Text>
+                <Text style={styles.heroTitle}>{featured.title}</Text>
+                <Text style={styles.heroSubtitle}>
+                  {formatGenres(featured)} • {formatRating(featured)}
+                </Text>
               </Pressable>
-              <Pressable style={styles.secondaryAction}>
-                <Ionicons name="add-outline" size={18} color={theme.text} />
-              </Pressable>
+              <View style={styles.heroActions}>
+                <Pressable
+                  style={styles.primaryAction}
+                  onPress={() => router.push({ pathname: '/content/[id]', params: { id: featured.id } })}
+                >
+                  <Text style={styles.primaryActionText}>View details</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isInWatchlist(featured.id) ? 'Remove from My List' : 'Add to My List'}
+                  disabled={libraryLoading || librarySaving}
+                  style={styles.secondaryAction}
+                  onPress={() => void toggleWatchlist(featured)}
+                >
+                  <Ionicons
+                    name={isInWatchlist(featured.id) ? 'checkmark' : 'add-outline'}
+                    size={18}
+                    color={theme.text}
+                  />
+                </Pressable>
+              </View>
             </View>
           </View>
-        </Pressable>
+        ) : (
+          <ContentNotice message="No featured titles are available right now." />
+        )}
 
         <SectionHeader title="Continue watching" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
-          {continueWatching.map((item) => (
-            <PosterCard
-              key={item.id}
-              item={item}
-              onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: item.slug } })}
-            />
+          {continueWatching.map((entry) => (
+            <Pressable
+              key={entry.item.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Continue ${entry.item.title}`}
+              onPress={() =>
+                router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
+              }
+              style={styles.continueCard}
+            >
+              <Image
+                source={
+                  entry.item.posterUrl
+                    ? { uri: entry.item.posterUrl }
+                    : require('../../assets/icon.png')
+                }
+                style={styles.continuePoster}
+                resizeMode="cover"
+              />
+              <View style={styles.continueMeta}>
+                <Text style={styles.continueTitle} numberOfLines={1}>{entry.item.title}</Text>
+                <Text style={styles.continueCaption}>{formatRuntime(entry.item)} • {entry.progress}%</Text>
+                <View style={styles.continueTrack}>
+                  <View style={[styles.continueFill, { width: `${entry.progress}%` }]} />
+                </View>
+              </View>
+            </Pressable>
           ))}
         </ScrollView>
+        {!continueWatching.length ? (
+          <Text style={styles.continueEmpty}>
+            Your viewing progress will appear here when playback is available.
+          </Text>
+        ) : null}
 
-        <SectionHeader title="Trending right now" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
-          {trendingTitles.map((item) => (
-            <PosterCard
-              key={item.id}
-              item={item}
-              onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: item.slug } })}
-            />
-          ))}
-        </ScrollView>
+        {uploadedMovies.length || uploadedMoviesQuery.isLoading || uploadedMoviesQuery.error ? (
+          <ContentRail
+            title="On Geniuz+"
+            items={uploadedMovies}
+            isLoading={uploadedMoviesQuery.isLoading}
+            error={uploadedMoviesQuery.error}
+            retry={uploadedMoviesQuery.retry}
+            emptyMessage="No movies have been published yet."
+          />
+        ) : null}
 
-        <SectionHeader title="Premium picks" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
-          {premiumPicks.map((item) => (
-            <PosterCard
-              key={item.id}
-              item={item}
-              onPress={() => router.push({ pathname: '/content/[slug]', params: { slug: item.slug } })}
-              compact
-            />
-          ))}
-        </ScrollView>
+        <ContentRail
+          title="Trending right now"
+          items={trending}
+          isLoading={trendingQuery.isLoading}
+          error={trendingQuery.error}
+          retry={trendingQuery.retry}
+          emptyMessage="No trending titles are available right now."
+        />
+        <ContentRail
+          title="Popular picks"
+          items={popular}
+          isLoading={popularQuery.isLoading}
+          error={popularQuery.error}
+          retry={popularQuery.retry}
+          emptyMessage="No popular titles are available right now."
+        />
+        <ContentRail
+          title="Now playing"
+          items={nowPlaying}
+          isLoading={nowPlayingQuery.isLoading}
+          error={nowPlayingQuery.error}
+          retry={nowPlayingQuery.retry}
+          emptyMessage="No now-playing titles are available right now."
+        />
+        <ContentRail
+          title="Coming soon"
+          items={upcoming}
+          isLoading={upcomingQuery.isLoading}
+          error={upcomingQuery.error}
+          retry={upcomingQuery.retry}
+          emptyMessage="No upcoming titles are available right now."
+        />
+        <ContentRail
+          title="Movies"
+          items={movies}
+          isLoading={moviesQuery.isLoading}
+          error={moviesQuery.error}
+          retry={moviesQuery.retry}
+          emptyMessage="No movies are available right now."
+        />
+        <ContentRail
+          title="Series"
+          items={series}
+          isLoading={seriesQuery.isLoading}
+          error={seriesQuery.error}
+          retry={seriesQuery.retry}
+          emptyMessage="No series are available right now."
+        />
+        <ContentRail
+          title="Anime"
+          items={anime}
+          isLoading={animeQuery.isLoading}
+          error={animeQuery.error}
+          retry={animeQuery.retry}
+          compact
+          emptyMessage="No anime metadata is available in this catalog."
+        />
+        <ContentRail
+          title="Premium picks"
+          items={premiumPicks}
+          isLoading={popularQuery.isLoading}
+          error={popularQuery.error}
+          retry={popularQuery.retry}
+          compact
+          emptyMessage="Premium availability is not provided by the discovery catalog."
+        />
       </ScrollView>
     </SafeAreaView>
   );
@@ -191,5 +396,51 @@ const styles = StyleSheet.create({
   rowList: {
     paddingRight: 18,
     paddingBottom: 4,
+  },
+  continueEmpty: {
+    color: theme.secondaryText,
+    fontSize: 13,
+    lineHeight: 19,
+    marginBottom: 4,
+  },
+  continueCard: {
+    width: 250,
+    height: 100,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    marginRight: 12,
+  },
+  continuePoster: {
+    width: 70,
+    height: '100%',
+  },
+  continueMeta: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 10,
+  },
+  continueTitle: {
+    color: theme.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  continueCaption: {
+    color: theme.secondaryText,
+    fontSize: 11,
+    marginVertical: 6,
+  },
+  continueTrack: {
+    height: 4,
+    borderRadius: 2,
+    overflow: 'hidden',
+    backgroundColor: theme.surfaceSoft,
+  },
+  continueFill: {
+    height: '100%',
+    backgroundColor: theme.accent,
   },
 });
