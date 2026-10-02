@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Geniuz-Entertainment",
+    "slug": "geniuz-entertainment",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "geniuz",
+    "userInterfaceStyle": "dark",
+    "plugins": [
+      "expo-router",
+      "expo-status-bar",
+      "expo-font"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.geniuz.entertainment"
+    },
+    "android": {
+      "package": "com.geniuz.entertainment",
+      "adaptiveIcon": {
+        "backgroundColor": "#0E1014",
+        "foregroundImage": "./assets/icon.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon.png"
+    }
+  }
+}
