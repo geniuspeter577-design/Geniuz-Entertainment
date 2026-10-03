@@ -24,6 +24,7 @@ type DownloadSheetProps = {
   item: ContentItem;
   record?: OfflineDownloadRecord;
   error?: string;
+  unavailableReason?: string;
   onClose: () => void;
   onDownload: () => void;
   onCancel: () => void;
@@ -35,6 +36,7 @@ export function DownloadSheet({
   item,
   record,
   error,
+  unavailableReason,
   onClose,
   onDownload,
   onCancel,
@@ -51,18 +53,20 @@ export function DownloadSheet({
   const downloading = record?.status === 'downloading';
   const queued = record?.status === 'queued';
   const size = item.fileSizeBytes ? formatBytes(item.fileSizeBytes) : 'Size unavailable';
-  const stateMessage = !allowed
+  const stateMessage = unavailableReason ?? (!allowed
     ? 'Downloads are not available for this title.'
     : !supported
       ? 'This video format may not play on this device.'
-      : error ??
+      : platform === 'web'
+        ? 'Offline downloads need the Geniuz+ phone app; they are not available in a browser.'
+        : error ??
         (record?.status === 'failed'
           ? 'The download failed. Retry when your connection is available.'
-          : undefined);
+          : undefined));
 
   let actionLabel = `Download (1) · ${size}`;
   let action = onDownload;
-  let disabled = !allowed || !supported;
+  let disabled = false;
   if (downloaded) {
     actionLabel = 'Play offline';
     action = onPlayOffline;
@@ -111,7 +115,7 @@ export function DownloadSheet({
               </Pressable>
             </View>
             <ScrollView showsVerticalScrollIndicator={false}>
-              <VersionsCard item={item} disabled={!allowed || !supported} onDownload={onDownload} />
+              <VersionsCard item={item} onDownload={onDownload} />
               <View style={styles.qualityHeader}>
                 <Text style={styles.sectionLabel}>Quality</Text>
                 <View style={styles.qualityRow}>

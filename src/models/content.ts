@@ -30,6 +30,7 @@ export interface ContentItem {
   releaseDate?: string;
   genres: string[];
   posterUrl?: string;
+  coverUrl?: string;
   backdropUrl?: string;
   mediaPath?: string;
   storageProvider?: 'supabase' | 'b2';
@@ -37,6 +38,10 @@ export interface ContentItem {
   fileExtension?: string;
   mimeType?: string;
   fileSizeBytes?: number;
+  trailerStorageKey?: string;
+  trailerSizeBytes?: number;
+  trailerDurationSeconds?: number;
+  trailerContentType?: string;
   description?: string;
   rating?: number;
   contentRating?: string;
@@ -78,6 +83,6 @@ export interface ContinueWatchingEntry {
 
 export type ContentQueryResult<T> = {
   data: T;
-  source: 'mock' | 'tmdb' | 'supabase';
+  source: 'mock' | 'tmdb' | 'supabase' | 'local';
   warning?: string;
 };

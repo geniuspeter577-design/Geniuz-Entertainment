@@ -5,6 +5,7 @@ import {
   Alert,
   Image,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -16,16 +17,29 @@ import { ContentNotice } from '../../src/components/ContentNotice';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { formatBytes } from '../../src/services/OfflineDownloadService';
 import { theme } from '../../src/theme';
+import { useNetwork } from '../../src/state/NetworkContext';
 
 export default function DownloadsScreen() {
-  const { records, isLoading, error, download, cancel, remove } = useDownloads();
+  const { isOnline } = useNetwork();
+  const { records, isLoading, isRefreshing, error, download, cancel, remove, refresh } = useDownloads();
   const storageUsed = records
     .filter((record) => record.status === 'downloaded')
     .reduce((total, record) => total + record.size, 0);
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefreshing}
+            onRefresh={() => void refresh()}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+      >
         <Text style={styles.header}>Downloads</Text>
         <View style={styles.storageCard}>
           <Text style={styles.storageLabel}>Storage used</Text>
@@ -97,6 +111,18 @@ export default function DownloadsScreen() {
                 </View>
               </Pressable>
               <View style={styles.actions}>
+                {isDownloaded ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Details for ${record.item.title}`}
+                    onPress={() =>
+                      router.push({ pathname: '/content/[id]', params: { id: record.item.id } })
+                    }
+                    style={styles.actionButton}
+                  >
+                    <Ionicons name="information-circle-outline" size={19} color={theme.text} />
+                  </Pressable>
+                ) : null}
                 {isDownloading ? (
                   <Pressable
                     accessibilityRole="button"
@@ -129,7 +155,7 @@ export default function DownloadsScreen() {
                   >
                     <Ionicons name="close" size={19} color={theme.text} />
                   </Pressable>
-                ) : !isDownloaded ? (
+                ) : !isDownloaded && isOnline ? (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Retry ${record.item.title} download`}

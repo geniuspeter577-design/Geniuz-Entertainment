@@ -4,7 +4,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
+  Alert,
+  Image,
+  Modal,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -15,10 +19,17 @@ import {
 } from 'react-native';
 
 import { ContentNotice } from '../src/components/ContentNotice';
-import { MAX_VIDEO_FILE_SIZE_BYTES } from '../src/constants/video';
+import { useNetwork } from '../src/state/NetworkContext';
+import { TitleImage } from '../src/components/TitleImage';
+import { MAX_TRAILER_FILE_SIZE_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from '../src/constants/video';
+import { compressTitleImage } from '../src/utils/titleImage';
+import { validateTitleImage } from '../src/utils/titleImageValidation';
 import type { ContentItem } from '../src/models/content';
 import { supabaseMovieRepository } from '../src/repositories/SupabaseMovieRepository';
-import { uploadVideoToB2 } from '../src/services/B2UploadService';
+import { deleteUploadedB2Object, uploadVideoToB2 } from '../src/services/B2UploadService';
+import type { AdminTitleUpdate, NewMovie } from '../src/repositories/SupabaseMovieRepository';
+import { loadAdminCatalog } from '../src/utils/adminCatalog';
+import { deleteOrphanedUpload, retryUploadedMovieSave } from '../src/utils/uploadSaveRecovery';
 import {
   isSupabaseConfigured,
   supabase,
@@ -30,6 +41,7 @@ import { detectVideoFileType, validateVideoFileSize } from '../src/utils/videoFi
 type AdminMovie = ContentItem & {
   published: boolean;
   createdAt: string;
+  allowDownload: boolean;
 };
 
 type SelectedMovieFile = {
@@ -40,6 +52,13 @@ type SelectedMovieFile = {
   storageExtension: string;
   mimeType: string;
   contentType: string;
+};
+
+type SelectedTitleImage = {
+  uri: string;
+  name: string;
+  size: number;
+  blob: Blob;
 };
 
 type AdminSeasonChoice = {
@@ -153,7 +172,42 @@ function AdminCheckbox({
   );
 }
 
+function AdminTitleImagePicker({
+  label,
+  uri,
+  disabled,
+  hint,
+  onChoose,
+  onRemove,
+}: {
+  label: string;
+  uri?: string;
+  disabled?: boolean;
+  hint: string;
+  onChoose: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View style={styles.imagePickerRow}>
+      {uri ? <Image source={{ uri }} style={styles.imagePreview} resizeMode="cover" /> : null}
+      <View style={styles.grow}>
+        <Text style={styles.fieldLabel}>{label}</Text>
+        <Text style={styles.helper}>{hint}</Text>
+        <Pressable accessibilityRole="button" disabled={disabled} onPress={onChoose}>
+          <Text style={styles.linkText}>{uri ? `Replace ${label.toLowerCase()}` : `Choose ${label.toLowerCase()}`}</Text>
+        </Pressable>
+        {uri ? (
+          <Pressable accessibilityRole="button" disabled={disabled} onPress={onRemove}>
+            <Text style={styles.removeText}>Remove</Text>
+          </Pressable>
+        ) : null}
+      </View>
+    </View>
+  );
+}
+
 export default function AdminScreen() {
+  const { isOnline } = useNetwork();
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
   const [email, setEmail] = useState('');
@@ -167,26 +221,57 @@ export default function AdminScreen() {
   const [runtime, setRuntime] = useState('');
   const [contentRating, setContentRating] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
+  const [posterImage, setPosterImage] = useState<SelectedTitleImage>();
+  const [coverImage, setCoverImage] = useState<SelectedTitleImage>();
   const [selectedFile, setSelectedFile] = useState<SelectedMovieFile | null>(null);
+  const [selectedTrailer, setSelectedTrailer] = useState<SelectedMovieFile | null>(null);
+  const [trailerDuration, setTrailerDuration] = useState('');
   const [uploadingFile, setUploadingFile] = useState<SelectedMovieFile | null>(null);
   const [confirmedRights, setConfirmedRights] = useState(false);
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [uploadingStage, setUploadingStage] = useState('Uploading video');
   const [formMessage, setFormMessage] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [movies, setMovies] = useState<AdminMovie[]>([]);
   const [seasons, setSeasons] = useState<AdminSeasonChoice[]>([]);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [moviesError, setMoviesError] = useState<string>();
+  const [seriesError, setSeriesError] = useState<string>();
+  const [pendingMovieSave, setPendingMovieSave] = useState<{
+    movie: NewMovie;
+    storageKey: string;
+  }>();
+  const [isRetryingMovieSave, setIsRetryingMovieSave] = useState(false);
   const [updatingMovieId, setUpdatingMovieId] = useState<string>();
+  const [editingMovie, setEditingMovie] = useState<AdminMovie>();
+  const [editTitle, setEditTitle] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editYear, setEditYear] = useState('');
+  const [editRating, setEditRating] = useState('');
+  const [editPosterUrl, setEditPosterUrl] = useState('');
+  const [editCoverUrl, setEditCoverUrl] = useState('');
+  const [editPosterImage, setEditPosterImage] = useState<SelectedTitleImage>();
+  const [editCoverImage, setEditCoverImage] = useState<SelectedTitleImage>();
+  const [editTrailerFile, setEditTrailerFile] = useState<SelectedMovieFile | null>(null);
+  const [editTrailerRemoved, setEditTrailerRemoved] = useState(false);
+  const [editTrailerDuration, setEditTrailerDuration] = useState('');
+  const [editPublished, setEditPublished] = useState(false);
+  const [editRightsConfirmed, setEditRightsConfirmed] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string>();
   const [seriesTitle, setSeriesTitle] = useState('');
   const [seriesDescription, setSeriesDescription] = useState('');
   const [seriesYear, setSeriesYear] = useState('');
   const [seriesGenres, setSeriesGenres] = useState('');
   const [seriesContentRating, setSeriesContentRating] = useState('');
   const [seriesPosterUrl, setSeriesPosterUrl] = useState('');
+  const [seriesPosterImage, setSeriesPosterImage] = useState<SelectedTitleImage>();
+  const [seriesCoverImage, setSeriesCoverImage] = useState<SelectedTitleImage>();
+  const [seriesTrailer, setSeriesTrailer] = useState<SelectedMovieFile | null>(null);
+  const [seriesTrailerDuration, setSeriesTrailerDuration] = useState('');
   const [seriesPublished, setSeriesPublished] = useState(true);
   const [seriesRightsConfirmed, setSeriesRightsConfirmed] = useState(false);
   const [seasonSeriesId, setSeasonSeriesId] = useState('');
@@ -212,29 +297,36 @@ export default function AdminScreen() {
   );
 
   const loadMovies = useCallback(async () => {
-    if (!supabaseMovieRepository) {
+    const repository = supabaseMovieRepository;
+    if (!repository || !isOnline) {
       return;
     }
 
     setMoviesLoading(true);
     setMoviesError(undefined);
-    try {
-      const [loadedMovies, loadedSeasons] = await Promise.all([
-        supabaseMovieRepository.getAdminMovies(),
-        supabaseMovieRepository.getAdminSeasons(),
-      ]);
-      setMovies(loadedMovies);
-      setSeasons(loadedSeasons);
-    } catch (error) {
-      console.error('[AdminScreen] Could not load movies.', error);
+    setSeriesError(undefined);
+    const result = await loadAdminCatalog(
+      () => repository.getAdminMovies(),
+      () => repository.getAdminSeasons(),
+    );
+    if ('movies' in result) {
+      setMovies(result.movies);
+    } else {
+      console.error('[AdminScreen] Could not load movies.', result.movieError);
       setMoviesError('The movie catalog could not be loaded. Check your connection and retry.');
-    } finally {
-      setMoviesLoading(false);
     }
-  }, []);
+    if ('seasons' in result) {
+      setSeasons(result.seasons);
+    } else {
+      console.error('[AdminScreen] Could not load series seasons.', result.seriesError);
+      setSeasons([]);
+      setSeriesError('Series could not be loaded - Retry');
+    }
+    setMoviesLoading(false);
+  }, [isOnline]);
 
   useEffect(() => {
-    if (!supabase) {
+    if (!supabase || !isOnline) {
       return;
     }
 
@@ -273,7 +365,7 @@ export default function AdminScreen() {
       active = false;
       subscription.unsubscribe();
     };
-  }, [loadMovies]);
+  }, [isOnline, loadMovies]);
 
   const isAdmin = session?.user.app_metadata?.role === 'admin';
 
@@ -319,7 +411,7 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const chooseVideoFile = useCallback(async () => {
+  const chooseVideoFile = useCallback(async (kind: 'video' | 'trailer' = 'video') => {
     setFormError(undefined);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -340,7 +432,8 @@ export default function AdminScreen() {
 
       const file = asset.file ?? new ExpoFile(asset.uri);
       const fileSize = typeof file.size === 'number' ? file.size : Number.NaN;
-      const sizeValidation = validateVideoFileSize(fileSize, MAX_VIDEO_FILE_SIZE_BYTES);
+      const maxSize = kind === 'trailer' ? MAX_TRAILER_FILE_SIZE_BYTES : MAX_VIDEO_FILE_SIZE_BYTES;
+      const sizeValidation = validateVideoFileSize(fileSize, maxSize);
       if (!sizeValidation.valid) {
         setFormError(sizeValidation.message);
         return null;
@@ -369,6 +462,13 @@ export default function AdminScreen() {
     }
   }, [chooseVideoFile]);
 
+  const chooseTrailer = useCallback(async (series = false) => {
+    const file = await chooseVideoFile('trailer');
+    if (file) {
+      (series ? setSeriesTrailer : setSelectedTrailer)(file);
+    }
+  }, [chooseVideoFile]);
+
   const chooseEpisodeFile = useCallback(async () => {
     const file = await chooseVideoFile();
     if (file) {
@@ -376,8 +476,47 @@ export default function AdminScreen() {
     }
   }, [chooseVideoFile]);
 
+  const chooseTitleImage = useCallback(async (kind: 'poster' | 'cover', series = false) => {
+    setFormError(undefined);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'image/webp'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) {
+        return;
+      }
+      const asset = result.assets[0];
+      const sourceFile = asset.file ?? new ExpoFile(asset.uri);
+      const size = typeof asset.size === 'number' ? asset.size : sourceFile.size;
+      const validation = validateTitleImage(asset.name, asset.mimeType, size);
+      if (!validation.valid) {
+        setFormError(validation.message);
+        return;
+      }
+      const compressed = await compressTitleImage(
+        asset.uri,
+        kind === 'poster' ? 600 : 1280,
+        kind === 'poster' ? 900 : 720,
+      );
+      const selected = { uri: compressed.uri, name: asset.name, size: compressed.blob.size, blob: compressed.blob };
+      if (series) {
+        (kind === 'poster' ? setSeriesPosterImage : setSeriesCoverImage)(selected);
+      } else {
+        (kind === 'poster' ? setPosterImage : setCoverImage)(selected);
+      }
+      if (compressed.blob.size > 500 * 1024) {
+        setFormMessage('Image optimized, but remains above 500 KB. Supabase allows up to 5 MB per image.');
+      }
+    } catch (error) {
+      console.error('[AdminScreen] Title image selection failed.', error);
+      setFormError(error instanceof Error ? error.message : 'Could not prepare the image. Choose another file.');
+    }
+  }, []);
+
   const handleUpload = useCallback(async () => {
-    if (!supabaseMovieRepository || !supabase || !selectedFile) {
+    const repository = supabaseMovieRepository;
+    if (!repository || !supabase || !selectedFile) {
       setFormError('Connect Supabase and choose a video before uploading.');
       return;
     }
@@ -397,11 +536,14 @@ export default function AdminScreen() {
 
     const parsedYear = year.trim() ? Number(year) : undefined;
     const parsedRuntime = runtime.trim() ? Number(runtime) : undefined;
+    const parsedTrailerDuration = trailerDuration.trim() ? Number(trailerDuration) : undefined;
     if (
       (parsedYear !== undefined &&
         (!Number.isInteger(parsedYear) || parsedYear < 1888 || parsedYear > 2200)) ||
       (parsedRuntime !== undefined &&
-        (!Number.isInteger(parsedRuntime) || parsedRuntime < 1 || parsedRuntime > 1000))
+        (!Number.isInteger(parsedRuntime) || parsedRuntime < 1 || parsedRuntime > 1000)) ||
+      (parsedTrailerDuration !== undefined &&
+        (!Number.isInteger(parsedTrailerDuration) || parsedTrailerDuration < 1 || parsedTrailerDuration > 86400))
     ) {
       setFormError('Enter a valid release year and runtime.');
       return;
@@ -419,11 +561,16 @@ export default function AdminScreen() {
 
     setIsUploading(true);
     setUploadingFile(selectedFile);
+    setUploadingStage('Uploading video');
     setProgress(0);
     setFormError(undefined);
     setFormMessage(undefined);
     const abortController = new AbortController();
     uploadAbortController.current = abortController;
+    const uploadedImages: string[] = [];
+    let preserveImagesForRetry = false;
+    let trailerStorageKey: string | undefined;
+    let accessTokenForCleanup: string | undefined;
     try {
       const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
       const accessToken = sessionResult.session?.access_token;
@@ -432,6 +579,40 @@ export default function AdminScreen() {
           cause: sessionError,
         });
       }
+      accessTokenForCleanup = accessToken;
+      const storedPosterUrl = posterImage
+        ? await repository.uploadTitleImage(posterImage.blob, 'image/jpeg')
+        : posterUrl.trim() || undefined;
+      if (posterImage && storedPosterUrl) {
+        uploadedImages.push(storedPosterUrl);
+      }
+      const storedCoverUrl = coverImage
+        ? await repository.uploadTitleImage(coverImage.blob, 'image/jpeg')
+        : undefined;
+      if (coverImage && storedCoverUrl) {
+        uploadedImages.push(storedCoverUrl);
+      }
+      if (selectedTrailer) {
+        setUploadingStage('Uploading trailer');
+        setUploadingFile(selectedTrailer);
+        trailerStorageKey = await uploadVideoToB2({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          file: {
+            size: selectedTrailer.size,
+            readPart: (start, end, contentType) =>
+              readVideoPart(selectedTrailer.file, start, end, contentType),
+          },
+          fileName: selectedTrailer.name,
+          contentType: selectedTrailer.contentType,
+          kind: 'trailer',
+          signal: abortController.signal,
+          onProgress: setProgress,
+        });
+      }
+      setUploadingStage('Uploading video');
+      setUploadingFile(selectedFile);
+      setProgress(0);
       const storageKey = await uploadVideoToB2({
         apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
         accessToken,
@@ -445,11 +626,7 @@ export default function AdminScreen() {
         signal: abortController.signal,
         onProgress: setProgress,
       });
-      if (abortController.signal.aborted) {
-        throw new Error('Upload canceled.');
-      }
-      await supabaseMovieRepository.createB2Movie(
-        {
+      const movieDraft: NewMovie = {
           title,
           description,
           ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
@@ -457,7 +634,8 @@ export default function AdminScreen() {
             .split(',')
             .map((genre) => genre.trim())
             .filter(Boolean),
-          ...(posterUrl.trim() ? { posterUrl: posterUrl.trim() } : {}),
+          ...(storedPosterUrl ? { posterUrl: storedPosterUrl } : {}),
+          ...(storedCoverUrl ? { coverUrl: storedCoverUrl } : {}),
           ...(parsedRuntime === undefined ? {} : { runtimeMinutes: parsedRuntime }),
           ...(contentRating.trim() ? { contentRating: contentRating.trim() } : {}),
           published: publishImmediately,
@@ -467,9 +645,22 @@ export default function AdminScreen() {
           mimeType: selectedFile.mimeType,
           contentType: selectedFile.contentType,
           fileSizeBytes: selectedFile.size,
-        },
-        storageKey,
+          ...(trailerStorageKey
+            ? {
+                trailerStorageKey,
+                trailerSizeBytes: selectedTrailer?.size,
+                trailerDurationSeconds: parsedTrailerDuration,
+                trailerContentType: selectedTrailer?.contentType,
+              }
+            : {}),
+        };
+      const pending = { movie: movieDraft, storageKey };
+      setPendingMovieSave(pending);
+      preserveImagesForRetry = true;
+      await retryUploadedMovieSave(pending, (movie, key) =>
+        repository.createB2Movie(movie, key),
       );
+      setPendingMovieSave(undefined);
 
       setFormMessage(
         publishImmediately
@@ -477,6 +668,8 @@ export default function AdminScreen() {
           : 'Movie uploaded as a draft. Publish it from the catalog below when it is ready.',
       );
       setSelectedFile(null);
+      setSelectedTrailer(null);
+      setTrailerDuration('');
       setTitle('');
       setDescription('');
       setYear('');
@@ -484,12 +677,30 @@ export default function AdminScreen() {
       setRuntime('');
       setContentRating('');
       setPosterUrl('');
+      setPosterImage(undefined);
+      setCoverImage(undefined);
       setConfirmedRights(false);
       setAllowDownload(false);
       setProgress(100);
       await loadMovies();
     } catch (error) {
       console.error('[AdminScreen] Movie upload failed.');
+      if (!preserveImagesForRetry) {
+        if (trailerStorageKey && accessTokenForCleanup) {
+          await deleteUploadedB2Object({
+            apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+            accessToken: accessTokenForCleanup,
+            key: trailerStorageKey,
+          }).catch((cleanupError: unknown) => {
+            console.error('[AdminScreen] Could not clean up an unused trailer.', cleanupError);
+          });
+        }
+        await Promise.all(
+          uploadedImages.map((url) => repository.deleteTitleImage(url).catch((cleanupError: unknown) => {
+            console.error('[AdminScreen] Could not clean up an unused title image.', cleanupError);
+          })),
+        );
+      }
       setFormError(
         error instanceof Error
           ? error.message
@@ -510,6 +721,10 @@ export default function AdminScreen() {
     allowDownload,
     loadMovies,
     posterUrl,
+    posterImage,
+    coverImage,
+    selectedTrailer,
+    trailerDuration,
     publishImmediately,
     runtime,
     selectedFile,
@@ -517,8 +732,81 @@ export default function AdminScreen() {
     year,
   ]);
 
+  const retryMovieSave = useCallback(async () => {
+    const repository = supabaseMovieRepository;
+    if (!repository || !pendingMovieSave) {
+      return;
+    }
+    setIsRetryingMovieSave(true);
+    setFormError(undefined);
+    try {
+      await retryUploadedMovieSave(pendingMovieSave, (movie, key) =>
+        repository.createB2Movie(movie, key),
+      );
+      setPendingMovieSave(undefined);
+      setFormMessage('Movie record saved. The uploaded video was not uploaded again.');
+      setSelectedFile(null);
+      setPosterImage(undefined);
+      setCoverImage(undefined);
+      await loadMovies();
+    } catch (error) {
+      console.error('[AdminScreen] Could not retry saving the uploaded movie.', error);
+      setFormError(error instanceof Error ? error.message : 'The movie record could not be saved. Retry.');
+    } finally {
+      setIsRetryingMovieSave(false);
+    }
+  }, [loadMovies, pendingMovieSave]);
+
+  const deleteOrphanedMovieUpload = useCallback(async () => {
+    const repository = supabaseMovieRepository;
+    if (!repository || !supabase || !pendingMovieSave) {
+      return;
+    }
+    setIsRetryingMovieSave(true);
+    setFormError(undefined);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (error || !accessToken) {
+        throw new Error('Your admin session expired. Sign in again before deleting the orphaned upload.');
+      }
+      await deleteOrphanedUpload(pendingMovieSave, (key) =>
+        deleteUploadedB2Object({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          key,
+        }),
+      );
+      if (pendingMovieSave.movie.trailerStorageKey) {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error('Your admin session expired. Sign in again before deleting the orphaned trailer.');
+        }
+        await deleteUploadedB2Object({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          key: pendingMovieSave.movie.trailerStorageKey,
+        });
+      }
+      await Promise.all([
+        repository.deleteTitleImage(pendingMovieSave.movie.posterUrl),
+        repository.deleteTitleImage(pendingMovieSave.movie.coverUrl),
+      ]);
+      setPendingMovieSave(undefined);
+      setSelectedFile(null);
+      setFormMessage('Orphaned B2 video deleted.');
+    } catch (error) {
+      console.error('[AdminScreen] Could not delete the orphaned video.', error);
+      setFormError(error instanceof Error ? error.message : 'The orphaned video could not be deleted. Retry.');
+    } finally {
+      setIsRetryingMovieSave(false);
+    }
+  }, [pendingMovieSave]);
+
   const handleCreateSeries = useCallback(async () => {
-    if (!supabaseMovieRepository) {
+    const repository = supabaseMovieRepository;
+    if (!repository) {
       setFormError('Connect Supabase before creating a series.');
       return;
     }
@@ -531,8 +819,16 @@ export default function AdminScreen() {
       return;
     }
     const parsedYear = seriesYear.trim() ? Number(seriesYear) : undefined;
+    const parsedTrailerDuration = seriesTrailerDuration.trim() ? Number(seriesTrailerDuration) : undefined;
     if (parsedYear !== undefined && (!Number.isInteger(parsedYear) || parsedYear < 1888 || parsedYear > 2200)) {
       setFormError('Enter a valid series release year.');
+      return;
+    }
+    if (
+      parsedTrailerDuration !== undefined &&
+      (!Number.isInteger(parsedTrailerDuration) || parsedTrailerDuration < 1 || parsedTrailerDuration > 86400)
+    ) {
+      setFormError('Enter a valid trailer duration in seconds.');
       return;
     }
     if (seriesPosterUrl.trim()) {
@@ -548,15 +844,68 @@ export default function AdminScreen() {
 
     setIsSavingSeries(true);
     setFormError(undefined);
+    const uploadedImages: string[] = [];
+    let trailerStorageKey: string | undefined;
+    const trailerAbortController = new AbortController();
+    uploadAbortController.current = trailerAbortController;
     try {
-      const seriesId = await supabaseMovieRepository.createSeries({
+      const storedPosterUrl = seriesPosterImage
+        ? await repository.uploadTitleImage(seriesPosterImage.blob, 'image/jpeg')
+        : seriesPosterUrl.trim() || undefined;
+      if (seriesPosterImage && storedPosterUrl) {
+        uploadedImages.push(storedPosterUrl);
+      }
+      const storedCoverUrl = seriesCoverImage
+        ? await repository.uploadTitleImage(seriesCoverImage.blob, 'image/jpeg')
+        : undefined;
+      if (seriesCoverImage && storedCoverUrl) {
+        uploadedImages.push(storedCoverUrl);
+      }
+      if (seriesTrailer) {
+        if (!supabase) {
+          throw new Error('Connect Supabase before uploading a trailer.');
+        }
+        const { data, error } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (error || !accessToken) {
+          throw new Error('Your admin session expired. Sign in again before uploading a trailer.');
+        }
+        setIsUploading(true);
+        setUploadingFile(seriesTrailer);
+        setUploadingStage('Uploading trailer');
+        setProgress(0);
+        trailerStorageKey = await uploadVideoToB2({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          file: {
+            size: seriesTrailer.size,
+            readPart: (start, end, contentType) =>
+              readVideoPart(seriesTrailer.file, start, end, contentType),
+          },
+          fileName: seriesTrailer.name,
+          contentType: seriesTrailer.contentType,
+          kind: 'trailer',
+          signal: trailerAbortController.signal,
+          onProgress: setProgress,
+        });
+      }
+      const seriesId = await repository.createSeries({
         title: seriesTitle,
         description: seriesDescription,
         ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
         genres: seriesGenres.split(',').map((genre) => genre.trim()).filter(Boolean),
-        ...(seriesPosterUrl.trim() ? { posterUrl: seriesPosterUrl.trim() } : {}),
+        ...(storedPosterUrl ? { posterUrl: storedPosterUrl } : {}),
+        ...(storedCoverUrl ? { coverUrl: storedCoverUrl } : {}),
         ...(seriesContentRating.trim() ? { contentRating: seriesContentRating.trim() } : {}),
         published: seriesPublished,
+        ...(trailerStorageKey
+          ? {
+              trailerStorageKey,
+              trailerSizeBytes: seriesTrailer?.size,
+              trailerDurationSeconds: parsedTrailerDuration,
+              trailerContentType: seriesTrailer?.contentType,
+            }
+          : {}),
       });
       setSeriesTitle('');
       setSeriesDescription('');
@@ -564,17 +913,44 @@ export default function AdminScreen() {
       setSeriesGenres('');
       setSeriesContentRating('');
       setSeriesPosterUrl('');
+      setSeriesPosterImage(undefined);
+      setSeriesCoverImage(undefined);
+      setSeriesTrailer(null);
+      setSeriesTrailerDuration('');
       setSeriesRightsConfirmed(false);
       setSeasonSeriesId(seriesId.replace(/^geniuz:series:/, ''));
       setFormMessage('Series created. Add seasons and episodes below.');
       await loadMovies();
     } catch (error) {
+      if (trailerStorageKey && supabase) {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (accessToken) {
+          await deleteUploadedB2Object({
+            apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+            accessToken,
+            key: trailerStorageKey,
+          }).catch((cleanupError: unknown) => {
+            console.error('[AdminScreen] Could not clean up an unused series trailer.', cleanupError);
+          });
+        }
+      }
+      await Promise.all(
+        uploadedImages.map((url) => repository.deleteTitleImage(url).catch((cleanupError: unknown) => {
+          console.error('[AdminScreen] Could not clean up an unused series image.', cleanupError);
+        })),
+      );
       console.error('[AdminScreen] Could not create series.', error);
       setFormError(error instanceof Error ? error.message : 'The series could not be created. Retry.');
     } finally {
+      if (uploadAbortController.current === trailerAbortController) {
+        uploadAbortController.current = null;
+      }
+      setUploadingFile(null);
+      setIsUploading(false);
       setIsSavingSeries(false);
     }
-  }, [loadMovies, seriesContentRating, seriesDescription, seriesGenres, seriesPosterUrl, seriesPublished, seriesRightsConfirmed, seriesTitle, seriesYear]);
+  }, [loadMovies, seriesContentRating, seriesDescription, seriesGenres, seriesPosterUrl, seriesPosterImage, seriesCoverImage, seriesTrailer, seriesTrailerDuration, seriesPublished, seriesRightsConfirmed, seriesTitle, seriesYear]);
 
   const handleCreateSeason = useCallback(async () => {
     if (!supabaseMovieRepository || !seasonSeriesId) {
@@ -742,12 +1118,333 @@ export default function AdminScreen() {
     [loadMovies],
   );
 
+  const openEditTitle = useCallback((movie: AdminMovie) => {
+    setEditingMovie(movie);
+    setEditTitle(movie.title);
+    setEditDescription(movie.description ?? '');
+    setEditYear(movie.year === undefined ? '' : String(movie.year));
+    setEditRating(movie.contentRating ?? '');
+    setEditPosterUrl(movie.posterUrl ?? '');
+    setEditCoverUrl(movie.coverUrl ?? '');
+    setEditPosterImage(undefined);
+    setEditCoverImage(undefined);
+    setEditTrailerFile(null);
+    setEditTrailerRemoved(false);
+    setEditTrailerDuration(movie.trailerDurationSeconds ? String(movie.trailerDurationSeconds) : '');
+    setEditPublished(movie.published);
+    setEditRightsConfirmed(false);
+    setEditError(undefined);
+  }, []);
+
+  const chooseEditImage = useCallback(async (kind: 'poster' | 'cover') => {
+    setEditError(undefined);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['image/jpeg', 'image/png', 'image/webp'],
+        copyToCacheDirectory: true,
+      });
+      if (result.canceled) {
+        return;
+      }
+      const asset = result.assets[0];
+      const sourceFile = asset.file ?? new ExpoFile(asset.uri);
+      const size = typeof asset.size === 'number' ? asset.size : sourceFile.size;
+      const validation = validateTitleImage(asset.name, asset.mimeType, size);
+      if (!validation.valid) {
+        setEditError(validation.message);
+        return;
+      }
+      const compressed = await compressTitleImage(
+        asset.uri,
+        kind === 'poster' ? 600 : 1280,
+        kind === 'poster' ? 900 : 720,
+      );
+      const image = { uri: compressed.uri, name: asset.name, size: compressed.blob.size, blob: compressed.blob };
+      if (kind === 'poster') {
+        setEditPosterImage(image);
+      } else {
+        setEditCoverImage(image);
+      }
+    } catch (error) {
+      console.error('[AdminScreen] Edit image selection failed.', error);
+      setEditError(error instanceof Error ? error.message : 'Could not prepare this image.');
+    }
+  }, []);
+
+  const saveEditedTitle = useCallback(async () => {
+    const repository = supabaseMovieRepository;
+    if (!repository || !editingMovie) {
+      return;
+    }
+    if (!editTitle.trim()) {
+      setEditError('Enter a title.');
+      return;
+    }
+    const parsedYear = editYear.trim() ? Number(editYear) : undefined;
+    const parsedTrailerDuration = editTrailerDuration.trim()
+      ? Number(editTrailerDuration)
+      : undefined;
+    if (parsedYear !== undefined && (!Number.isInteger(parsedYear) || parsedYear < 1888 || parsedYear > 2200)) {
+      setEditError('Enter a valid release year.');
+      return;
+    }
+    if (
+      parsedTrailerDuration !== undefined &&
+      (!Number.isInteger(parsedTrailerDuration) || parsedTrailerDuration < 1 || parsedTrailerDuration > 86400)
+    ) {
+      setEditError('Enter a valid trailer duration in seconds.');
+      return;
+    }
+    if ((editPosterImage || editCoverImage || editTrailerFile) && !editRightsConfirmed) {
+      setEditError('Confirm that you have the legal rights to distribute the replacement image or trailer.');
+      return;
+    }
+
+    setEditSaving(true);
+    setEditError(undefined);
+    let uploadedPosterUrl: string | undefined;
+    let uploadedCoverUrl: string | undefined;
+    let uploadedTrailerKey: string | undefined;
+    let updateSucceeded = false;
+    const controller = new AbortController();
+    uploadAbortController.current = controller;
+    try {
+      if (editPosterImage) {
+        uploadedPosterUrl = await repository.uploadTitleImage(editPosterImage.blob, 'image/jpeg');
+      }
+      if (editCoverImage) {
+        uploadedCoverUrl = await repository.uploadTitleImage(editCoverImage.blob, 'image/jpeg');
+      }
+      let trailerStorageKey = editTrailerRemoved ? undefined : editingMovie.trailerStorageKey;
+      let trailerSizeBytes = editTrailerRemoved ? undefined : editingMovie.trailerSizeBytes;
+      let trailerContentType = editTrailerRemoved ? undefined : editingMovie.trailerContentType;
+      let trailerDurationSeconds = editTrailerRemoved ? undefined : editingMovie.trailerDurationSeconds;
+      if (editTrailerFile) {
+        if (!supabase) {
+          throw new Error('Connect Supabase before replacing a trailer.');
+        }
+        const { data, error } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (error || !accessToken) {
+          throw new Error('Your admin session expired. Sign in again before replacing a trailer.');
+        }
+        setIsUploading(true);
+        setUploadingFile(editTrailerFile);
+        setUploadingStage('Uploading trailer');
+        setProgress(0);
+        trailerStorageKey = await uploadVideoToB2({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          file: {
+            size: editTrailerFile.size,
+            readPart: (start, end, contentType) =>
+              readVideoPart(editTrailerFile.file, start, end, contentType),
+          },
+          fileName: editTrailerFile.name,
+          contentType: editTrailerFile.contentType,
+          kind: 'trailer',
+          signal: controller.signal,
+          onProgress: setProgress,
+        });
+        uploadedTrailerKey = trailerStorageKey;
+        trailerSizeBytes = editTrailerFile.size;
+        trailerContentType = editTrailerFile.contentType;
+        trailerDurationSeconds = parsedTrailerDuration;
+      }
+
+      const update: AdminTitleUpdate = {
+        title: editTitle,
+        description: editDescription,
+        ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
+        ...(editRating.trim() ? { contentRating: editRating.trim() } : {}),
+        posterUrl: uploadedPosterUrl ?? (editPosterUrl.trim() || undefined),
+        coverUrl: uploadedCoverUrl ?? (editCoverUrl.trim() || undefined),
+        ...(trailerStorageKey ? { trailerStorageKey } : {}),
+        ...(trailerSizeBytes === undefined ? {} : { trailerSizeBytes }),
+        ...(trailerDurationSeconds === undefined ? {} : { trailerDurationSeconds }),
+        ...(trailerContentType ? { trailerContentType } : {}),
+        published: editPublished,
+      };
+      await repository.updateAdminTitle(editingMovie.id, update);
+      updateSucceeded = true;
+      setEditingMovie(undefined);
+      await loadMovies();
+
+      const oldImages = [editingMovie.posterUrl, editingMovie.coverUrl];
+      const nextImages = [update.posterUrl, update.coverUrl];
+      const cleanup: Promise<void>[] = [];
+      oldImages.forEach((oldUrl, index) => {
+        if (oldUrl && oldUrl !== nextImages[index]) {
+          cleanup.push(repository.deleteTitleImage(oldUrl));
+        }
+      });
+      const oldTrailer = editingMovie.trailerStorageKey;
+      if (oldTrailer && oldTrailer !== trailerStorageKey && supabase) {
+        const { data } = await supabase.auth.getSession();
+        const accessToken = data.session?.access_token;
+        if (!accessToken) {
+          throw new Error('Title saved, but sign in again to remove the replaced trailer.');
+        }
+        cleanup.push(
+          deleteUploadedB2Object({
+            apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+            accessToken,
+            key: oldTrailer,
+          }),
+        );
+      }
+      await Promise.all(cleanup);
+    } catch (error) {
+      if (!updateSucceeded) {
+        const cleanup: Promise<unknown>[] = [];
+        if (uploadedPosterUrl) {
+          cleanup.push(repository.deleteTitleImage(uploadedPosterUrl));
+        }
+        if (uploadedCoverUrl) {
+          cleanup.push(repository.deleteTitleImage(uploadedCoverUrl));
+        }
+        if (uploadedTrailerKey && supabase) {
+          const { data } = await supabase.auth.getSession();
+          const accessToken = data.session?.access_token;
+          if (accessToken) {
+            cleanup.push(
+              deleteUploadedB2Object({
+                apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+                accessToken,
+                key: uploadedTrailerKey,
+              }),
+            );
+          }
+        }
+        await Promise.all(
+          cleanup.map((operation) =>
+            operation.catch((cleanupError: unknown) => {
+              console.error('[AdminScreen] Edit cleanup failed.', cleanupError);
+            }),
+          ),
+        );
+        setEditError(error instanceof Error ? error.message : 'Could not save this title. Retry.');
+      } else {
+        console.error('[AdminScreen] Title saved but old files could not be removed.', error);
+        setMoviesError('Title saved, but one or more replaced files could not be removed. Retry cleanup from Backblaze or Supabase.');
+      }
+    } finally {
+      if (uploadAbortController.current === controller) {
+        uploadAbortController.current = null;
+      }
+      setUploadingFile(null);
+      setIsUploading(false);
+      setEditSaving(false);
+    }
+  }, [
+    editCoverImage,
+    editCoverUrl,
+    editDescription,
+    editPublished,
+    editPosterImage,
+    editPosterUrl,
+    editRating,
+    editRightsConfirmed,
+    editTitle,
+    editTrailerDuration,
+    editTrailerFile,
+    editTrailerRemoved,
+    editYear,
+    editingMovie,
+    loadMovies,
+  ]);
+
+  const toggleTitleDownloads = useCallback(async (movie: AdminMovie, enabled: boolean) => {
+    const repository = supabaseMovieRepository;
+    if (!repository) {
+      return;
+    }
+    setUpdatingMovieId(movie.id);
+    setEditError(undefined);
+    try {
+      await repository.setDownloadsAllowed(movie.id, enabled);
+      setMovies((current) => current.map((item) => item.id === movie.id
+        ? { ...item, allowDownload: enabled }
+        : item));
+      setEditingMovie((current) => current?.id === movie.id
+        ? { ...current, allowDownload: enabled }
+        : current);
+    } catch (error) {
+      console.error('[AdminScreen] Could not update download setting.', error);
+      const message = 'Could not update the download setting. Check your connection and retry.';
+      setEditError(message);
+      setMoviesError(message);
+    } finally {
+      setUpdatingMovieId(undefined);
+    }
+  }, []);
+
+  const deleteAdminTitle = useCallback(async (movie: AdminMovie) => {
+    const repository = supabaseMovieRepository;
+    if (!repository || !supabase) {
+      return;
+    }
+    setUpdatingMovieId(movie.id);
+    setMoviesError(undefined);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (error || !accessToken) {
+        throw new Error('Your admin session expired. Sign in again before deleting a title.');
+      }
+      const assets = await repository.getAdminTitleAssets(movie.id);
+      for (const key of assets.b2Keys) {
+        await deleteUploadedB2Object({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          key,
+        });
+      }
+      if (assets.supabaseVideoPath) {
+        await repository.deleteSupabaseMovieVideo(assets.supabaseVideoPath);
+      }
+      for (const imageUrl of assets.images) {
+        await repository.deleteTitleImage(imageUrl);
+      }
+      await repository.deleteAdminTitleRecord(movie.id);
+      await loadMovies();
+    } catch (error) {
+      console.error('[AdminScreen] Could not delete title and its files.', error);
+      setMoviesError(error instanceof Error ? error.message : 'Could not delete this title. Retry.');
+    } finally {
+      setUpdatingMovieId(undefined);
+    }
+  }, [loadMovies]);
+
   const adminSeries = movies.filter((movie) => movie.type === 'series');
   const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
 
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+          <Text style={styles.backText}>‹  Back</Text>
+        </Pressable>
+        <Text style={styles.header}>Admin console</Text>
+        <ContentNotice message="Admin tools need an internet connection. Your saved videos and local downloads are unchanged." />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={styles.content}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={moviesLoading}
+            onRefresh={() => void loadMovies()}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+      >
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>‹  Back</Text>
         </Pressable>
@@ -882,6 +1579,67 @@ export default function AdminScreen() {
                 );
               })}
 
+              <View style={styles.filePicker}>
+                <Text style={styles.filePickerTitle}>{selectedTrailer?.name ?? 'Optional trailer'}</Text>
+                <Text style={styles.helper}>
+                  {selectedTrailer
+                    ? formatFileSize(selectedTrailer.size)
+                    : 'Common video formats up to 300 MB; trailers are not downloadable.'}
+                </Text>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isUploading}
+                  onPress={() => void chooseTrailer()}
+                >
+                  <Text style={styles.linkText}>{selectedTrailer ? 'Replace trailer' : 'Choose trailer'}</Text>
+                </Pressable>
+                {selectedTrailer ? (
+                  <Pressable accessibilityRole="button" disabled={isUploading} onPress={() => setSelectedTrailer(null)}>
+                    <Text style={styles.removeText}>Remove trailer</Text>
+                  </Pressable>
+                ) : null}
+                <AdminTextField
+                  label="Trailer duration (seconds, optional)"
+                  value={trailerDuration}
+                  onChangeText={setTrailerDuration}
+                  keyboardType="number-pad"
+                />
+                {isUploading && uploadingFile === seriesTrailer ? (
+                  <>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                    </View>
+                    <Text style={styles.helper}>Uploading trailer {progress}%</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      onPress={() => uploadAbortController.current?.abort()}
+                      style={styles.secondaryButton}
+                    >
+                      <Text style={styles.secondaryButtonText}>Cancel trailer upload</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+              </View>
+              <AdminTitleImagePicker
+                label="Poster"
+                uri={posterImage?.uri ?? (posterUrl || undefined)}
+                disabled={isUploading}
+                hint="Portrait 2:3 (about 600×900). JPG, PNG, or WebP; up to 5 MB, optimized to about 500 KB. Your legal-rights confirmation is required."
+                onChoose={() => void chooseTitleImage('poster')}
+                onRemove={() => {
+                  setPosterImage(undefined);
+                  setPosterUrl('');
+                }}
+              />
+              <AdminTitleImagePicker
+                label="Cover"
+                uri={coverImage?.uri}
+                disabled={isUploading}
+                hint="Landscape 16:9 (about 1280×720). JPG, PNG, or WebP; up to 5 MB, optimized to about 500 KB. Your legal-rights confirmation is required."
+                onChoose={() => void chooseTitleImage('cover')}
+                onRemove={() => setCoverImage(undefined)}
+              />
+
               <Pressable
                 accessibilityRole="button"
                 disabled={isUploading}
@@ -944,6 +1702,44 @@ export default function AdminScreen() {
 
               {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
               {formMessage ? <Text style={styles.successText}>{formMessage}</Text> : null}
+              {pendingMovieSave ? (
+                <View>
+                  <Text style={styles.helper}>
+                    The video is safely in Backblaze, but its catalog record was not saved. Retry saving without re-uploading, or delete the orphaned video.
+                  </Text>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isRetryingMovieSave}
+                    onPress={() => void retryMovieSave()}
+                    style={[styles.primaryButton, isRetryingMovieSave && styles.disabledButton]}
+                  >
+                    <Text style={styles.primaryButtonText}>
+                      {isRetryingMovieSave ? 'Saving…' : 'Retry saving'}
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={isRetryingMovieSave}
+                    onPress={() =>
+                      Alert.alert(
+                        'Delete orphaned video?',
+                        'This permanently deletes the uploaded B2 video. No movie record will be created.',
+                        [
+                          { text: 'Keep video', style: 'cancel' },
+                          {
+                            text: 'Delete video',
+                            style: 'destructive',
+                            onPress: () => void deleteOrphanedMovieUpload(),
+                          },
+                        ],
+                      )
+                    }
+                    style={styles.secondaryButton}
+                  >
+                    <Text style={styles.secondaryButtonText}>Delete orphaned video</Text>
+                  </Pressable>
+                </View>
+              ) : null}
               {isUploading && uploadingFile ? (
                 <>
                   <View
@@ -955,7 +1751,7 @@ export default function AdminScreen() {
                       <View style={[styles.progressFill, { width: `${progress}%` }]} />
                     </View>
                     <Text style={styles.helper}>
-                      Uploading {progress}% · {formatFileSize(uploadingFile.size * progress / 100)} of{' '}
+                      {uploadingStage} {progress}% · {formatFileSize(uploadingFile.size * progress / 100)} of{' '}
                       {formatFileSize(uploadingFile.size)}
                     </Text>
                   </View>
@@ -992,6 +1788,47 @@ export default function AdminScreen() {
               <AdminTextField label="Genres" value={seriesGenres} onChangeText={setSeriesGenres} />
               <AdminTextField label="Content rating" value={seriesContentRating} onChangeText={setSeriesContentRating} />
               <AdminTextField label="Poster image URL (optional)" value={seriesPosterUrl} onChangeText={setSeriesPosterUrl} />
+              <View style={styles.filePicker}>
+                <Text style={styles.filePickerTitle}>{seriesTrailer?.name ?? 'Optional series trailer'}</Text>
+                <Text style={styles.helper}>
+                  {seriesTrailer
+                    ? formatFileSize(seriesTrailer.size)
+                    : 'Common video formats up to 300 MB; trailers are not downloadable.'}
+                </Text>
+                <Pressable accessibilityRole="button" disabled={isSavingSeries} onPress={() => void chooseTrailer(true)}>
+                  <Text style={styles.linkText}>{seriesTrailer ? 'Replace trailer' : 'Choose trailer'}</Text>
+                </Pressable>
+                {seriesTrailer ? (
+                  <Pressable accessibilityRole="button" disabled={isSavingSeries} onPress={() => setSeriesTrailer(null)}>
+                    <Text style={styles.removeText}>Remove trailer</Text>
+                  </Pressable>
+                ) : null}
+                <AdminTextField
+                  label="Trailer duration (seconds, optional)"
+                  value={seriesTrailerDuration}
+                  onChangeText={setSeriesTrailerDuration}
+                  keyboardType="number-pad"
+                />
+              </View>
+              <AdminTitleImagePicker
+                label="Poster"
+                uri={seriesPosterImage?.uri ?? (seriesPosterUrl || undefined)}
+                disabled={isSavingSeries}
+                hint="Portrait 2:3 (about 600×900). JPG, PNG, or WebP; up to 5 MB, optimized to about 500 KB. Your legal-rights confirmation is required."
+                onChoose={() => void chooseTitleImage('poster', true)}
+                onRemove={() => {
+                  setSeriesPosterImage(undefined);
+                  setSeriesPosterUrl('');
+                }}
+              />
+              <AdminTitleImagePicker
+                label="Cover"
+                uri={seriesCoverImage?.uri}
+                disabled={isSavingSeries}
+                hint="Landscape 16:9 (about 1280×720). JPG, PNG, or WebP; up to 5 MB, optimized to about 500 KB. Your legal-rights confirmation is required."
+                onChoose={() => void chooseTitleImage('cover', true)}
+                onRemove={() => setSeriesCoverImage(undefined)}
+              />
               <AdminCheckbox
                 checked={seriesRightsConfirmed}
                 disabled={isSavingSeries}
@@ -1138,16 +1975,33 @@ export default function AdminScreen() {
                 onAction={() => void loadMovies()}
               />
             ) : null}
+            {seriesError ? (
+              <ContentNotice
+                message={seriesError}
+                tone="warning"
+                actionLabel="Retry"
+                onAction={() => void loadMovies()}
+              />
+            ) : null}
             {!moviesLoading && !moviesError && movies.length === 0 ? (
               <Text style={styles.helper}>No uploaded movies yet.</Text>
             ) : null}
             {movies.map((movie) => (
               <View key={movie.id} style={styles.movieRow}>
+                <TitleImage uri={movie.posterUrl} style={styles.catalogPoster} iconSize={18} />
                 <View style={styles.grow}>
                   <Text style={styles.movieTitle}>{movie.title}</Text>
                   <Text style={styles.helper}>
                     {movie.year ?? 'Year not set'} · {movie.published ? 'Published' : 'Draft'}
                   </Text>
+                  <View style={styles.badgeRow}>
+                    <Text style={styles.catalogBadge}>{movie.posterUrl ? 'Has poster' : 'No poster'}</Text>
+                    <Text style={styles.catalogBadge}>{movie.coverUrl ? 'Has cover' : 'No cover'}</Text>
+                    <Text style={styles.catalogBadge}>{movie.trailerStorageKey ? 'Has trailer' : 'No trailer'}</Text>
+                    <Text style={styles.catalogBadge}>
+                      Downloads {movie.allowDownload ? 'on' : 'off'}
+                    </Text>
+                  </View>
                 </View>
                 <View style={[styles.statusPill, movie.published ? styles.published : styles.draft]}>
                   <Text style={styles.statusText}>{movie.published ? 'Live' : 'Draft'}</Text>
@@ -1167,8 +2021,167 @@ export default function AdminScreen() {
                     </Text>
                   </Pressable>
                 ) : null}
+                <Pressable accessibilityRole="button" onPress={() => openEditTitle(movie)}>
+                  <Text style={styles.linkText}>Edit</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={updatingMovieId === movie.id}
+                  onPress={() =>
+                    Alert.alert(
+                      'Delete title?',
+                      `This permanently deletes "${movie.title}", its video/trailer, images, and series episodes.`,
+                      [
+                        { text: 'Cancel', style: 'cancel' },
+                        {
+                          text: 'Delete title',
+                          style: 'destructive',
+                          onPress: () => void deleteAdminTitle(movie),
+                        },
+                      ],
+                    )
+                  }
+                >
+                  <Text style={styles.removeText}>
+                    {updatingMovieId === movie.id ? 'Deleting…' : 'Delete'}
+                  </Text>
+                </Pressable>
               </View>
             ))}
+            <Modal
+              visible={Boolean(editingMovie)}
+              transparent
+              animationType="slide"
+              onRequestClose={() => {
+                if (!editSaving) {
+                  setEditingMovie(undefined);
+                }
+              }}
+            >
+              <View style={styles.editBackdrop}>
+                <ScrollView contentContainerStyle={styles.editPanel} keyboardShouldPersistTaps="handled">
+                  <View style={styles.catalogHeader}>
+                    <Text style={styles.sectionTitle}>Edit title</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={editSaving}
+                      onPress={() => setEditingMovie(undefined)}
+                    >
+                      <Text style={styles.linkText}>Close</Text>
+                    </Pressable>
+                  </View>
+                  <AdminTextField label="Title" value={editTitle} onChangeText={setEditTitle} />
+                  <AdminTextField label="Description" value={editDescription} onChangeText={setEditDescription} multiline />
+                  <AdminTextField label="Release year" value={editYear} onChangeText={setEditYear} keyboardType="number-pad" />
+                  <AdminTextField label="Content rating" value={editRating} onChangeText={setEditRating} />
+                  <AdminTextField label="Poster image URL (optional)" value={editPosterUrl} onChangeText={setEditPosterUrl} />
+                  <AdminTitleImagePicker
+                    label="Poster"
+                    uri={editPosterImage?.uri ?? (editPosterUrl || undefined)}
+                    disabled={editSaving}
+                    hint="Portrait 2:3; JPG, PNG, or WebP, up to 5 MB."
+                    onChoose={() => void chooseEditImage('poster')}
+                    onRemove={() => {
+                      setEditPosterImage(undefined);
+                      setEditPosterUrl('');
+                    }}
+                  />
+                  <AdminTitleImagePicker
+                    label="Cover"
+                    uri={editCoverImage?.uri ?? (editCoverUrl || undefined)}
+                    disabled={editSaving}
+                    hint="Landscape 16:9; JPG, PNG, or WebP, up to 5 MB."
+                    onChoose={() => void chooseEditImage('cover')}
+                    onRemove={() => {
+                      setEditCoverImage(undefined);
+                      setEditCoverUrl('');
+                    }}
+                  />
+                  <View style={styles.filePicker}>
+                    <Text style={styles.filePickerTitle}>
+                      {editTrailerFile?.name ?? (editingMovie?.trailerStorageKey ? 'Trailer attached' : 'No trailer')}
+                    </Text>
+                    <Text style={styles.helper}>Common video formats, up to 300 MB. Trailers are never downloadable.</Text>
+                    <Pressable
+                      accessibilityRole="button"
+                      disabled={editSaving}
+                      onPress={() =>
+                        void chooseVideoFile('trailer').then((file) => {
+                          if (file) {
+                            setEditTrailerFile(file);
+                            setEditTrailerRemoved(false);
+                          }
+                        })
+                      }
+                    >
+                      <Text style={styles.linkText}>Replace trailer</Text>
+                    </Pressable>
+                    {editingMovie?.trailerStorageKey || editTrailerFile ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        disabled={editSaving}
+                        onPress={() => {
+                          setEditTrailerFile(null);
+                          setEditTrailerRemoved(true);
+                        }}
+                      >
+                        <Text style={styles.removeText}>Remove trailer</Text>
+                      </Pressable>
+                    ) : null}
+                    <AdminTextField
+                      label="Trailer duration (seconds, optional)"
+                      value={editTrailerDuration}
+                      onChangeText={setEditTrailerDuration}
+                      keyboardType="number-pad"
+                    />
+                  </View>
+                  {editTrailerFile && editSaving ? (
+                    <>
+                      <View style={styles.progressTrack}>
+                        <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                      </View>
+                      <Text style={styles.helper}>Uploading trailer {progress}%</Text>
+                      <Pressable
+                        accessibilityRole="button"
+                        onPress={() => uploadAbortController.current?.abort()}
+                        style={styles.secondaryButton}
+                      >
+                        <Text style={styles.secondaryButtonText}>Cancel trailer upload</Text>
+                      </Pressable>
+                    </>
+                  ) : null}
+                  <AdminCheckbox
+                    checked={editPublished}
+                    disabled={editSaving}
+                    label="Published (Live)"
+                    onPress={() => setEditPublished((current) => !current)}
+                  />
+                  {editingMovie ? (
+                    <AdminCheckbox
+                      checked={editingMovie.allowDownload}
+                      disabled={updatingMovieId === editingMovie.id}
+                      label="Allow downloads (updates immediately)"
+                      onPress={() => void toggleTitleDownloads(editingMovie, !editingMovie.allowDownload)}
+                    />
+                  ) : null}
+                  <AdminCheckbox
+                    checked={editRightsConfirmed}
+                    disabled={editSaving}
+                    label="I confirm I have the legal rights to distribute any replacement image or trailer."
+                    onPress={() => setEditRightsConfirmed((current) => !current)}
+                  />
+                  {editError ? <Text style={styles.errorText}>{editError}</Text> : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={editSaving || !editingMovie}
+                    onPress={() => void saveEditedTitle()}
+                    style={[styles.primaryButton, editSaving && styles.disabledButton]}
+                  >
+                    <Text style={styles.primaryButtonText}>{editSaving ? 'Saving…' : 'Save changes'}</Text>
+                  </Pressable>
+                </ScrollView>
+              </View>
+            </Modal>
           </>
         )}
       </ScrollView>
@@ -1298,6 +2311,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
   },
+  imagePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 14,
+    padding: 12,
+    backgroundColor: theme.background,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  imagePreview: {
+    width: 74,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: theme.surfaceAlt,
+  },
+  removeText: {
+    color: theme.error,
+    fontSize: 13,
+    fontWeight: '700',
+    marginTop: 8,
+  },
   checkRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1395,6 +2431,7 @@ const styles = StyleSheet.create({
   },
   movieRow: {
     alignItems: 'center',
+    flexWrap: 'wrap',
     backgroundColor: theme.surface,
     borderColor: theme.border,
     borderRadius: 14,
@@ -1403,6 +2440,42 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
     padding: 14,
+  },
+  catalogPoster: {
+    width: 42,
+    height: 60,
+    borderRadius: 7,
+    backgroundColor: theme.surfaceAlt,
+  },
+  badgeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 6,
+  },
+  catalogBadge: {
+    overflow: 'hidden',
+    color: theme.secondaryText,
+    backgroundColor: theme.background,
+    borderRadius: 999,
+    fontSize: 9,
+    fontWeight: '700',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  editBackdrop: {
+    flex: 1,
+    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0,0,0,0.72)',
+  },
+  editPanel: {
+    maxHeight: '94%',
+    backgroundColor: theme.background,
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
+    paddingHorizontal: 18,
+    paddingTop: 18,
+    paddingBottom: 32,
   },
   grow: {
     flex: 1,

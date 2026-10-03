@@ -34,6 +34,20 @@ const service = new OfflineDownloadService(
         file.delete();
       }
     },
+    getPosterFilePath: (item) => {
+      const extension = item.posterUrl?.match(/\.(jpe?g|png|webp)(?:[?#]|$)/i)?.[1]?.toLowerCase() ?? 'jpg';
+      return `${new File(Paths.document, getSafeFileName(item)).uri}.poster.${extension}`;
+    },
+    downloadPoster: async (url, filePath, signal) => {
+      const task = File.createDownloadTask(url, new File(filePath), {
+        signal,
+        onProgress: () => undefined,
+      });
+      const result = await task.downloadAsync();
+      if (!result) {
+        throw new Error('The poster image download did not complete.');
+      }
+    },
   },
   async (item) => {
     if (!supabaseMovieRepository || !item.mediaPath) {
@@ -48,11 +62,13 @@ const service = new OfflineDownloadService(
 type DownloadsContextValue = {
   records: OfflineDownloadRecord[];
   isLoading: boolean;
+  isRefreshing: boolean;
   error?: string;
   download: (item: ContentItem) => Promise<void>;
   downloadSequentially: (items: readonly ContentItem[]) => Promise<void>;
   cancel: (itemId: string) => Promise<void>;
   remove: (itemId: string) => Promise<void>;
+  refresh: () => Promise<void>;
   dismissError: () => void;
 };
 
@@ -61,6 +77,7 @@ const DownloadsContext = createContext<DownloadsContextValue | null>(null);
 export function DownloadsProvider({ children }: React.PropsWithChildren) {
   const [records, setRecords] = useState<OfflineDownloadRecord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [error, setError] = useState<string>();
 
   useEffect(() => {
@@ -135,9 +152,33 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
 
   const dismissError = useCallback(() => setError(undefined), []);
 
+  const refresh = useCallback(async () => {
+    setIsRefreshing(true);
+    setError(undefined);
+    try {
+      await service.load();
+    } catch (loadError) {
+      console.error('[Downloads] Could not refresh saved downloads.', loadError);
+      setError('Saved downloads could not be refreshed. Check device storage and retry.');
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, []);
+
   return (
     <DownloadsContext.Provider
-      value={{ records, isLoading, error, download, downloadSequentially, cancel, remove, dismissError }}
+      value={{
+        records,
+        isLoading,
+        isRefreshing,
+        error,
+        download,
+        downloadSequentially,
+        cancel,
+        remove,
+        refresh,
+        dismissError,
+      }}
     >
       {children}
     </DownloadsContext.Provider>

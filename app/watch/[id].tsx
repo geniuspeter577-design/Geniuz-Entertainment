@@ -4,19 +4,23 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { OfflineState } from '../../src/components/OfflineState';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
+import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
 
 export default function WatchScreen() {
-  const { id: routeId } = useLocalSearchParams<{ id: string }>();
+  const { id: routeId, trailer: routeTrailer } = useLocalSearchParams<{ id: string; trailer?: string }>();
   const id = typeof routeId === 'string' ? routeId : '';
+  const isTrailer = routeTrailer === '1';
   const player = useVideoPlayer(null);
   const downloads = useDownloads();
+  const { isOnline } = useNetwork();
   const localDownload = downloads.records.find(
     (record) => record.item.id === id && record.status === 'downloaded',
   );
@@ -69,7 +73,7 @@ export default function WatchScreen() {
       setIsOfflinePlayback(false);
       setPlaybackEnded(false);
 
-      if (localDownload) {
+      if (localDownload && !isTrailer) {
         const extension =
           localDownload.item.fileExtension ?? getFileExtension(localDownload.item.mediaPath ?? '');
         if (
@@ -88,6 +92,45 @@ export default function WatchScreen() {
         setIsOfflinePlayback(true);
         setPlaybackUrl(localDownload.filePath);
         setIsLoading(false);
+        return;
+      }
+
+      if (!isOnline) {
+        setError('You are offline. Only downloaded titles can be played.');
+        setIsLoading(false);
+        return;
+      }
+
+      if (isTrailer) {
+        if (!supabaseMovieRepository) {
+          setError('Trailers are unavailable without a connection.');
+          setIsLoading(false);
+          return;
+        }
+        try {
+          const title = await supabaseMovieRepository.getById(id);
+          if (!title?.trailerStorageKey) {
+            throw new Error('This title does not have an available trailer.');
+          }
+          const url = await supabaseMovieRepository.getTrailerPlaybackUrl(title);
+          if (active) {
+            setMovie(title);
+            setPlaybackUrl(url);
+            setIsOfflinePlayback(false);
+          }
+        } catch (trailerError) {
+          if (active) {
+            setError(
+              trailerError instanceof Error
+                ? trailerError.message
+                : 'Could not prepare this trailer. Please retry.',
+            );
+          }
+        } finally {
+          if (active) {
+            setIsLoading(false);
+          }
+        }
         return;
       }
 
@@ -149,7 +192,7 @@ export default function WatchScreen() {
     return () => {
       active = false;
     };
-  }, [downloads.isLoading, id, localDownload, retryAttempt]);
+  }, [downloads.isLoading, id, isOnline, isTrailer, localDownload, retryAttempt]);
 
   useEffect(() => {
     if (!playbackUrl) {
@@ -238,13 +281,19 @@ export default function WatchScreen() {
         error={error}
         onRetry={retryPlayback}
       />
+      {!isOnline && !isOfflinePlayback ? (
+        <OfflineState
+          onRetry={() => void retryPlayback()}
+          message="You are offline. Download this title while connected to watch it here."
+        />
+      ) : null}
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>‹  Back</Text>
         </Pressable>
-        <Text style={styles.title}>Now playing</Text>
+        <Text style={styles.title}>{isTrailer ? `Trailer · ${movie?.title ?? ''}` : 'Now playing'}</Text>
       </View>
-      {movie?.availability.download ? (
+      {!isTrailer && movie?.availability.download ? (
         <Pressable
           accessibilityRole="button"
           disabled={Boolean(isDownloaded)}

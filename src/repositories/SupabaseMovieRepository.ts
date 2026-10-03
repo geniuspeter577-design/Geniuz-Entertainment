@@ -1,13 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Upload } from 'tus-js-client';
-
 import type { ContentItem, EpisodeItem, SeasonItem } from '../models/content';
 import { supabase } from '../services/supabase';
 
 const MOVIE_BUCKET = 'movie-assets';
 const MOVIE_COLUMNS =
-  'id,title,description,release_year,genres,poster_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type';
+  'id,title,description,release_year,genres,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type';
+const TITLE_IMAGE_BUCKET = 'title-images';
 const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
 type MovieRecord = {
@@ -17,6 +17,7 @@ type MovieRecord = {
   release_year: number | null;
   genres: string[] | null;
   poster_url: string | null;
+  cover_url?: string | null;
   runtime_minutes: number | null;
   content_rating: string | null;
   video_path: string | null;
@@ -28,6 +29,10 @@ type MovieRecord = {
   storage_provider: 'supabase' | 'b2' | null;
   storage_key: string | null;
   content_type: 'movie' | 'series' | null;
+  trailer_storage_key?: string | null;
+  trailer_size_bytes?: number | null;
+  trailer_duration_seconds?: number | null;
+  trailer_content_type?: string | null;
 };
 
 type StoredTusUpload = {
@@ -45,6 +50,7 @@ export type NewMovie = {
   releaseYear?: number;
   genres: string[];
   posterUrl?: string;
+  coverUrl?: string;
   runtimeMinutes?: number;
   contentRating?: string;
   published: boolean;
@@ -54,6 +60,24 @@ export type NewMovie = {
   mimeType: string;
   contentType: string;
   fileSizeBytes: number;
+  trailerStorageKey?: string;
+  trailerSizeBytes?: number;
+  trailerDurationSeconds?: number;
+  trailerContentType?: string;
+};
+
+export type AdminTitleUpdate = {
+  title: string;
+  description: string;
+  releaseYear?: number;
+  contentRating?: string;
+  posterUrl?: string;
+  coverUrl?: string;
+  trailerStorageKey?: string;
+  trailerSizeBytes?: number;
+  trailerDurationSeconds?: number;
+  trailerContentType?: string;
+  published: boolean;
 };
 
 type NewSeries = {
@@ -62,8 +86,13 @@ type NewSeries = {
   releaseYear?: number;
   genres: string[];
   posterUrl?: string;
+  coverUrl?: string;
   contentRating?: string;
   published: boolean;
+  trailerStorageKey?: string;
+  trailerSizeBytes?: number;
+  trailerDurationSeconds?: number;
+  trailerContentType?: string;
 };
 
 type PublishMovieOptions = {
@@ -104,7 +133,8 @@ function toContentItem(movie: MovieRecord): ContentItem {
     type: isSeries ? 'series' : 'movie',
     ...(movie.release_year === null ? {} : { year: movie.release_year }),
     genres: movie.genres ?? [],
-    ...(movie.poster_url ? { posterUrl: movie.poster_url, backdropUrl: movie.poster_url } : {}),
+    ...(movie.poster_url ? { posterUrl: movie.poster_url } : {}),
+    ...(movie.cover_url ? { coverUrl: movie.cover_url, backdropUrl: movie.cover_url } : {}),
     ...(movie.description ? { description: movie.description } : {}),
     ...(movie.runtime_minutes === null ? {} : { runtimeMinutes: movie.runtime_minutes }),
     ...(movie.content_rating ? { contentRating: movie.content_rating } : {}),
@@ -116,6 +146,12 @@ function toContentItem(movie: MovieRecord): ContentItem {
     ...(movie.file_extension ? { fileExtension: movie.file_extension } : {}),
     ...(movie.mime_type ? { mimeType: movie.mime_type } : {}),
     ...(movie.file_size_bytes === null ? {} : { fileSizeBytes: Number(movie.file_size_bytes) }),
+    ...(movie.trailer_storage_key ? { trailerStorageKey: movie.trailer_storage_key } : {}),
+    ...(movie.trailer_size_bytes == null ? {} : { trailerSizeBytes: Number(movie.trailer_size_bytes) }),
+    ...(movie.trailer_duration_seconds == null
+      ? {}
+      : { trailerDurationSeconds: Number(movie.trailer_duration_seconds) }),
+    ...(movie.trailer_content_type ? { trailerContentType: movie.trailer_content_type } : {}),
     availability: {
       discoverable: movie.published && (isSeries || hasVideo),
       stream: movie.published && !isSeries && hasVideo,
@@ -137,6 +173,52 @@ export class SupabaseMovieRepository {
     private readonly projectUrl: string,
     private readonly publishableKey: string,
   ) {}
+
+  async uploadTitleImage(blob: Blob, contentType: string) {
+    const extension = contentType === 'image/png' ? 'png' : 'jpg';
+    const path = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}.${extension}`;
+    const { error } = await this.client.storage.from(TITLE_IMAGE_BUCKET).upload(path, blob, {
+      contentType,
+      cacheControl: '31536000',
+      upsert: false,
+    });
+    if (error) {
+      throw new Error('Could not save the title image. Check the title-images bucket and try again.', {
+        cause: error,
+      });
+    }
+    return this.client.storage.from(TITLE_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
+  }
+
+  async deleteTitleImage(url: string | undefined) {
+    if (!url) {
+      return;
+    }
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      return;
+    }
+    const marker = `/object/public/${TITLE_IMAGE_BUCKET}/`;
+    const markerIndex = parsed.pathname.indexOf(marker);
+    if (markerIndex < 0) {
+      return;
+    }
+    let path: string;
+    try {
+      path = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
+    } catch (error) {
+      throw new Error('The stored title image URL is invalid.', { cause: error });
+    }
+    if (!path || path.includes('..')) {
+      throw new Error('The stored title image path is invalid.');
+    }
+    const { error } = await this.client.storage.from(TITLE_IMAGE_BUCKET).remove([path]);
+    if (error) {
+      throw new Error('Could not remove the title image from storage.', { cause: error });
+    }
+  }
 
   async getPublished() {
     const { data, error } = await this.client
@@ -207,8 +289,99 @@ export class SupabaseMovieRepository {
     return (data as (MovieRecord & { created_at: string })[]).map((movie) => ({
       ...toContentItem(movie),
       published: movie.published,
+      allowDownload: movie.allow_download,
       createdAt: movie.created_at,
     }));
+  }
+
+  async updateAdminTitle(id: string, title: AdminTitleUpdate) {
+    const { error } = await this.client
+      .from('movies')
+      .update({
+        title: title.title.trim(),
+        description: title.description.trim() || null,
+        release_year: title.releaseYear ?? null,
+        content_rating: title.contentRating?.trim() || null,
+        poster_url: title.posterUrl?.trim() || null,
+        cover_url: title.coverUrl?.trim() || null,
+        trailer_storage_key: title.trailerStorageKey ?? null,
+        trailer_size_bytes: title.trailerSizeBytes ?? null,
+        trailer_duration_seconds: title.trailerDurationSeconds ?? null,
+        trailer_content_type: title.trailerContentType ?? null,
+        published: title.published,
+      })
+      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+    if (error) {
+      throw new Error('Could not update this title.', { cause: error });
+    }
+  }
+
+  async setDownloadsAllowed(id: string, allowDownload: boolean) {
+    const { error } = await this.client
+      .from('movies')
+      .update({ allow_download: allowDownload })
+      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+    if (error) {
+      throw new Error('Could not update the download setting.', { cause: error });
+    }
+  }
+
+  async getAdminTitleAssets(id: string) {
+    const { data, error } = await this.client
+      .from('movies')
+      .select('storage_provider,storage_key,video_path,trailer_storage_key,poster_url,cover_url,content_type')
+      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''))
+      .single();
+    if (error) {
+      throw new Error('Could not load this title’s stored files.', { cause: error });
+    }
+    const b2Keys: string[] = [];
+    if (data.storage_provider === 'b2' && typeof data.storage_key === 'string') {
+      b2Keys.push(data.storage_key);
+    }
+    if (typeof data.trailer_storage_key === 'string') {
+      b2Keys.push(data.trailer_storage_key);
+    }
+    if (data.content_type === 'series') {
+      const { data: episodes, error: episodeError } = await this.client
+        .from('episodes')
+        .select('storage_provider,storage_key,seasons!inner(series_id)')
+        .eq('seasons.series_id', id.replace(/^geniuz:series:/, ''));
+      if (episodeError) {
+        throw new Error('Could not load this series’s stored episodes.', { cause: episodeError });
+      }
+      b2Keys.push(
+        ...(episodes ?? [])
+          .filter((episode) => episode.storage_provider === 'b2' && typeof episode.storage_key === 'string')
+          .map((episode) => episode.storage_key as string),
+      );
+    }
+    return {
+      b2Keys,
+      supabaseVideoPath: data.storage_provider === 'supabase' && typeof data.video_path === 'string'
+        ? data.video_path
+        : undefined,
+      images: [data.poster_url, data.cover_url].filter((url): url is string => typeof url === 'string'),
+    };
+  }
+
+  async deleteAdminTitleRecord(id: string) {
+    const { error } = await this.client
+      .from('movies')
+      .delete()
+      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+    if (error) {
+      throw new Error('Stored files were removed, but the title record could not be deleted.', {
+        cause: error,
+      });
+    }
+  }
+
+  async deleteSupabaseMovieVideo(path: string) {
+    const { error } = await this.client.storage.from(MOVIE_BUCKET).remove([path]);
+    if (error) {
+      throw new Error('Could not remove the title’s Supabase video file.', { cause: error });
+    }
   }
 
   async publishMovie(
@@ -380,6 +553,20 @@ export class SupabaseMovieRepository {
   }
 
   async createB2Movie(movie: NewMovie, storageKey: string) {
+    const { data: existing, error: lookupError } = await this.client
+      .from('movies')
+      .select('id')
+      .eq('storage_key', storageKey)
+      .maybeSingle();
+    if (lookupError) {
+      throw new Error('The video uploaded, but its movie record could not be saved.', {
+        cause: lookupError,
+      });
+    }
+    if (existing) {
+      return existing.id as string;
+    }
+
     const { data, error } = await this.client
       .from('movies')
       .insert({
@@ -388,6 +575,11 @@ export class SupabaseMovieRepository {
         release_year: movie.releaseYear ?? null,
         genres: movie.genres,
         poster_url: movie.posterUrl?.trim() || null,
+        cover_url: movie.coverUrl?.trim() || null,
+        trailer_storage_key: movie.trailerStorageKey ?? null,
+        trailer_size_bytes: movie.trailerSizeBytes ?? null,
+        trailer_duration_seconds: movie.trailerDurationSeconds ?? null,
+        trailer_content_type: movie.trailerContentType ?? null,
         runtime_minutes: movie.runtimeMinutes ?? null,
         content_rating: movie.contentRating?.trim() || null,
         file_extension: movie.fileExtension,
@@ -408,6 +600,7 @@ export class SupabaseMovieRepository {
         cause: error,
       });
     }
+    return data.id as string;
   }
 
     async createSeries(series: NewSeries) {
@@ -419,6 +612,11 @@ export class SupabaseMovieRepository {
           release_year: series.releaseYear ?? null,
           genres: series.genres,
           poster_url: series.posterUrl?.trim() || null,
+          cover_url: series.coverUrl?.trim() || null,
+          trailer_storage_key: series.trailerStorageKey ?? null,
+          trailer_size_bytes: series.trailerSizeBytes ?? null,
+          trailer_duration_seconds: series.trailerDurationSeconds ?? null,
+          trailer_content_type: series.trailerContentType ?? null,
           content_rating: series.contentRating?.trim() || null,
           runtime_minutes: null,
           content_type: 'series',
@@ -661,7 +859,19 @@ export class SupabaseMovieRepository {
     return this.getApiPlaybackUrl('movies', movie.id.replace(/^geniuz:(?:movie|series):/, ''));
   }
 
-  private async getApiPlaybackUrl(resource: 'movies' | 'episodes', id: string) {
+  async getTrailerPlaybackUrl(item: Pick<ContentItem, 'id' | 'trailerStorageKey'>) {
+    if (!item.trailerStorageKey) {
+      throw new Error('This title does not have an available trailer.');
+    }
+    const resource = item.id.startsWith('geniuz:series:') ? 'series' : 'movies';
+    return this.getApiPlaybackUrl(resource, item.id.replace(/^geniuz:(?:movie|series):/, ''), 'trailer');
+  }
+
+  private async getApiPlaybackUrl(
+    resource: 'movies' | 'episodes' | 'series',
+    id: string,
+    kind: 'video' | 'trailer' = 'video',
+  ) {
     const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
     if (!apiBaseUrl) {
       throw new Error('The Geniuz API is not configured. Restart the app after setting its URL.');
@@ -680,7 +890,7 @@ export class SupabaseMovieRepository {
     let response: Response;
     try {
       response = await fetch(
-        `${apiBaseUrl.replace(/\/+$/, '')}/${resource}/${encodeURIComponent(id)}/play-url`,
+        `${apiBaseUrl.replace(/\/+$/, '')}/${resource}/${encodeURIComponent(id)}/${kind === 'trailer' ? 'trailer-play-url' : 'play-url'}`,
         requestOptions,
       );
     } catch (fetchError) {

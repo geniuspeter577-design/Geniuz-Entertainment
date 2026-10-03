@@ -10,6 +10,7 @@ type UploadOptions = {
   fileName: string;
   contentType: string;
   objectType?: 'movie' | 'episode';
+  kind?: 'video' | 'trailer';
   signal: AbortSignal;
   onProgress: (progress: number) => void;
 };
@@ -185,6 +186,7 @@ export async function uploadVideoToB2({
   fileName,
   contentType,
   objectType = 'movie',
+  kind = 'video',
   signal,
   onProgress,
 }: UploadOptions) {
@@ -202,6 +204,7 @@ export async function uploadVideoToB2({
         fileSize: file.size,
         contentType,
         objectType,
+        kind,
       },
     );
     if (signal.aborted) {
@@ -275,6 +278,24 @@ export async function uploadVideoToB2({
         );
       }
     }
+
     throw error;
   }
+}
+
+export async function deleteUploadedB2Object({
+  apiBaseUrl,
+  accessToken,
+  key,
+}: {
+  apiBaseUrl: string;
+  accessToken: string;
+  key: string;
+}) {
+  await requestJson(
+    apiBaseUrl,
+    makeApiUrl(apiBaseUrl, '/uploads/delete'),
+    accessToken,
+    { key },
+  );
 }

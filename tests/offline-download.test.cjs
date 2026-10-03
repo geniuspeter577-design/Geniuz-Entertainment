@@ -47,6 +47,8 @@ function createDownloadService(options = {}) {
     fileExists: (filePath) => files.has(filePath),
     getFileSize: (filePath) => files.get(filePath) ?? null,
     deleteFile: (filePath) => files.delete(filePath),
+    getPosterFilePath: (item) => `/documents/${item.sourceId}.poster.jpg`,
+    downloadPoster: async (_url, filePath) => files.set(filePath, 128),
   };
   const service = new OfflineDownloadService(storage, fileSystem, async (item) => {
     signedUrls.push(item.id);
@@ -113,6 +115,29 @@ test('download service requests a fresh signed URL, reports progress, and persis
     if (current) {
       progressUpdates.push(current.progress);
     }
+  });
+
+  test('download service saves title metadata and caches its poster for offline details', async () => {
+    const { service, files, values } = createDownloadService();
+    const item = downloadableItem({
+      title: 'Saved title',
+      description: 'Saved description',
+      posterUrl: 'https://images.example.test/poster.jpg',
+    });
+    await service.download(item);
+
+    const saved = service.getRecords()[0];
+    assert.equal(saved.item.title, 'Saved title');
+    assert.equal(saved.item.description, 'Saved description');
+    assert.equal(saved.item.posterUrl, '/documents/movie-123.poster.jpg');
+    assert.equal(files.get(saved.item.posterUrl), 128);
+    assert.match([...values.values()][0], /"description":"Saved description"/);
+
+    await service.load();
+    assert.equal(service.getRecords()[0].item.posterUrl, '/documents/movie-123.poster.jpg');
+
+    await service.delete(item.id);
+    assert.equal(files.has('/documents/movie-123.poster.jpg'), false);
   });
 
   await service.download(downloadableItem());

@@ -11,16 +11,19 @@ import {
 } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { OfflineState } from '../../src/components/OfflineState';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
 import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { theme } from '../../src/theme';
+import { useNetwork } from '../../src/state/NetworkContext';
 
 const categories = ['All', 'Science Fiction', 'Action', 'Drama', 'Live', 'Thriller'];
 
 export default function SearchScreen() {
+  const { isOnline, retryConnection } = useNetwork();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -40,6 +43,7 @@ export default function SearchScreen() {
   const search = useContentQuery(
     `search:${debouncedQuery}:${selectedCategory}`,
     searchContent,
+    isOnline,
   );
   const searchUploaded = useCallback(
     async () => ({
@@ -56,14 +60,28 @@ export default function SearchScreen() {
   const uploadedSearch = useContentQuery(
     `uploaded-search:${debouncedQuery}:${selectedCategory}`,
     searchUploaded,
+    isOnline,
   );
   const retryUploadedSearch = uploadedSearch.retry;
   useFocusEffect(
     useCallback(() => {
-      retryUploadedSearch();
-    }, [retryUploadedSearch]),
+      if (isOnline) {
+        retryUploadedSearch();
+      }
+    }, [isOnline, retryUploadedSearch]),
   );
   const results = [...(search.data ?? []), ...(uploadedSearch.data ?? [])];
+
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <OfflineState
+          onRetry={() => void retryConnection()}
+          message="Search needs an internet connection. Your downloaded titles are ready in My downloads."
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>

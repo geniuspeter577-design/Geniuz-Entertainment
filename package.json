@@ -13,7 +13,9 @@
     "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
+    "expo-image-manipulator": "~57.0.20",
     "expo-linking": "~57.0.11",
+    "expo-network": "~57.0.2",
     "expo-router": "~57.0.24",
     "expo-status-bar": "~57.0.1",
     "expo-video": "~57.0.5",
@@ -50,7 +52,8 @@
     "test": "node scripts/run-tests.cjs",
     "backend:build": "tsc -p backend/tsconfig.json",
     "backend:start": "npm run backend:build && node --env-file-if-exists=.env --env-file-if-exists=backend/.env backend/dist/backend/src/server.js",
-    "backend:restart": "node scripts/free-port.cjs 4000 && npm run backend:start"
+    "backend:restart": "node scripts/free-port.cjs 4000 && npm run backend:start",
+    "b2:cors": "node --env-file-if-exists=.env --env-file-if-exists=backend/.env scripts/b2-cors.cjs"
   },
   "private": true
 }

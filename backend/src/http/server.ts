@@ -186,7 +186,7 @@ async function handleRequest(
       writeJson(
         response,
         201,
-        await storage.startMultipartUpload(input.fileName, input.contentType, input.objectType),
+        await storage.startMultipartUpload(input.fileName, input.contentType, input.objectType, input.kind),
       );
       return;
     }
@@ -227,6 +227,15 @@ async function handleRequest(
         requiredString(body, 'uploadId'),
       );
       writeJson(response, 200, { aborted: true });
+      return;
+    }
+
+    if (pathname === '/uploads/delete') {
+      if (request.method !== 'POST') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      await storage.deleteObject(requiredString(await readJson(request), 'key'));
+      writeJson(response, 200, { deleted: true });
       return;
     }
 
@@ -310,6 +319,45 @@ async function handleRequest(
     }
     const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
+    return;
+  }
+
+  const trailerPlayUrlMatch = /^\/(movies|series)\/([^/]+)\/trailer-play-url$/.exec(pathname);
+  if (trailerPlayUrlMatch) {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, isAdmin } = await authenticatePlayback(config, request.headers.authorization);
+    let titleId: string;
+    try {
+      titleId = decodeURIComponent(trailerPlayUrlMatch[2]);
+    } catch {
+      throw new HttpError(400, 'INVALID_TITLE_ID', 'The title ID is invalid.');
+    }
+    if (!isMovieId(titleId)) {
+      throw new HttpError(400, 'INVALID_TITLE_ID', 'The title ID is invalid.');
+    }
+    const { data, error } = await client
+      .from('movies')
+      .select('content_type,trailer_storage_key,published')
+      .eq('id', titleId)
+      .maybeSingle();
+    if (error) {
+      throw new HttpError(502, 'TRAILER_LOOKUP_FAILED', 'Could not load this trailer.');
+    }
+    if (!data || (trailerPlayUrlMatch[1] === 'series') !== (data.content_type === 'series')) {
+      throw new HttpError(
+        isAdmin ? 404 : 403,
+        isAdmin ? 'TITLE_NOT_FOUND' : 'ADMIN_REQUIRED',
+        isAdmin ? 'The requested title was not found.' : 'Admin access is required.',
+      );
+    }
+    requirePublishedOrAdmin(data.published === true, isAdmin);
+    if (typeof data.trailer_storage_key !== 'string') {
+      throw new HttpError(404, 'TRAILER_NOT_FOUND', 'This title does not have a trailer.');
+    }
+    const trailerUrl = await getB2Storage(config).createTrailerPlayUrl(data.trailer_storage_key);
+    writeJson(response, 200, { url: trailerUrl, expiresIn: 900 });
     return;
   }
 

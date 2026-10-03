@@ -19,12 +19,14 @@ test('upload validation enforces names, video content types, and the shared 1 Gi
       fileSize: 1073741824,
       contentType: 'video/x-matroska',
       objectType: 'movie',
+      kind: 'video',
     }),
     {
       fileName: 'movie.mkv',
       fileSize: 1073741824,
       contentType: 'video/x-matroska',
       objectType: 'movie',
+      kind: 'video',
     },
   );
   for (const input of [
@@ -66,12 +68,36 @@ test('object keys are unique, scoped to movies, and preserve safe extensions', (
     'movies/00000000-0000-4000-8000-000000000003',
   );
   assert.equal(
+    generateObjectKey('trailer.mp4', '00000000-0000-4000-8000-000000000005', 'trailer'),
+    'trailers/00000000-0000-4000-8000-000000000005.mp4',
+  );
+  assert.equal(
     generateObjectKey('episode.mkv', '00000000-0000-4000-8000-000000000004', 'episode'),
     'episodes/00000000-0000-4000-8000-000000000004.mkv',
   );
   assert.throws(
     () => validateUploadInput({ fileName: 'episode.mkv', fileSize: 1024, contentType: 'video/x-matroska', objectType: 'other' }),
     { status: 400 },
+  );
+});
+
+test('trailer uploads accept kind trailer up to 300 MB while preserving the 1 GiB video limit', () => {
+  const input = {
+    fileName: 'preview.mp4',
+    fileSize: 300 * 1024 * 1024,
+    contentType: 'video/mp4',
+    kind: 'trailer',
+    objectType: 'movie',
+  };
+  assert.deepEqual(validateUploadInput(input), input);
+  assert.throws(
+    () => validateUploadInput({ ...input, fileSize: 300 * 1024 * 1024 + 1 }),
+    { status: 400 },
+  );
+  assert.throws(() => validateUploadInput({ ...input, kind: 'unknown' }), { status: 400 });
+  assert.equal(
+    validateUploadInput({ ...input, kind: 'video', fileSize: 1024 * 1024 * 1024 }).kind,
+    'video',
   );
 });
 

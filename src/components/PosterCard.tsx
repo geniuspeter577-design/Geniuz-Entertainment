@@ -1,8 +1,9 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ContentItem } from '../models/content';
+import { TitleImage } from './TitleImage';
 import { useDownloads } from '../state/DownloadsContext';
 import { theme } from '../theme';
 import { formatRuntime } from '../utils/contentPresentation';
@@ -31,14 +32,9 @@ export function PosterCard({ item, onPress, compact = false, grid = false, progr
         accessibilityRole="button"
         accessibilityLabel={`View ${item.title}`}
       >
-        <Image
-          source={
-            item.posterUrl
-              ? { uri: item.posterUrl }
-              : require('../../assets/icon.png')
-          }
+        <TitleImage
+          uri={item.posterUrl}
           style={[styles.image, compact && styles.compactImage]}
-          resizeMode="cover"
         />
         <View style={styles.badgeRow}>
           {item.availability.premium ? <Text style={styles.badge}>Premium</Text> : null}

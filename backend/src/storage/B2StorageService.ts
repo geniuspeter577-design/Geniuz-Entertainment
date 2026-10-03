@@ -4,6 +4,7 @@ import {
   CreateMultipartUploadCommand,
   GetObjectCommand,
   ListPartsCommand,
+  DeleteObjectCommand,
   S3Client,
   UploadPartCommand,
   type CompletedPart,
@@ -17,6 +18,7 @@ import { generateObjectKey, validatePartNumbers, type UploadInput } from './uplo
 
 const MAX_MULTIPART_PARTS = 64;
 const PLAY_URL_EXPIRY_SECONDS = 2 * 60 * 60;
+const TRAILER_URL_EXPIRY_SECONDS = 15 * 60;
 
 export class B2StorageService {
   private readonly client: S3Client;
@@ -43,8 +45,13 @@ export class B2StorageService {
     });
   }
 
-  async startMultipartUpload(fileName: string, contentType: string, objectType: UploadInput['objectType']) {
-    const key = generateObjectKey(fileName, undefined, objectType);
+  async startMultipartUpload(
+    fileName: string,
+    contentType: string,
+    objectType: UploadInput['objectType'],
+    kind: UploadInput['kind'] = 'video',
+  ) {
+    const key = generateObjectKey(fileName, undefined, kind === 'trailer' ? 'trailer' : objectType);
     const result = await this.client.send(
       new CreateMultipartUploadCommand({
         Bucket: this.config.s3Bucket,
@@ -128,8 +135,34 @@ export class B2StorageService {
     );
   }
 
+  async createTrailerPlayUrl(key: string) {
+    if (!/^trailers\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
+      throw new HttpError(400, 'INVALID_TRAILER_KEY', 'The trailer object key is invalid.');
+    }
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({
+        Bucket: this.config.s3Bucket,
+        Key: key,
+      }),
+      { expiresIn: TRAILER_URL_EXPIRY_SECONDS },
+    );
+  }
+
+  async deleteObject(key: string) {
+    if (!/^(?:movies|episodes|trailers)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
+      throw new HttpError(400, 'INVALID_OBJECT_KEY', 'The stored object key is invalid.');
+    }
+    await this.client.send(
+      new DeleteObjectCommand({
+        Bucket: this.config.s3Bucket,
+        Key: key,
+      }),
+    );
+  }
+
   private async verifyMultipartUpload(key: string, uploadId: string) {
-    if (!/^(?:movies|episodes)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key) || !uploadId || uploadId.length > 2048) {
+    if (!/^(?:movies|episodes|trailers)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key) || !uploadId || uploadId.length > 2048) {
       throw new HttpError(400, 'INVALID_UPLOAD', 'The multipart upload details are invalid.');
     }
     try {

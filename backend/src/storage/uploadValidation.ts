@@ -1,7 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { extname } from 'node:path';
 
-import { MAX_VIDEO_FILE_SIZE_BYTES } from '../../../src/constants/video';
+import {
+  MAX_TRAILER_FILE_SIZE_BYTES,
+  MAX_VIDEO_FILE_SIZE_BYTES,
+} from '../../../src/constants/video';
 import { HttpError } from '../http/errors';
 
 export type UploadInput = {
@@ -9,6 +12,7 @@ export type UploadInput = {
   fileSize: number;
   contentType: string;
   objectType: 'movie' | 'episode';
+  kind: 'video' | 'trailer';
 };
 
 export function validateUploadInput(value: unknown): UploadInput {
@@ -21,6 +25,7 @@ export function validateUploadInput(value: unknown): UploadInput {
     typeof input.contentType === 'string' ? input.contentType.trim().toLowerCase() : '';
   const fileSize = input.fileSize;
   const objectType = input.objectType ?? 'movie';
+  const kind = input.kind ?? 'video';
 
   if (
     !fileName ||
@@ -35,7 +40,7 @@ export function validateUploadInput(value: unknown): UploadInput {
     typeof fileSize !== 'number' ||
     !Number.isSafeInteger(fileSize) ||
     fileSize <= 0 ||
-    fileSize > MAX_VIDEO_FILE_SIZE_BYTES
+    fileSize > (kind === 'trailer' ? MAX_TRAILER_FILE_SIZE_BYTES : MAX_VIDEO_FILE_SIZE_BYTES)
   ) {
     throw new HttpError(400, 'INVALID_FILE_SIZE', 'The video size must be between 1 byte and 1 GiB.');
   }
@@ -45,18 +50,22 @@ export function validateUploadInput(value: unknown): UploadInput {
   if (objectType !== 'movie' && objectType !== 'episode') {
     throw new HttpError(400, 'INVALID_OBJECT_TYPE', 'Choose a valid video type.');
   }
+  if (kind !== 'video' && kind !== 'trailer') {
+    throw new HttpError(400, 'INVALID_UPLOAD_KIND', 'Choose a valid upload kind.');
+  }
 
-  return { fileName, fileSize, contentType, objectType };
+  return { fileName, fileSize, contentType, objectType, kind };
 }
 
 export function generateObjectKey(
   fileName: string,
   id = randomUUID(),
-  objectType: 'movie' | 'episode' = 'movie',
+  objectType: 'movie' | 'episode' | 'trailer' = 'movie',
 ) {
   const extension = extname(fileName).toLowerCase();
   const safeExtension = /^\.[a-z0-9]{1,12}$/.test(extension) ? extension : '';
-  return `${objectType === 'episode' ? 'episodes' : 'movies'}/${id}${safeExtension}`;
+  const prefix = objectType === 'episode' ? 'episodes' : objectType === 'trailer' ? 'trailers' : 'movies';
+  return `${prefix}/${id}${safeExtension}`;
 }
 
 export function validatePartNumbers(value: unknown, maximumParts: number) {

@@ -4,21 +4,24 @@ import type { ContentQueryResult } from '../models/content';
 
 export type ContentQueryState<T> = {
   data: T | null;
-  source: 'mock' | 'tmdb' | 'supabase' | null;
+  source: 'mock' | 'tmdb' | 'supabase' | 'local' | null;
   warning?: string;
   error?: string;
   isLoading: boolean;
+  isRefreshing: boolean;
   retry: () => void;
 };
 
-type InternalQueryState<T> = Omit<ContentQueryState<T>, 'retry' | 'isLoading'> & {
+type InternalQueryState<T> = Omit<ContentQueryState<T>, 'retry' | 'isLoading' | 'isRefreshing'> & {
   queryKey: string;
   attempt: number;
+  isFetching: boolean;
 };
 
 export function useContentQuery<T>(
   queryKey: string,
   load: () => Promise<ContentQueryResult<T>>,
+  enabled = true,
 ): ContentQueryState<T> {
   const [attempt, setAttempt] = useState(0);
   const [state, setState] = useState<InternalQueryState<T>>({
@@ -26,19 +29,39 @@ export function useContentQuery<T>(
     source: null,
     queryKey: '',
     attempt: -1,
+    isFetching: false,
   });
 
   useEffect(() => {
     let active = true;
+    if (!enabled) {
+      return () => {
+        active = false;
+      };
+    }
 
-    load()
+    Promise.resolve()
+      .then(() => {
+        if (!active) {
+          return undefined;
+        }
+        setState((current) => ({
+          queryKey,
+          attempt,
+          data: current.queryKey === queryKey ? current.data : null,
+          source: current.queryKey === queryKey ? current.source : null,
+          isFetching: true,
+        }));
+        return load();
+      })
       .then((result) => {
-        if (active) {
+        if (active && result) {
           setState({
             queryKey,
             attempt,
             data: result.data,
             source: result.source,
+            isFetching: false,
             ...(result.warning ? { warning: result.warning } : {}),
           });
         }
@@ -46,30 +69,35 @@ export function useContentQuery<T>(
       .catch((error: unknown) => {
         if (active) {
           console.error(`[useContentQuery] Loading "${queryKey}" failed.`, error);
-          setState({
+          setState((current) => ({
             queryKey,
             attempt,
-            data: null,
-            source: null,
+            data: current.queryKey === queryKey ? current.data : null,
+            source: current.queryKey === queryKey ? current.source : null,
             error: 'We could not load this content. Check your connection and try again.',
-          });
+            isFetching: false,
+          }));
         }
       });
 
     return () => {
       active = false;
     };
-  }, [attempt, load, queryKey]);
+  }, [attempt, enabled, load, queryKey]);
 
   const retry = useCallback(() => setAttempt((current) => current + 1), []);
-  const queryMatches = state.queryKey === queryKey && state.attempt === attempt;
+  const queryMatchesKey = state.queryKey === queryKey;
+  const queryMatchesRequest = queryMatchesKey && state.attempt === attempt;
+  const isFetching =
+    enabled && (!queryMatchesRequest || (queryMatchesRequest && state.isFetching));
 
   return {
-    data: queryMatches ? state.data : null,
-    source: queryMatches ? state.source : null,
-    warning: queryMatches ? state.warning : undefined,
-    error: queryMatches ? state.error : undefined,
-    isLoading: !queryMatches,
+    data: queryMatchesKey ? state.data : null,
+    source: queryMatchesKey ? state.source : null,
+    warning: queryMatchesRequest ? state.warning : undefined,
+    error: queryMatchesRequest ? state.error : undefined,
+    isLoading: enabled && (!queryMatchesKey || (state.data === null && isFetching)),
+    isRefreshing: queryMatchesKey && isFetching && state.data !== null,
     retry,
   };
 }

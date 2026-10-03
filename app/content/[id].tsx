@@ -3,9 +3,10 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import {
   Alert,
-  Image,
   Modal,
+  Platform,
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   Share,
@@ -13,8 +14,11 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Paths } from 'expo-file-system';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { OfflineState } from '../../src/components/OfflineState';
+import { TitleImage } from '../../src/components/TitleImage';
 import {
   ActionChips,
   DetailSkeleton,
@@ -36,26 +40,44 @@ import { contentService } from '../../src/services/createContentService';
 import { formatBytes } from '../../src/services/OfflineDownloadService';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
+import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { formatRuntime } from '../../src/utils/contentPresentation';
+import { getDownloadUnavailableReason } from '../../src/utils/downloadAvailability';
+import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
 
 export default function ContentDetailsScreen() {
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const id = typeof routeId === 'string' ? routeId : '';
   const library = useLibrary();
   const downloads = useDownloads();
+  const { isOnline, retryConnection } = useNetwork();
+  const localDownload = downloads.records.find(
+    (record) => record.item.id === id && record.status === 'downloaded',
+  );
   const fallbackItem =
     library.watchlist.find((item) => item.id === id) ??
     library.continueWatching.find((entry) => entry.item.id === id)?.item;
   const loadContent = useCallback(
-    () =>
-      id.startsWith('geniuz:movie:') && supabaseMovieRepository
+    () => {
+      if (!isOnline) {
+        return Promise.resolve({
+          data: localDownload?.item ?? null,
+          source: 'local' as const,
+        });
+      }
+      return id.startsWith('geniuz:movie:') && supabaseMovieRepository
         ? supabaseMovieRepository.getById(id).then((data) => ({ data, source: 'supabase' as const }))
-        : contentService.getById(id, fallbackItem),
-    [fallbackItem, id],
+        : contentService.getById(id, fallbackItem);
+    },
+    [fallbackItem, id, isOnline, localDownload?.item],
   );
-  const content = useContentQuery(`content:${id}`, loadContent);
-  const media = content.data;
+  const content = useContentQuery<ContentItem | null>(
+    `content:${id}`,
+    loadContent,
+    isOnline || Boolean(localDownload),
+  );
+  const media = isOnline ? content.data : localDownload?.item ?? null;
   const [showDownloadSheet, setShowDownloadSheet] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [activeTab, setActiveTab] = useState<'similar' | 'comments'>('similar');
@@ -79,7 +101,7 @@ export default function ContentDetailsScreen() {
 
   useEffect(() => {
     let active = true;
-    if (!media || !supabaseMovieRepository) {
+    if (!isOnline || !media || !supabaseMovieRepository) {
       return;
     }
     void supabaseMovieRepository
@@ -112,11 +134,11 @@ export default function ContentDetailsScreen() {
     return () => {
       active = false;
     };
-  }, [media, similarAttempt]);
+  }, [isOnline, media, similarAttempt]);
 
   useEffect(() => {
     let active = true;
-    if (!media || media.type !== 'series' || !supabaseMovieRepository) {
+    if (!isOnline || !media || media.type !== 'series' || !supabaseMovieRepository) {
       return;
     }
     void supabaseMovieRepository
@@ -139,13 +161,29 @@ export default function ContentDetailsScreen() {
     return () => {
       active = false;
     };
-  }, [media, seasonAttempt]);
+  }, [isOnline, media, seasonAttempt]);
 
   const saved = media ? library.isInWatchlist(media.id) : false;
   const downloadRecord = downloads.records.find((record) => record.item.id === media?.id);
   const isDownloading = downloadRecord?.status === 'downloading';
   const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
+  const downloadPlatform =
+    Platform.OS === 'ios' || Platform.OS === 'android' || Platform.OS === 'web'
+      ? Platform.OS
+      : 'other';
+  const downloadUnavailableReason = media
+    ? getDownloadUnavailableReason({
+        allowed: media.availability.download,
+        platform: downloadPlatform,
+        supported: isVideoFormatLikelySupported(
+          media.fileExtension ?? getFileExtension(media.mediaPath ?? ''),
+          downloadPlatform,
+        ),
+        availableBytes: Paths.availableDiskSpace,
+        fileSize: media.fileSizeBytes,
+      })
+    : undefined;
   const downloadLabel = isDownloaded
     ? 'Downloaded'
     : isDownloading
@@ -165,7 +203,7 @@ export default function ContentDetailsScreen() {
     );
   }
 
-  if (content.error) {
+  if (content.error && isOnline) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ContentNotice message={content.error} tone="error" actionLabel="Retry" onAction={content.retry} />
@@ -177,6 +215,16 @@ export default function ContentDetailsScreen() {
   }
 
   if (!media) {
+    if (!isOnline) {
+      return (
+        <SafeAreaView style={styles.safeArea}>
+          <OfflineState
+            onRetry={() => void retryConnection()}
+            message="This title is not saved on this device. Only downloaded titles can open offline."
+          />
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.safeArea}>
         <ContentNotice message="This title could not be found in the available catalog." />
@@ -196,6 +244,8 @@ export default function ContentDetailsScreen() {
     season.episodes.some((episode) => episode.availability.download),
   );
   const playTitle = () => router.push({ pathname: '/watch/[id]', params: { id: media.id } });
+  const playTrailer = () =>
+    router.push({ pathname: '/watch/[id]', params: { id: media.id, trailer: '1' } });
   const handleShare = async () => {
     try {
       await Share.share({
@@ -219,8 +269,34 @@ export default function ContentDetailsScreen() {
       playTitle();
       return;
     }
+    if (downloadUnavailableReason) {
+      return;
+    }
     void downloads.download(media).catch(() => undefined);
   };
+
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.scrollContent}>
+          <Pressable onPress={() => router.back()} style={styles.homeButton}>
+            <Text style={styles.homeButtonText}>‹  Back</Text>
+          </Pressable>
+          <TitleImage uri={media.posterUrl} style={styles.offlinePoster} />
+          <Text style={styles.offlineTitle}>{media.title}</Text>
+          <Text style={styles.offlineDescription}>
+            {media.description || 'No description is available for this title.'}
+          </Text>
+          {localDownload ? (
+            <Pressable onPress={playTitle} style={styles.homeButton}>
+              <Text style={styles.homeButtonText}>Play downloaded title</Text>
+            </Pressable>
+          ) : null}
+          <OfflineState onRetry={() => void retryConnection()} />
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -229,12 +305,26 @@ export default function ContentDetailsScreen() {
         scrollEventThrottle={16}
         onScroll={(event) => setIsScrolled(event.nativeEvent.contentOffset.y > 480)}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={content.isRefreshing}
+            onRefresh={() => {
+              content.retry();
+              setSimilarAttempt((attempt) => attempt + 1);
+              if (media.type === 'series') {
+                setSeasonAttempt((attempt) => attempt + 1);
+              }
+            }}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
       >
         <View style={styles.heroWrap}>
-          <Image
-            source={media.backdropUrl ? { uri: media.backdropUrl } : require('../../assets/icon.png')}
+          <TitleImage
+            uri={media.coverUrl ?? media.backdropUrl ?? media.posterUrl}
             style={styles.heroImage}
-            resizeMode="cover"
+            iconSize={48}
           />
           <View style={styles.heroOverlay} />
           <Pressable
@@ -282,11 +372,16 @@ export default function ContentDetailsScreen() {
               </View>
             )}
           </View>
+          {media.trailerStorageKey ? (
+            <Pressable accessibilityRole="button" onPress={playTrailer} style={styles.trailerButton}>
+              <Ionicons name="play-circle-outline" size={19} color={theme.accent} />
+              <Text style={styles.trailerButtonText}>Watch trailer</Text>
+            </Pressable>
+          ) : null}
 
           <ActionChips
             saved={saved}
             downloadLabel={isSeries ? 'Download season' : downloadLabel}
-            downloadsEnabled={isSeries ? seriesHasDownloads : media.availability.download}
             onToggleList={() => void library.toggleWatchlist(media)}
             onShare={() => void handleShare()}
             onDownload={() =>
@@ -312,7 +407,6 @@ export default function ContentDetailsScreen() {
           {media.type === 'movie' && media.mediaPath ? (
             <VersionsCard
               item={media}
-              disabled={!media.availability.download}
               onDownload={() => setShowDownloadSheet(true)}
             />
           ) : null}
@@ -424,6 +518,7 @@ export default function ContentDetailsScreen() {
         item={media}
         record={downloadRecord}
         error={downloads.error}
+        unavailableReason={downloadUnavailableReason}
         onClose={() => setShowDownloadSheet(false)}
         onDownload={() => handleDownload()}
         onCancel={() => void downloads.cancel(media.id).catch(() => undefined)}
@@ -515,6 +610,9 @@ const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.background },
   scrollContent: { paddingBottom: 96 },
   heroWrap: { position: 'relative', height: 260, backgroundColor: theme.surface },
+  offlinePoster: { width: 180, height: 270, borderRadius: 14, alignSelf: 'center', marginTop: 20 },
+  offlineTitle: { color: theme.text, fontSize: 26, fontWeight: '800', marginHorizontal: 20, marginTop: 18 },
+  offlineDescription: { color: theme.muted, fontSize: 15, lineHeight: 23, marginHorizontal: 20, marginTop: 10 },
   heroImage: { width: '100%', height: '100%' },
   heroOverlay: {
     position: 'absolute',
@@ -537,6 +635,20 @@ const styles = StyleSheet.create({
   },
   contentWrap: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 24 },
   primaryActions: { flexDirection: 'row', marginTop: 16 },
+  trailerButton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.surface,
+  },
+  trailerButtonText: { color: theme.text, fontSize: 13, fontWeight: '700' },
   primaryButton: {
     minHeight: 48,
     flexDirection: 'row',

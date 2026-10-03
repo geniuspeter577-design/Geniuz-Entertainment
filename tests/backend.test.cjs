@@ -134,6 +134,7 @@ test('upload preflight allows the configured app origin and auth headers', async
       'Access-Control-Request-Headers': 'authorization,content-type',
     },
   });
+
   assert.equal(response.status, 204);
   assert.equal(response.headers.get('access-control-allow-origin'), origin);
   assert.deepEqual(
@@ -154,6 +155,69 @@ test('upload preflight allows the configured app origin and auth headers', async
   });
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).error.code, 'CORS_ORIGIN_DENIED');
+});
+
+test('trailer play URLs are public for published titles and admin-only for drafts', async (context) => {
+  const originalFetch = global.fetch;
+  let published = true;
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000001',
+        app_metadata: { role: 'admin' },
+      });
+    }
+    if (url.pathname === '/rest/v1/movies') {
+      return makeResponse({
+        content_type: 'movie',
+        trailer_storage_key: 'trailers/00000000-0000-4000-8000-000000000002.mp4',
+        published,
+      });
+    }
+    return makeResponse({ error: 'unexpected request' }, 404);
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const config = {
+    port: 0,
+    tmdbApiKey: undefined,
+    tmdbBaseUrl: 'https://tmdb.example.test/3',
+    anilistApiUrl: 'https://anilist.example.test/graphql',
+    corsOrigins: [],
+    cacheTtlSeconds: 30,
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'publishable-test-key',
+    s3Endpoint: 'https://s3.example.test',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: 'test-key-id',
+    s3SecretAccessKey: 'test-secret',
+    s3Bucket: 'test-bucket',
+  };
+  const provider = new HttpTMDBProvider({ tmdbApiKey: undefined, tmdbBaseUrl: config.tmdbBaseUrl });
+  const server = createApiServer(config, new ContentService(new TMDBContentRepository(provider)));
+  server.listen(0, '127.0.0.1');
+  await once(server, 'listening');
+  context.after(() => new Promise((resolve) => server.close(resolve)));
+  const url = `http://127.0.0.1:${server.address().port}/movies/00000000-0000-4000-8000-000000000001/trailer-play-url`;
+
+  const publicResponse = await originalFetch(url);
+  assert.equal(publicResponse.status, 200);
+  const publicResult = await publicResponse.json();
+  assert.equal(publicResult.expiresIn, 900);
+  assert.match(publicResult.url, /trailers/);
+
+  published = false;
+  const blocked = await originalFetch(url);
+  assert.equal(blocked.status, 403);
+  assert.equal((await blocked.json()).error.code, 'ADMIN_REQUIRED');
+
+  const adminResponse = await originalFetch(url, {
+    headers: { Authorization: 'Bearer admin-test-token' },
+  });
+  assert.equal(adminResponse.status, 200);
 });
 
 test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => {

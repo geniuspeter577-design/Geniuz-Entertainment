@@ -1,10 +1,20 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
 import React, { useCallback } from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import {
+  Image,
+  Pressable,
+  RefreshControl,
+  SafeAreaView,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { ContentRail } from '../../src/components/ContentRail';
+import { OfflineState } from '../../src/components/OfflineState';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
 import type { ContentItem } from '../../src/models/content';
@@ -12,17 +22,19 @@ import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
+import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { formatGenres, formatRating, formatRuntime } from '../../src/utils/contentPresentation';
 
 export default function HomeScreen() {
-  const trendingQuery = useContentQuery('home-trending', contentService.getTrending);
-  const popularQuery = useContentQuery('home-popular', contentService.getPopular);
-  const upcomingQuery = useContentQuery('home-upcoming', contentService.getUpcoming);
-  const nowPlayingQuery = useContentQuery('home-now-playing', contentService.getNowPlaying);
-  const moviesQuery = useContentQuery('home-movies', contentService.getMovies);
-  const seriesQuery = useContentQuery('home-series', contentService.getSeries);
-  const animeQuery = useContentQuery('home-anime', contentService.getAnime);
+  const { isOnline, retryConnection } = useNetwork();
+  const trendingQuery = useContentQuery('home-trending', contentService.getTrending, isOnline);
+  const popularQuery = useContentQuery('home-popular', contentService.getPopular, isOnline);
+  const upcomingQuery = useContentQuery('home-upcoming', contentService.getUpcoming, isOnline);
+  const nowPlayingQuery = useContentQuery('home-now-playing', contentService.getNowPlaying, isOnline);
+  const moviesQuery = useContentQuery('home-movies', contentService.getMovies, isOnline);
+  const seriesQuery = useContentQuery('home-series', contentService.getSeries, isOnline);
+  const animeQuery = useContentQuery('home-anime', contentService.getAnime, isOnline);
   const loadUploadedMovies = useCallback(
     async () => ({
       data: supabaseMovieRepository ? await supabaseMovieRepository.getPublished() : [],
@@ -30,13 +42,15 @@ export default function HomeScreen() {
     }),
     [],
   );
-  const uploadedMoviesQuery = useContentQuery('uploaded-movies', loadUploadedMovies);
+  const uploadedMoviesQuery = useContentQuery('uploaded-movies', loadUploadedMovies, isOnline);
   const downloads = useDownloads();
   const retryUploadedMovies = uploadedMoviesQuery.retry;
   useFocusEffect(
     useCallback(() => {
-      retryUploadedMovies();
-    }, [retryUploadedMovies]),
+      if (isOnline) {
+        retryUploadedMovies();
+      }
+    }, [isOnline, retryUploadedMovies]),
   );
   const {
     continueWatching,
@@ -65,6 +79,28 @@ export default function HomeScreen() {
     seriesQuery.retry,
     animeQuery.retry,
   ];
+  const refreshHome = () => {
+    retries.forEach((retry) => retry());
+    retryUploadedMovies();
+  };
+  const refreshing = [
+    trendingQuery,
+    popularQuery,
+    upcomingQuery,
+    nowPlayingQuery,
+    moviesQuery,
+    seriesQuery,
+    animeQuery,
+    uploadedMoviesQuery,
+  ].some((query) => query.isRefreshing);
+
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <OfflineState onRetry={() => void retryConnection()} />
+      </SafeAreaView>
+    );
+  }
   const warnings = [
     {
       message:
@@ -84,7 +120,18 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={refreshHome}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+      >
         <View style={styles.headerRow}>
           <Text style={styles.brand}>Geniuz+</Text>
           <Pressable

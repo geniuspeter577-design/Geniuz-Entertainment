@@ -62,11 +62,11 @@ Keep `.env` and `backend/.env` out of source control. Put `S3_SECRET_ACCESS_KEY`
 The app uses Supabase for authentication and movie records, Backblaze B2 for newly uploaded private video files, and optional local offline downloads. To enable it:
 
 1. Create a Supabase project.
-2. Apply all three migrations in timestamp order. With the Supabase CLI, run `npx supabase init` once if this project has no `supabase/config.toml`, then `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF`, and `npx supabase db push`. Alternatively, apply the SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor. Existing Supabase Storage movies remain on the `supabase` provider and continue to play.
+2. Apply all migrations in timestamp order. With the Supabase CLI, run `npx supabase init` once if this project has no `supabase/config.toml`, then `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF`, and `npx supabase db push`. Alternatively, apply the SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor. This provisions the public-read `title-images` bucket and its admin-only write policies, plus the title cover and trailer metadata columns. Existing Supabase Storage movies remain on the `supabase` provider and continue to play.
 3. Create an account in Supabase Authentication, then set that user's **app metadata** to `{"role":"admin"}` in the Supabase dashboard. Do not use user-editable metadata for the admin role. Sign out and back in after changing the role.
 4. Create a private Backblaze B2 bucket and a bucket-scoped application key with `readFiles` and `writeFiles` capabilities; `deleteFiles` is also needed for the one-off storage diagnostic cleanup. Copy `.env.example` to `.env` for the app and `backend/.env` for the server. Configure `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, and `SUPABASE_URL` only in the backend environment. In the app `.env`, set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 5. Start the API with `npm run backend:start`. In Codespaces, run `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`, and set the app URL to `https://$CODESPACE_NAME-4000.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` (no trailing slash). Include both `http://localhost:8081` and `https://$CODESPACE_NAME-8081.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` in backend `CORS_ORIGIN`.
-6. Restart Expo with `npm start -- --tunnel`, scan its QR code with Expo Go, and open **Profile → Admin console**. Choose a supported video up to 1 GiB, enter its listing details, confirm distribution rights, and upload. New files upload directly to B2 in 16 MiB parts, with at most three concurrent part uploads. A movie row is created only after storage confirms completion. Check **Allow users to download this title** to enable local downloads.
+6. Restart Expo with `npm start -- --tunnel`, scan its QR code with Expo Go, and open **Profile → Admin console**. Choose a supported video up to 1 GiB, enter its listing details, confirm distribution rights, and upload. New files upload directly to B2 in 16 MiB parts, with at most three concurrent part uploads. A movie row is created only after storage confirms completion. Check **Allow users to download this title** to enable local downloads. Poster and cover images accept JPG, PNG, or WebP up to 5 MB and are resized/compressed before upload; trailers use the same multipart flow and are limited to 300 MB. The rights confirmation is required for image and trailer additions/replacements too.
 
 Configure this CORS rule for the B2 bucket (replace the forwarded origin with your Codespace's actual port-8081 origin):
 
@@ -79,7 +79,7 @@ Configure this CORS rule for the B2 bucket (replace the forwarded origin with yo
           "http://localhost:8081",
           "https://YOUR-CODESPACE-8081.app.github.dev"
         ],
-        "AllowedMethods": ["GET", "PUT", "HEAD"],
+        "AllowedMethods": ["GET", "HEAD", "PUT"],
         "AllowedHeaders": ["*"],
         "ExposeHeaders": ["ETag"],
         "MaxAgeSeconds": 3600
@@ -91,7 +91,11 @@ Configure this CORS rule for the B2 bucket (replace the forwarded origin with yo
 
 Backblaze's S3-compatible API supports `PutBucketCors` and `GetBucketCors`; configure the rule in the bucket CORS settings or through the S3-compatible API. The B2 application key and secret stay server-side; the app receives only short-lived presigned URLs. B2 playback URLs expire after two hours and support HTTP Range requests for seeking. Playback support depends on the device; MP4 is the most compatible format, and MKV and other formats may not play on iPhones. Offline files are stored in the app's document directory and appear in **Downloads** only for titles whose admin setting permits downloads. The app does not implement DRM, transcoding to HLS, or payments. Upload and stream only content you are legally authorized to distribute.
 
+Use `npm run b2:cors` to print the bucket's current CORS rules without changing them. Use `npm run b2:cors -- --apply` to replace them with the rule above, using the current Codespaces port-8081 origin and all origins in backend `CORS_ORIGIN`. Both commands use the backend `S3_*` settings.
+
 The Supabase publishable key is intentionally public and is protected by RLS. Never put a Supabase `service_role` key in `.env` variables prefixed with `EXPO_PUBLIC_`, the app, or a mobile build.
+
+Downloaded title metadata and a local poster copy are saved with the video so its details, Downloads listing, and playback remain available offline. The app checks connectivity and limits offline mode to saved downloads; reconnecting refreshes online catalogs automatically. Supabase's free plan allows up to 50 MB per storage file and about 1 GB total, while B2's free allowance is 10 GB. Image storage, video storage, and transfer beyond provider allowances may incur charges; monitor both project usage dashboards. Each offline video also consumes space on the phone.
 
 ## API routes
 

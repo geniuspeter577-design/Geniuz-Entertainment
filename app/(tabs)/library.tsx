@@ -1,19 +1,44 @@
 import { router } from 'expo-router';
 import React from 'react';
-import { Image, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { OfflineState } from '../../src/components/OfflineState';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useLibrary } from '../../src/state/LibraryContext';
+import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 
 export default function LibraryScreen() {
+  const { isOnline, retryConnection } = useNetwork();
   const { continueWatching, error, isLoading, retryLoad, watchlist } = useLibrary();
+
+  if (!isOnline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <OfflineState
+          onRetry={() => void retryConnection()}
+          message="Your online library is unavailable offline. Downloaded titles remain ready in My downloads."
+        />
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={isLoading}
+            onRefresh={retryLoad}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+      >
         <Text style={styles.header}>My library</Text>
 
         <View style={styles.summaryRow}>

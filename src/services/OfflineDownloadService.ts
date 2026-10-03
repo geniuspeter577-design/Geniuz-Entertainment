@@ -9,6 +9,7 @@ export type OfflineDownloadStatus = 'queued' | 'downloading' | 'downloaded' | 'f
 export type OfflineDownloadRecord = {
   item: ContentItem;
   filePath: string;
+  posterFilePath?: string;
   size: number;
   status: OfflineDownloadStatus;
   progress: number;
@@ -38,6 +39,8 @@ export type DownloadFileSystem = {
   fileExists(filePath: string): boolean;
   getFileSize(filePath: string): number | null;
   deleteFile(filePath: string): void;
+  getPosterFilePath?(item: ContentItem): string;
+  downloadPoster?(url: string, filePath: string, signal: AbortSignal): Promise<void>;
 };
 
 const STORAGE_KEY = '@geniuz/downloads/v1';
@@ -55,6 +58,7 @@ function isDownloadRecord(value: unknown): value is OfflineDownloadRecord {
     typeof value.item.id === 'string' &&
     typeof value.item.title === 'string' &&
     typeof value.filePath === 'string' &&
+    (value.posterFilePath === undefined || typeof value.posterFilePath === 'string') &&
     typeof value.size === 'number' &&
     Number.isFinite(value.size) &&
     value.size > 0 &&
@@ -121,6 +125,9 @@ export class OfflineDownloadService {
       if (record.status === 'downloading') {
         if (this.fileSystem.fileExists(record.filePath)) {
           this.fileSystem.deleteFile(record.filePath);
+        }
+        if (record.posterFilePath && this.fileSystem.fileExists(record.posterFilePath)) {
+          this.fileSystem.deleteFile(record.posterFilePath);
         }
         restored.push({ ...record, status: 'failed', progress: 0 });
       } else if (record.status === 'queued') {
@@ -273,6 +280,9 @@ export class OfflineDownloadService {
     if (record && this.fileSystem.fileExists(record.filePath)) {
       this.fileSystem.deleteFile(record.filePath);
     }
+    if (record?.posterFilePath && this.fileSystem.fileExists(record.posterFilePath)) {
+      this.fileSystem.deleteFile(record.posterFilePath);
+    }
     this.records = this.records.filter((candidate) => candidate.item.id !== itemId);
     this.emit();
     await this.persist();
@@ -280,9 +290,14 @@ export class OfflineDownloadService {
 
   private async performDownload(item: ContentItem, size: number, signal: AbortSignal) {
     const filePath = this.fileSystem.getFilePath(item);
+    const posterFilePath =
+      item.posterUrl && this.fileSystem.getPosterFilePath && this.fileSystem.downloadPoster
+        ? this.fileSystem.getPosterFilePath(item)
+        : undefined;
     const record: OfflineDownloadRecord = {
       item,
       filePath,
+      ...(posterFilePath ? { posterFilePath } : {}),
       size,
       status: 'downloading',
       progress: 0,
@@ -324,14 +339,43 @@ export class OfflineDownloadService {
       if (actualSize !== size) {
         throw new Error('The downloaded file size did not match. Delete it and try again.');
       }
-      await this.setRecord({ ...record, status: 'downloaded', progress: 100, size: actualSize });
+      let savedItem = item;
+      let posterCached = false;
+      if (posterFilePath && item.posterUrl && this.fileSystem.downloadPoster) {
+        try {
+          await this.fileSystem.downloadPoster(item.posterUrl, posterFilePath, signal);
+          savedItem = { ...item, posterUrl: posterFilePath };
+          posterCached = true;
+        } catch (posterError) {
+          if (this.fileSystem.fileExists(posterFilePath)) {
+            this.fileSystem.deleteFile(posterFilePath);
+          }
+          if (signal.aborted) {
+            throw posterError;
+          }
+          console.warn('[Downloads] Poster could not be cached for offline use.', posterError);
+          savedItem = { ...item, posterUrl: undefined };
+        }
+      }
+      await this.setRecord({
+        ...record,
+        item: savedItem,
+        ...(posterCached ? {} : { posterFilePath: undefined }),
+        status: 'downloaded',
+        progress: 100,
+        size: actualSize,
+      });
     } catch (error) {
       if (this.fileSystem.fileExists(filePath)) {
         this.fileSystem.deleteFile(filePath);
       }
+      if (posterFilePath && this.fileSystem.fileExists(posterFilePath)) {
+        this.fileSystem.deleteFile(posterFilePath);
+      }
       const canceled = signal.aborted;
       await this.setRecord({
         ...record,
+        posterFilePath: undefined,
         status: canceled ? 'canceled' : 'failed',
         progress: 0,
       });

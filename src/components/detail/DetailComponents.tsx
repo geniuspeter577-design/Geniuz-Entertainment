@@ -61,7 +61,6 @@ export function MetaRow({ item, extra }: MetaRowProps) {
 type ActionChipsProps = {
   saved: boolean;
   downloadLabel: string;
-  downloadsEnabled: boolean;
   onToggleList: () => void;
   onShare: () => void;
   onDownload: () => void;
@@ -71,7 +70,6 @@ type ActionChipsProps = {
 export function ActionChips({
   saved,
   downloadLabel,
-  downloadsEnabled,
   onToggleList,
   onShare,
   onDownload,
@@ -89,7 +87,6 @@ export function ActionChips({
         icon="download-outline"
         label={downloadLabel}
         onPress={onDownload}
-        disabled={!downloadsEnabled}
       />
       <ActionChip icon="folder-open-outline" label="My downloads" onPress={onMyDownloads} />
     </ScrollView>
