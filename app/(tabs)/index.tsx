@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -23,8 +23,11 @@ import { MockContentRepository } from '../../src/repositories/MockContentReposit
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
+import { loadNotifications, getUnreadNotificationCount } from '../../src/services/NotificationsStore';
 import { formatRuntime } from '../../src/utils/contentPresentation';
 import {
+  getCategoryItems,
+  getCategoryTabs,
   isDemoCatalogEnabled,
   loadPublishedCatalog,
   sortPublishedNewest,
@@ -35,6 +38,7 @@ const demoRepository = new MockContentRepository();
 export default function HomeScreen() {
   const { isOnline, retryConnection } = useNetwork();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const loadCatalog = useCallback(async () => {
     const catalog = await loadPublishedCatalog(
       () => {
@@ -75,6 +79,38 @@ export default function HomeScreen() {
   const series = catalogQuery.data?.series ?? [];
   const publishedItems = sortPublishedNewest([...movies, ...series]);
   const heroItems = publishedItems.slice(0, 5);
+  const categoryTabs = useMemo(
+    () => [
+      { key: 'trending', label: 'Trending' },
+      { key: 'all', label: 'All' },
+      ...getCategoryTabs(publishedItems).map(({ category }) => ({ key: category, label: category })),
+    ],
+    [publishedItems],
+  );
+  const [selectedCategory, setSelectedCategory] = useState('trending');
+  const tabsScrollRef = useRef<ScrollView | null>(null);
+  const activeCategoryItems = selectedCategory === 'trending'
+    ? publishedItems
+    : selectedCategory === 'all'
+      ? publishedItems
+      : getCategoryItems(publishedItems, selectedCategory);
+  const activeHeroItems = selectedCategory === 'trending'
+    ? heroItems
+    : selectedCategory === 'all'
+      ? heroItems
+      : sortPublishedNewest(activeCategoryItems).slice(0, 5);
+
+  useEffect(() => {
+    const selectedIndex = categoryTabs.findIndex(({ key }) => key === selectedCategory);
+    if (selectedIndex < 0) {
+      return;
+    }
+    tabsScrollRef.current?.scrollTo({
+      x: Math.max(0, selectedIndex * 118 - 24),
+      y: 0,
+      animated: true,
+    });
+  }, [categoryTabs, selectedCategory]);
   const listedIds = new Set(publishedItems.map((item) => item.id));
   const recent = continueWatching.filter(
     ({ item }) => listedIds.has(item.id) || (catalogQuery.data?.showingDemo && item.source === 'mock'),
@@ -89,6 +125,20 @@ export default function HomeScreen() {
     }))
     .filter(({ items }) => items.length > 0);
   const retryCatalog = catalogQuery.retry;
+
+  useEffect(() => {
+    let active = true;
+    void loadNotifications().then((items) => {
+      if (active) {
+        setUnreadCount(getUnreadNotificationCount(items));
+      }
+    }).catch((error: unknown) => {
+      console.error('[Home] Could not load notifications.', error);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (!isOnline) {
     return (
@@ -107,7 +157,14 @@ export default function HomeScreen() {
             />
           }
         >
-          <Text style={styles.brand}>Geniuz+</Text>
+          <View style={styles.brandGroup}>
+            <Image
+              source={require('../../assets/branding/logo-mark.png')}
+              style={styles.brandMark}
+              resizeMode="contain"
+            />
+            <Text style={styles.brand}>Geniuz+</Text>
+          </View>
           <OfflineState onRetry={() => void retryConnection()} />
         </ScrollView>
       </SafeAreaView>
@@ -134,15 +191,22 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.headerRow}>
-          <Text style={styles.brand}>Geniuz+</Text>
+          <View style={styles.brandGroup}>
+            <Image
+              source={require('../../assets/branding/logo-mark.png')}
+              style={styles.brandMark}
+              resizeMode="contain"
+            />
+            <Text style={styles.brand}>Geniuz+</Text>
+          </View>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Notifications"
+            accessibilityLabel={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
             style={styles.iconButton}
-            disabled
-            accessibilityState={{ disabled: true }}
+            onPress={() => router.push('/notifications')}
           >
             <Ionicons name="notifications-outline" size={22} color={theme.text} />
+            {unreadCount > 0 ? <View style={styles.notificationBadge}><Text style={styles.notificationBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View> : null}
           </Pressable>
         </View>
 
@@ -159,9 +223,35 @@ export default function HomeScreen() {
           <ContentNotice message="Demo catalog — titles shown here are sample content, not playable streams." />
         ) : null}
 
-        {heroItems.length ? (
+        {categoryTabs.length > 1 ? (
+          <ScrollView
+            ref={tabsScrollRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.categoryTabs}
+            snapToInterval={120}
+          >
+            {categoryTabs.map(({ key, label }) => {
+              const isSelected = selectedCategory === key;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: isSelected }}
+                  accessibilityLabel={key === 'trending' ? 'Trending category' : key === 'all' ? 'All category' : `${label} category`}
+                  onPress={() => setSelectedCategory(key)}
+                  style={[styles.categoryTab, isSelected && styles.selectedCategoryTab]}
+                >
+                  <Text style={[styles.categoryTabText, isSelected && styles.selectedCategoryTabText]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        ) : null}
+
+        {activeHeroItems.length ? (
           <HomeHeroCarousel
-            items={heroItems}
+            items={activeHeroItems}
             isLoading={catalogQuery.isLoading}
             isInWatchlist={isInWatchlist}
             onToggleWatchlist={(item) => void toggleWatchlist(item)}
@@ -169,6 +259,9 @@ export default function HomeScreen() {
         ) : null}
         {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
         {noTitles ? <Text style={styles.emptyText}>No titles yet</Text> : null}
+        {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'trending' && selectedCategory !== 'all' && activeCategoryItems.length === 0 ? (
+          <Text style={styles.emptyText}>No titles in this category yet</Text>
+        ) : null}
 
         {recent.length ? (
           <>
@@ -209,43 +302,71 @@ export default function HomeScreen() {
         ) : null}
 
         {publishedItems.length ? (
-          <>
-            <ContentRail
-              title="Latest"
-              items={publishedItems}
-              isLoading={catalogQuery.isLoading}
-              retry={retryCatalog}
-              emptyMessage="No titles yet"
-            />
-            {movies.length ? (
+          (() => {
+            if (selectedCategory === 'trending') {
+              return (
+                <>
+                  <ContentRail
+                    title="Latest"
+                    items={publishedItems}
+                    isLoading={catalogQuery.isLoading}
+                    retry={retryCatalog}
+                    emptyMessage="No titles yet"
+                  />
+                  {movies.length ? (
+                    <ContentRail
+                      title="Movies"
+                      items={sortPublishedNewest(movies)}
+                      isLoading={false}
+                      retry={retryCatalog}
+                      emptyMessage="No movies yet"
+                    />
+                  ) : null}
+                  {series.length ? (
+                    <ContentRail
+                      title="Series"
+                      items={sortPublishedNewest(series)}
+                      isLoading={false}
+                      retry={retryCatalog}
+                      emptyMessage="No series yet"
+                    />
+                  ) : null}
+                  {genresWithItems.map(({ genre, items }) => (
+                    <ContentRail
+                      key={genre}
+                      title={genre}
+                      items={items}
+                      isLoading={false}
+                      retry={retryCatalog}
+                      emptyMessage={`No ${genre} titles yet`}
+                    />
+                  ))}
+                </>
+              );
+            }
+
+            if (selectedCategory === 'all') {
+              return (
+                <ContentRail
+                  title="All titles"
+                  items={publishedItems}
+                  isLoading={catalogQuery.isLoading}
+                  retry={retryCatalog}
+                  emptyMessage="No titles yet"
+                />
+              );
+            }
+
+            return activeCategoryItems.length ? (
               <ContentRail
-                title="Movies"
-                items={sortPublishedNewest(movies)}
-                isLoading={false}
+                title={selectedCategory}
+                items={activeCategoryItems}
+                isLoading={catalogQuery.isLoading}
                 retry={retryCatalog}
-                emptyMessage="No movies yet"
+                emptyMessage={`No ${selectedCategory} titles yet`}
               />
-            ) : null}
-            {series.length ? (
-              <ContentRail
-                title="Series"
-                items={sortPublishedNewest(series)}
-                isLoading={false}
-                retry={retryCatalog}
-                emptyMessage="No series yet"
-              />
-            ) : null}
-            {genresWithItems.map(({ genre, items }) => (
-              <ContentRail
-                key={genre}
-                title={genre}
-                items={items}
-                isLoading={false}
-                retry={retryCatalog}
-                emptyMessage={`No ${genre} titles yet`}
-              />
-            ))}
-          </>
+            ) : null;
+          })()
         ) : null}
       </ScrollView>
     </SafeAreaView>
@@ -262,6 +383,17 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 18,
   },
+  brandGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+    flexShrink: 1,
+  },
+  brandMark: {
+    width: 24,
+    height: 24,
+    marginRight: 8,
+  },
   brand: { fontSize: 28, color: theme.text, fontWeight: '800', letterSpacing: -0.8 },
   iconButton: {
     width: 40,
@@ -272,8 +404,50 @@ const styles = StyleSheet.create({
     backgroundColor: theme.surface,
     borderWidth: 1,
     borderColor: theme.border,
+    position: 'relative',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    right: -4,
+    top: -4,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationBadgeText: {
+    color: theme.background,
+    fontSize: 10,
+    fontWeight: '800',
   },
   emptyText: { color: theme.secondaryText, fontSize: 14, paddingVertical: 18 },
+  categoryTabs: { paddingTop: 4, paddingBottom: 12, paddingHorizontal: 2, gap: 8 },
+  categoryTab: {
+    minHeight: 44,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+    marginRight: 8,
+  },
+  selectedCategoryTab: {
+    borderBottomColor: theme.accent,
+  },
+  categoryTabText: {
+    color: theme.secondaryText,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  selectedCategoryTabText: {
+    color: theme.text,
+    fontWeight: '800',
+  },
   rowList: { paddingRight: 18, paddingBottom: 4 },
   continueCard: {
     width: 250,

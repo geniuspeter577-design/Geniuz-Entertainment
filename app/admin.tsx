@@ -254,6 +254,8 @@ export default function AdminScreen() {
   const [formMessage, setFormMessage] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [movies, setMovies] = useState<AdminMovie[]>([]);
+  const [selectedTitleIds, setSelectedTitleIds] = useState<string[]>([]);
+  const [selectMode, setSelectMode] = useState(false);
   const [seasons, setSeasons] = useState<AdminSeasonChoice[]>([]);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [moviesError, setMoviesError] = useState<string>();
@@ -1555,6 +1557,38 @@ export default function AdminScreen() {
   const adminSeries = movies.filter((movie) => movie.type === 'series');
   const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
 
+  const toggleTitleSelection = (movieId: string) => {
+    setSelectedTitleIds((current) => current.includes(movieId)
+      ? current.filter((id) => id !== movieId)
+      : [...current, movieId]);
+  };
+
+  const deleteSelectedTitles = useCallback(async () => {
+    const selectedMovies = movies.filter((movie) => selectedTitleIds.includes(movie.id));
+    if (!selectedMovies.length) {
+      return;
+    }
+
+    Alert.alert(
+      'Delete selected titles?',
+      `This permanently removes ${selectedMovies.length} title(s): ${selectedMovies.map(({ title }) => title).join(', ')}.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: `Delete selected (${selectedMovies.length})`,
+          style: 'destructive',
+          onPress: async () => {
+            for (const movie of selectedMovies) {
+              await deleteAdminTitle(movie);
+            }
+            setSelectedTitleIds([]);
+            setSelectMode(false);
+          },
+        },
+      ],
+    );
+  }, [deleteAdminTitle, movies, selectedTitleIds]);
+
   if (!authLoading && routeState === 'not-found') {
     return (
       <SafeAreaView style={styles.safeArea}>
@@ -2209,8 +2243,39 @@ export default function AdminScreen() {
             {!moviesLoading && !moviesError && movies.length === 0 ? (
               <Text style={styles.helper}>No uploaded movies yet.</Text>
             ) : null}
+            {movies.length ? (
+              <View style={styles.bulkActionsRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  onPress={() => setSelectMode((current) => !current)}
+                  style={styles.secondaryButton}
+                >
+                  <Text style={styles.secondaryButtonText}>{selectMode ? 'Cancel select' : 'Select titles'}</Text>
+                </Pressable>
+                {selectMode ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={selectedTitleIds.length === 0}
+                    onPress={() => void deleteSelectedTitles()}
+                    style={[styles.primaryButton, selectedTitleIds.length === 0 && styles.disabledButton]}
+                  >
+                    <Text style={styles.primaryButtonText}>Delete selected ({selectedTitleIds.length})</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
             {movies.map((movie) => (
               <View key={movie.id} style={styles.movieRow}>
+                {selectMode ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: selectedTitleIds.includes(movie.id) }}
+                    onPress={() => toggleTitleSelection(movie.id)}
+                    style={[styles.selectionBox, selectedTitleIds.includes(movie.id) && styles.selectionBoxSelected]}
+                  >
+                    {selectedTitleIds.includes(movie.id) ? <Text style={styles.selectionCheck}>✓</Text> : null}
+                  </Pressable>
+                ) : null}
                 <TitleImage uri={movie.posterUrl} style={styles.catalogPoster} iconSize={18} />
                 <View style={styles.grow}>
                   <Text style={styles.movieTitle}>{movie.title}</Text>
@@ -2664,6 +2729,32 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
     padding: 14,
+  },
+  bulkActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+    flexWrap: 'wrap',
+  },
+  selectionBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: theme.border,
+    backgroundColor: theme.background,
+  },
+  selectionBoxSelected: {
+    backgroundColor: theme.accent,
+    borderColor: theme.accent,
+  },
+  selectionCheck: {
+    color: theme.background,
+    fontSize: 14,
+    fontWeight: '900',
   },
   cleanupRow: {
     flexDirection: 'row',

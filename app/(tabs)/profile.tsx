@@ -91,12 +91,15 @@ export default function ProfileScreen() {
             <Pressable
               key={label}
               style={styles.actionCard}
-              disabled={label !== 'Settings'}
+              disabled={label !== 'Settings' && label !== 'Notifications'}
               accessibilityRole="button"
-              accessibilityState={{ disabled: label !== 'Settings' }}
+              accessibilityState={{ disabled: label !== 'Settings' && label !== 'Notifications' }}
               onPress={() => {
                 if (label === 'Settings') {
                   router.push('/settings');
+                }
+                if (label === 'Notifications') {
+                  router.push('/notifications');
                 }
               }}
             >

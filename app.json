@@ -1,16 +1,26 @@
 {
   "expo": {
-    "name": "Geniuz-Entertainment",
+    "name": "Geniuz+",
     "slug": "geniuz-entertainment",
     "version": "1.0.0",
     "orientation": "portrait",
     "scheme": "geniuz",
     "userInterfaceStyle": "dark",
+    "icon": "./assets/branding/icon.png",
     "plugins": [
       "expo-router",
       "expo-status-bar",
       "expo-font",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/branding/splash-icon.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#0E1014",
+          "imageWidth": 280
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
@@ -20,13 +30,14 @@
       "package": "com.geniuz.entertainment",
       "adaptiveIcon": {
         "backgroundColor": "#0E1014",
-        "foregroundImage": "./assets/icon.png"
+        "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
+        "monochromeImage": "./assets/branding/adaptive-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/branding/favicon.png"
     }
   }
 }

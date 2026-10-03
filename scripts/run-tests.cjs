@@ -34,6 +34,7 @@ const sources = [
   'src/utils/episodeSelection.ts',
   'src/services/OfflineDownloadService.ts',
   'src/services/TitleCleanupStore.ts',
+  'src/services/NotificationsStore.ts',
 ];
 
 function run(command, args) {
@@ -86,6 +87,7 @@ try {
       'tests/offline-download.test.cjs',
       'tests/backend-storage.test.cjs',
       'tests/detail-features.test.cjs',
+      'tests/category-notifications.test.cjs',
     ]);
   }
 } finally {
