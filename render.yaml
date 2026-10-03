@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: geniuz-backend
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start
+    envVars:
+      - key: NODE_VERSION
+        value: "22.9.0"

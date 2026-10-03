@@ -1,8 +1,10 @@
-import { loadConfig } from './config/config';
+import { ensureRequiredBackendEnv, loadConfig } from './config/config';
 import { createApiServer } from './http/server';
 import { TMDBContentRepository } from './repositories/TMDBContentRepository';
 import { HttpTMDBProvider } from './providers/TMDBProvider';
 import { ContentService } from './services/ContentService';
+
+ensureRequiredBackendEnv(process.env);
 
 const config = loadConfig();
 const provider = new HttpTMDBProvider(config);

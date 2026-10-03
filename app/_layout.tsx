@@ -1,8 +1,10 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useColorScheme } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, useColorScheme } from 'react-native';
 
 import { OfflineBanner } from '../src/components/OfflineBanner';
+import { prewarmContentApi } from '../src/services/createContentService';
 import { theme } from '../src/theme';
 import { DownloadsProvider } from '../src/state/DownloadsContext';
 import { LibraryProvider } from '../src/state/LibraryContext';
@@ -11,6 +13,16 @@ import { NetworkProvider } from '../src/state/NetworkContext';
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme !== 'light';
+
+  useEffect(() => {
+    prewarmContentApi();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        prewarmContentApi();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
 
   return (
     <NetworkProvider>

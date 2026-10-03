@@ -9,6 +9,7 @@ import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { OfflineState } from '../../src/components/OfflineState';
+import { logger } from '../../src/utils/logger';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
@@ -92,8 +93,8 @@ export default function WatchScreen() {
           originalOrientationLock.current = lock;
         }
       })
-      .catch((orientationError: unknown) => {
-        console.error('[WatchScreen] Could not read the original screen orientation.', orientationError);
+      .catch(() => {
+        logger.warn('[WatchScreen] Could not read the original screen orientation.');
       });
     return () => {
       active = false;
@@ -125,8 +126,8 @@ export default function WatchScreen() {
       active = false;
       const previousBrightness = originalBrightness.current;
       if (previousBrightness !== undefined) {
-        void Brightness.setBrightnessAsync(previousBrightness).catch((brightnessError: unknown) => {
-          console.error('[WatchScreen] Could not restore the original display brightness.', brightnessError);
+        void Brightness.setBrightnessAsync(previousBrightness).catch(() => {
+          logger.warn('[WatchScreen] Could not restore the original display brightness.');
         });
       }
     };
@@ -140,8 +141,7 @@ export default function WatchScreen() {
           setShowGestureHint(true);
         }
       })
-      .catch((storageError: unknown) => {
-        console.error('[WatchScreen] Could not read the player gesture hint preference.', storageError);
+      .catch(() => {
         if (active) {
           setShowGestureHint(true);
         }
@@ -181,8 +181,8 @@ export default function WatchScreen() {
           return;
         }
         brightnessRef.current = value;
-        void Brightness.setBrightnessAsync(value).catch((brightnessError: unknown) => {
-          console.error('[WatchScreen] Could not change the display brightness.', brightnessError);
+        void Brightness.setBrightnessAsync(value).catch(() => {
+          logger.warn('[WatchScreen] Could not change the display brightness.');
         });
       } else {
         setPlayerVolume(player, value);
@@ -216,16 +216,15 @@ export default function WatchScreen() {
           : ScreenOrientation.OrientationLock.PORTRAIT_UP,
       );
       setIsLandscape(landscape);
-    } catch (orientationError) {
-      console.error('[WatchScreen] Could not change screen orientation.', orientationError);
+    } catch {
+      logger.warn('[WatchScreen] Could not change screen orientation.');
       Alert.alert('Rotation unavailable', 'Could not rotate the screen on this device.');
     }
   };
 
   const dismissGestureHint = () => {
     setShowGestureHint(false);
-    void AsyncStorage.setItem(PLAYER_GESTURE_HINT_KEY, 'true').catch((storageError: unknown) => {
-      console.error('[WatchScreen] Could not save the player gesture hint preference.', storageError);
+    void AsyncStorage.setItem(PLAYER_GESTURE_HINT_KEY, 'true').catch(() => {
       Alert.alert('Could not save setting', 'The player gesture tip may appear again next time.');
     });
   };
@@ -345,14 +344,21 @@ export default function WatchScreen() {
           setPlaybackUrl(url);
         }
       } catch (loadError) {
-        console.error('[WatchScreen] Could not prepare movie playback.');
+        const status = typeof loadError === 'object' && loadError !== null && 'status' in loadError
+          ? Number(loadError.status)
+          : undefined;
+        const code = typeof loadError === 'object' && loadError !== null && 'code' in loadError
+          ? String(loadError.code)
+          : undefined;
         if (active) {
-          setError(
+          const message =
             loadError instanceof Error
               ? loadError.message
-              : 'Could not prepare this movie for playback. Please try again.',
-          );
+              : 'Could not prepare this movie for playback. Please try again.';
+          const devSuffix = __DEV__ && (status || code) ? ` [HTTP ${status ?? 'n/a'} • ${code ?? 'unknown'}]` : '';
+          setError(`${message}${devSuffix}`);
         }
+        logger.warn('[WatchScreen] Could not prepare movie playback.', status ?? 'n/a', code ?? 'unknown');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -389,17 +395,25 @@ export default function WatchScreen() {
 
     return () => {
       active = false;
-      player.pause();
+      try {
+        player.pause();
+      } catch {
+        // ignore released-player cleanup edge cases
+      }
     };
   }, [player, playbackUrl]);
 
   useEffect(() => {
     const subscription = player.addListener('statusChange', ({ status }) => {
       if (status === 'error') {
-        console.error('[WatchScreen] Video playback failed.');
+        logger.warn('[WatchScreen] Video playback failed.');
         setError('Could not play this video. Check your connection and retry.');
         setIsLoading(false);
-        player.pause();
+        try {
+          player.pause();
+        } catch {
+          // ignore released-player cleanup edge cases
+        }
       }
     });
     return () => subscription.remove();
@@ -429,8 +443,8 @@ export default function WatchScreen() {
           });
         }
       })
-      .catch((sequenceError: unknown) => {
-        console.error('[WatchScreen] Could not load the next episode.', sequenceError);
+      .catch(() => {
+        logger.warn('[WatchScreen] Could not load the next episode.');
       });
     return () => {
       active = false;

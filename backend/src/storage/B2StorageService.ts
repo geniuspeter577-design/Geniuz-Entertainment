@@ -11,7 +11,7 @@ import {
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
-import { VIDEO_UPLOAD_PART_SIZE_BYTES } from '../../../src/constants/video';
+import { VIDEO_UPLOAD_PART_SIZE_BYTES } from '../constants/video';
 import type { Config } from '../config/config';
 import { HttpError } from '../http/errors';
 import { generateObjectKey, validatePartNumbers, type UploadInput } from './uploadValidation';

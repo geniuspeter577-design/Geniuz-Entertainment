@@ -1,3 +1,14 @@
+export const REQUIRED_BACKEND_ENV_VARS = [
+  'S3_ENDPOINT',
+  'S3_REGION',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_BUCKET',
+  'SUPABASE_URL',
+  'SUPABASE_PUBLISHABLE_KEY',
+  'CORS_ORIGIN',
+] as const;
+
 export type Config = {
   port: number;
   tmdbApiKey: string | undefined;
@@ -24,6 +35,15 @@ function positiveInteger(value: string | undefined, fallback: number) {
     throw new Error('Expected a positive integer environment setting.');
   }
   return parsed;
+}
+
+export function ensureRequiredBackendEnv(environment: NodeJS.ProcessEnv = process.env) {
+  const missing = REQUIRED_BACKEND_ENV_VARS.filter(
+    (name) => !environment[name]?.trim(),
+  );
+  if (missing.length > 0) {
+    throw new Error(`Missing required backend environment variables: ${missing.join(', ')}`);
+  }
 }
 
 export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config {
@@ -63,11 +83,9 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
       .map((origin) => origin.trim())
       .filter(Boolean),
     cacheTtlSeconds,
-    supabaseUrl: environment.SUPABASE_URL?.trim() || environment.EXPO_PUBLIC_SUPABASE_URL?.trim() || undefined,
+    supabaseUrl: environment.SUPABASE_URL?.trim() || undefined,
     supabasePublishableKey:
-      environment.SUPABASE_PUBLISHABLE_KEY?.trim() ||
-      environment.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
-      undefined,
+      environment.SUPABASE_PUBLISHABLE_KEY?.trim() || undefined,
     s3Endpoint: environment.S3_ENDPOINT?.trim() || undefined,
     s3Region: environment.S3_REGION?.trim() || undefined,
     s3AccessKeyId: environment.S3_ACCESS_KEY_ID?.trim() || undefined,

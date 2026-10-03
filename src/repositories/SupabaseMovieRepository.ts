@@ -988,7 +988,10 @@ export class SupabaseMovieRepository {
     try {
       result = await response.json();
     } catch (parseError) {
-      throw new Error('The video service returned an invalid response.', { cause: parseError });
+      const error = new Error('The video service returned an invalid response.', { cause: parseError });
+      Reflect.set(error, 'status', response.status);
+      Reflect.set(error, 'code', 'INVALID_PLAYBACK_RESPONSE');
+      throw error;
     }
     if (!response.ok || typeof result !== 'object' || result === null || !('url' in result)) {
       const message =
@@ -1001,10 +1004,25 @@ export class SupabaseMovieRepository {
         typeof result.error.message === 'string'
           ? result.error.message
           : 'Could not prepare this movie for playback.';
-      throw new Error(message);
+      const error = new Error(message);
+      Reflect.set(error, 'status', response.status);
+      Reflect.set(error, 'code',
+        typeof result === 'object' &&
+        result !== null &&
+        'error' in result &&
+        typeof result.error === 'object' &&
+        result.error !== null &&
+        'code' in result.error &&
+        typeof result.error.code === 'string'
+          ? result.error.code
+          : 'PLAYBACK_ERROR');
+      throw error;
     }
     if (typeof result.url !== 'string') {
-      throw new Error('The video service returned an invalid playback URL.');
+      const error = new Error('The video service returned an invalid playback URL.');
+      Reflect.set(error, 'status', response.status);
+      Reflect.set(error, 'code', 'INVALID_PLAYBACK_URL');
+      throw error;
     }
     return result.url;
   }

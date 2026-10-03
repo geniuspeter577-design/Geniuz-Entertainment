@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 
 import { TitleImage } from '../TitleImage';
+import { logger } from '../../utils/logger';
 import type { ContentItem } from '../../models/content';
 import { supabaseMovieRepository } from '../../repositories/SupabaseMovieRepository';
 import { useNetwork } from '../../state/NetworkContext';
@@ -66,6 +67,7 @@ export function TitleTrailerHero({
   const isTrailerMutedRef = useRef(true);
   const [trailerRetry, setTrailerRetry] = useState(0);
   const [isVideoMounted, setIsVideoMounted] = useState(false);
+  const playerReleasedRef = useRef(false);
 
   const hasTrailer = Boolean(item.trailerStorageKey);
   const shouldAutoplay = shouldAutoplayTrailer({
@@ -99,7 +101,7 @@ export function TitleTrailerHero({
         }
       })
       .catch((preferenceError: unknown) => {
-        console.error('[TitleTrailerHero] Could not read trailer autoplay preference.', preferenceError);
+        logger.warn('[TitleTrailerHero] Could not read trailer autoplay preference.');
         if (active) {
           setAutoplayEnabled(false);
           setPreferenceError(true);
@@ -119,6 +121,20 @@ export function TitleTrailerHero({
     });
     return () => subscription.remove();
   }, []);
+
+  useEffect(() => () => {
+    playerReleasedRef.current = true;
+    try {
+      player.pause();
+    } catch {
+      // ignore released-player cleanup edge cases
+    }
+    try {
+      player.release();
+    } catch {
+      // ignore released-player cleanup edge cases
+    }
+  }, [player]);
 
   useEffect(() => {
     setPlayerTimeUpdateInterval(player, 0.25);
@@ -142,7 +158,11 @@ export function TitleTrailerHero({
     });
     const statusSubscription = player.addListener('statusChange', ({ status }) => {
       if (status === 'error' && loadedTrailerKey.current === item.trailerStorageKey) {
-        player.pause();
+        try {
+          player.pause();
+        } catch {
+          // player may already have been released during teardown
+        }
         setIsPlaying(false);
         setIsTrailerLoading(false);
         setIsTrailerUnavailable(true);
@@ -150,7 +170,7 @@ export function TitleTrailerHero({
         setIsTrailerVisible(false);
         setShowOverlay(true);
         coverOpacity.setValue(1);
-        console.error('[TitleTrailerHero] Trailer playback failed.');
+        logger.warn('[TitleTrailerHero] Trailer playback failed.');
       }
     });
     return () => {
@@ -163,7 +183,13 @@ export function TitleTrailerHero({
 
   useEffect(() => {
     if (!preferenceReadyForFocus.current || !shouldAutoplay) {
-      player.pause();
+      if (!playerReleasedRef.current) {
+        try {
+          player.pause();
+        } catch {
+          // ignore released-player cleanup edge cases
+        }
+      }
       setIsPlaying(false);
       setIsTrailerVisible(false);
       coverOpacity.setValue(1);
@@ -238,14 +264,20 @@ export function TitleTrailerHero({
           setIsTrailerVisible(false);
           setShowOverlay(true);
           coverOpacity.setValue(1);
-          console.error('[TitleTrailerHero] Could not prepare the trailer.');
+          logger.warn('[TitleTrailerHero] Could not prepare the trailer.');
         }
       });
 
     return () => {
       active = false;
       requestId.current += 1;
-      player.pause();
+      if (!playerReleasedRef.current) {
+        try {
+          player.pause();
+        } catch {
+          // ignore released-player cleanup edge cases
+        }
+      }
     };
   }, [
     autoplayEnabled,

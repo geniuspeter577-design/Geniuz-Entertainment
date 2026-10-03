@@ -8,13 +8,11 @@ Use Node.js 22.9 or newer and npm.
 
 ```sh
 npm install
-cp .env.example .env
-mkdir -p backend
-cp .env.example backend/.env
+cp backend/.env.example backend/.env
 npm run backend:start
 ```
 
-The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in the backend-only `backend/.env`. Restart the API after changing that setting.
+Set the required Supabase, B2, and CORS variables in `backend/.env` before starting the API. The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in `backend/.env`. Restart the API after changing backend settings.
 
 In a second terminal, run the mobile app:
 
@@ -44,7 +42,7 @@ The backend uses Node's HTTP server and built-in `fetch`; there is no general we
 
 ## Environment
 
-`.env.example` documents:
+The root `.env.example` is for public Expo app settings only. `backend/.env.example` documents backend settings:
 
 - `PORT` — API listen port (default 4000)
 - `TMDB_API_KEY` — server-only TMDB Bearer credential
@@ -52,10 +50,10 @@ The backend uses Node's HTTP server and built-in `fetch`; there is no general we
 - `ANILIST_API_URL` — reserved for a future AniList provider
 - `CORS_ORIGIN` — comma-separated browser origins allowed to call the API
 - `CATALOG_CACHE_TTL_SECONDS` — in-memory catalog cache lifetime (default 300)
-- `EXPO_PUBLIC_GENIUZ_API_URL` — public API base URL for the Expo client; this is not a secret
-- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — public Supabase project settings; these do not grant access without the database and storage policies
+- `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY` — backend Supabase project settings for Auth and RLS
+- `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, and `S3_BUCKET` — private Backblaze B2 access settings
 
-Keep `.env` and `backend/.env` out of source control. Put `S3_SECRET_ACCESS_KEY` and `S3_ACCESS_KEY_ID` only in `backend/.env` or the backend host's environment; do not use `EXPO_PUBLIC_` names for them. Set `SUPABASE_URL` in the backend environment. The backend uses the existing Supabase publishable key for Supabase Auth and RLS requests; it is public and does not grant admin privileges. Never add the TMDB credential to an `EXPO_PUBLIC_` variable or a mobile build.
+Keep `.env` and `backend/.env` out of source control. `EXPO_PUBLIC_GENIUZ_API_URL`, `EXPO_PUBLIC_SUPABASE_URL`, and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` belong only in the app environment. The Supabase publishable key does not grant admin privileges. Keep B2 credentials and `TMDB_API_KEY` only in `backend/.env` or the backend host's environment; never use `EXPO_PUBLIC_` names for them.
 
 ## Upload and stream licensed movies
 
@@ -64,7 +62,7 @@ The app uses Supabase for authentication and movie records, Backblaze B2 for new
 1. Create a Supabase project.
 2. Apply all migrations in timestamp order. With the Supabase CLI, run `npx supabase init` once if this project has no `supabase/config.toml`, then `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF`, and `npx supabase db push`. Alternatively, apply the SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor. This provisions the public-read `title-images` bucket and its admin-only write policies, plus the title cover and trailer metadata columns. Existing Supabase Storage movies remain on the `supabase` provider and continue to play.
 3. Create an account in Supabase Authentication, then set that user's **app metadata** to `{"role":"admin"}` in the Supabase dashboard. Do not use user-editable metadata for the admin role. Sign out and back in after changing the role.
-4. Create a private Backblaze B2 bucket and a bucket-scoped application key with `readFiles` and `writeFiles` capabilities; `deleteFiles` is also needed for the one-off storage diagnostic cleanup. Copy `.env.example` to `.env` for the app and `backend/.env` for the server. Configure `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, and `SUPABASE_URL` only in the backend environment. In the app `.env`, set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+4. Create a private Backblaze B2 bucket and a bucket-scoped application key with `readFiles` and `writeFiles` capabilities; `deleteFiles` is also needed for the one-off storage diagnostic cleanup. Copy `.env.example` to `.env` for the app and `backend/.env.example` to `backend/.env` for the server. Configure `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, `SUPABASE_URL`, and `SUPABASE_PUBLISHABLE_KEY` only in the backend environment. In the app `.env`, set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
 5. Start the API with `npm run backend:start`. In Codespaces, run `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`, and set the app URL to `https://$CODESPACE_NAME-4000.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` (no trailing slash). Include both `http://localhost:8081` and `https://$CODESPACE_NAME-8081.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` in backend `CORS_ORIGIN`.
 6. Restart Expo with `npm start -- --tunnel`, scan its QR code with Expo Go, and open **Profile → Admin console**. Choose a supported video up to 1 GiB, enter its listing details, confirm distribution rights, and upload. New files upload directly to B2 in 16 MiB parts, with at most three concurrent part uploads. A movie row is created only after storage confirms completion. Check **Allow users to download this title** to enable local downloads. Poster and cover images accept JPG, PNG, or WebP up to 5 MB and are resized/compressed before upload; trailers use the same multipart flow and are limited to 300 MB. The rights confirmation is required for image and trailer additions/replacements too.
 

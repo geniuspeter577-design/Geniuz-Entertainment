@@ -54,8 +54,8 @@
     "lint": "expo lint",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.cjs",
-    "backend:build": "tsc -p backend/tsconfig.json",
-    "backend:start": "npm run backend:build && node --env-file-if-exists=.env --env-file-if-exists=backend/.env backend/dist/backend/src/server.js",
+    "backend:build": "npm --prefix backend run build",
+    "backend:start": "npm --prefix backend run start",
     "backend:restart": "node scripts/free-port.cjs 4000 && npm run backend:start",
     "b2:cors": "node --env-file-if-exists=.env --env-file-if-exists=backend/.env scripts/b2-cors.cjs"
   },

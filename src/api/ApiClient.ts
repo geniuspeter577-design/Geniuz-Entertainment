@@ -10,6 +10,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     readonly status?: number,
+    readonly code?: string,
     options?: ErrorOptions,
   ) {
     super(message, options);
@@ -28,6 +29,7 @@ export class ApiClient {
   private readonly cacheTtlMs: number;
   private readonly cache = new Map<string, CacheEntry>();
   private readonly requests = new Map<string, Promise<unknown>>();
+  private startupRequest = true;
 
   constructor({ baseUrl, timeoutMs = 12_000, cacheTtlMs = 30_000 }: ApiClientOptions) {
     const normalizedBaseUrl = baseUrl.trim().replace(/\/+$/, '');
@@ -95,39 +97,90 @@ export class ApiClient {
   }
 
   private async request<T>(url: URL): Promise<T> {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const maxAttempts = this.startupRequest ? 3 : 1;
+    let lastError: unknown;
 
-    try {
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: { Accept: 'application/json' },
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        throw new ApiError(`Geniuz API returned HTTP ${response.status}.`, response.status);
-      }
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      const controller = new AbortController();
+      const timeoutMs = this.startupRequest ? 75_000 : this.timeoutMs;
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
-        return (await response.json()) as T;
-      } catch (error) {
-        throw new ApiError('Geniuz API returned invalid JSON.', response.status, { cause: error });
-      }
-    } catch (error) {
-      if (error instanceof ApiError) {
-        throw error;
-      }
-
-      if (controller.signal.aborted) {
-        throw new ApiError(`Geniuz API request timed out after ${this.timeoutMs} ms.`, undefined, {
-          cause: error,
+        const response = await fetch(url.toString(), {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          signal: controller.signal,
         });
-      }
 
-      throw new ApiError('Unable to reach the Geniuz API.', undefined, { cause: error });
-    } finally {
-      clearTimeout(timeout);
+        if (!response.ok) {
+          const retryable = [502, 503, 504].includes(response.status);
+          const isTransient = retryable && attempt < maxAttempts - 1;
+          if (isTransient) {
+            await this.delay(1200 * (attempt + 1));
+            continue;
+          }
+
+          if (response.status === 401 || response.status === 403 || response.status === 404) {
+            throw new ApiError(`Geniuz API returned HTTP ${response.status}.`, response.status);
+          }
+
+          throw new ApiError(`Geniuz API returned HTTP ${response.status}.`, response.status);
+        }
+
+        try {
+          const value = (await response.json()) as T;
+          this.startupRequest = false;
+          return value;
+        } catch (error) {
+          throw new ApiError('Geniuz API returned invalid JSON.', undefined, undefined, { cause: error });
+        }
+      } catch (error) {
+        lastError = error;
+
+        if (error instanceof ApiError) {
+          if (error.status === 401 || error.status === 403 || error.status === 404) {
+            throw error;
+          }
+          if ([502, 503, 504].includes(error.status ?? 0) && attempt < maxAttempts - 1) {
+            await this.delay(1200 * (attempt + 1));
+            continue;
+          }
+          if (attempt < maxAttempts - 1 && this.shouldRetry(error)) {
+            await this.delay(1200 * (attempt + 1));
+            continue;
+          }
+          throw error;
+        }
+
+        if (controller.signal.aborted) {
+          throw new ApiError(`Geniuz API request timed out after ${timeoutMs} ms.`, undefined, undefined, {
+            cause: error,
+          });
+        }
+
+        if (attempt < maxAttempts - 1 && this.shouldRetry(error)) {
+          await this.delay(1200 * (attempt + 1));
+          continue;
+        }
+
+        throw new ApiError('Unable to reach the Geniuz API.', undefined, undefined, { cause: error });
+      } finally {
+        clearTimeout(timeout);
+      }
     }
+
+    throw lastError instanceof Error ? lastError : new ApiError('Unable to reach the Geniuz API.');
+  }
+
+  private shouldRetry(error: unknown) {
+    return (
+      error instanceof TypeError ||
+      error instanceof DOMException ||
+      (typeof error === 'object' && error !== null && 'cause' in error && error.cause instanceof TypeError)
+    );
+  }
+
+  private delay(milliseconds: number) {
+    return new Promise((resolve) => setTimeout(resolve, milliseconds));
   }
 }

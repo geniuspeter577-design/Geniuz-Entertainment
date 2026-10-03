@@ -4,7 +4,7 @@ import { extname } from 'node:path';
 import {
   MAX_TRAILER_FILE_SIZE_BYTES,
   MAX_VIDEO_FILE_SIZE_BYTES,
-} from '../../../src/constants/video';
+} from '../constants/video';
 import { HttpError } from '../http/errors';
 
 export type UploadInput = {

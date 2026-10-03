@@ -106,6 +106,32 @@ test('mobile Geniuz repository rejects malformed normalized responses', async ()
   await assert.rejects(repository.getTrending(), /invalid content item/i);
 });
 
+test('API client retries transient launch wake-ups and preserves the public error semantics', async () => {
+  const originalFetch = global.fetch;
+  let attempts = 0;
+  global.fetch = async (input) => {
+    attempts += 1;
+    if (attempts < 3) {
+      throw new TypeError('temporary network issue');
+    }
+    const url = new URL(String(input));
+    assert.equal(url.pathname, '/api/content/trending');
+    return new Response(JSON.stringify({ items: [], page: 1, totalPages: 1 }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  try {
+    const client = new ApiClient({ baseUrl: 'https://api.example.test', timeoutMs: 1000 });
+    const result = await client.get('/api/content/trending');
+    assert.deepEqual(result, { items: [], page: 1, totalPages: 1 });
+    assert.equal(attempts, 3);
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('server health stays available when TMDB credentials are missing', async (context) => {
   context.mock.method(console, 'error', () => {});
   const config = loadConfig({ PORT: '4000' });

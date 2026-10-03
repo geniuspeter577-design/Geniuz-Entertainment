@@ -1,3 +1,5 @@
+import { logger } from '../utils/logger';
+
 type UploadFile = {
   size: number;
   readPart: (start: number, end: number, contentType: string) => Promise<Blob>;
@@ -87,8 +89,9 @@ async function requestJson<T>(
     if (signal?.aborted) {
       throw new Error('Upload canceled.');
     }
-    console.error(
-      `[B2UploadService] Network/CORS request failed for ${safeApiBaseUrl(apiBaseUrl)}.`,
+    logger.warn(
+      '[B2UploadService] Network/CORS request failed.',
+      safeApiBaseUrl(apiBaseUrl),
       error instanceof Error ? error.name : 'Unknown network error',
     );
     throw new Error(

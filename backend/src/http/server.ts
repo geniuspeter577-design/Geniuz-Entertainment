@@ -17,6 +17,9 @@ const MAX_GENRE_LENGTH = 80;
 const MAX_JSON_BODY_BYTES = 256 * 1024;
 const CORS_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
 const CORS_HEADERS = ['authorization', 'content-type', 'apikey', 'x-client-info'];
+const publicRateLimit = new Map<string, { count: number; windowStart: number }>();
+const PUBLIC_RATE_LIMIT_PER_MINUTE = 120;
+const PLAY_URL_RATE_LIMIT_PER_MINUTE = 30;
 
 let b2Storage: B2StorageService | undefined;
 
@@ -31,9 +34,57 @@ function writeJson(response: ServerResponse, status: number, data: unknown) {
     'Content-Type': 'application/json; charset=utf-8',
     'Content-Length': Buffer.byteLength(body),
     'X-Content-Type-Options': 'nosniff',
+    'X-Frame-Options': 'DENY',
+    'Referrer-Policy': 'no-referrer',
     'Cache-Control': 'no-store',
   });
   response.end(body);
+}
+
+function sanitizeUrl(rawUrl: string) {
+  try {
+    const url = new URL(rawUrl, 'http://localhost');
+    if (url.searchParams.has('token')) {
+      url.searchParams.set('token', '[redacted]');
+    }
+    if (url.searchParams.has('signature')) {
+      url.searchParams.set('signature', '[redacted]');
+    }
+    return `${url.pathname}${url.search ? '?[filtered]' : ''}`;
+  } catch {
+    return '/';
+  }
+}
+
+function getClientIp(request: IncomingMessage) {
+  const forwarded = request.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0]?.trim() ?? 'unknown';
+  }
+  if (Array.isArray(forwarded)) {
+    return forwarded[0]?.trim() ?? 'unknown';
+  }
+  return request.socket.remoteAddress ?? 'unknown';
+}
+
+function applyRateLimit(request: IncomingMessage, pathname: string) {
+  const isPlayUrl = /^\/movies\/[^/]+\/play-url$/.test(pathname) || /^\/episodes\/[^/]+\/play-url$/.test(pathname);
+  const limit = isPlayUrl ? PLAY_URL_RATE_LIMIT_PER_MINUTE : PUBLIC_RATE_LIMIT_PER_MINUTE;
+  const key = `${getClientIp(request)}:${isPlayUrl ? 'play-url' : pathname}`;
+  const now = Date.now();
+  const bucket = publicRateLimit.get(key);
+
+  if (!bucket || now - bucket.windowStart > 60_000) {
+    publicRateLimit.set(key, { count: 1, windowStart: now });
+    return false;
+  }
+
+  if (bucket.count >= limit) {
+    return true;
+  }
+
+  bucket.count += 1;
+  return false;
 }
 
 function pageFrom(url: URL) {
@@ -165,6 +216,20 @@ async function handleRequest(
   }
   const url = new URL(request.url, 'http://localhost');
   const pathname = url.pathname.replace(/\/+$/, '') || '/';
+
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('X-Frame-Options', 'DENY');
+  response.setHeader('Referrer-Policy', 'no-referrer');
+  response.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+
+  if (pathname === '/' && request.method === 'GET') {
+    writeJson(response, 200, { status: 'ok', service: 'geniuz-api' });
+    return;
+  }
+
+  if (applyRateLimit(request, pathname)) {
+    throw new HttpError(429, 'RATE_LIMITED', 'Too many requests. Please try again shortly.');
+  }
 
   if (pathname === '/health') {
     if (request.method !== 'GET') {
@@ -462,8 +527,9 @@ export function createApiServer(config: Config, content: ContentService): Server
 
       if (httpError.status >= 500) {
         const method = request.method ?? 'UNKNOWN';
-        const route = request.url?.split('?')[0] ?? 'unknown';
-        console.error(`[Geniuz API] ${method} ${route} failed: ${httpError.code}`);
+        const route = sanitizeUrl(request.url ?? '/');
+        const clientIp = getClientIp(request);
+        console.error(`[Geniuz API] ${method} ${route} ${httpError.code} ${clientIp}`);
       }
 
       if (!response.headersSent) {

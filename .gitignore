@@ -34,6 +34,8 @@ yarn-error.*
 # local env files
 .env
 .env.*
+backend/.env
+backend/.env.*
 !.env.example
 .env*.local
 
