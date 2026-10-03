@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Last Horizon - Touch Lock &amp; Parental Verification</title>
+<!-- Tailwind CSS CDN with forms and container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration for Cyber-Neon Streaming Theme -->
+<script data-purpose="tailwind-config" id="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              neon: '#72F06A',
+              neonDark: '#56c84f',
+              panel: '#111317',
+              panelElevated: '#1A1C20',
+              panelBorder: 'rgba(255, 255, 255, 0.08)',
+              glass: 'rgba(17, 19, 23, 0.78)',
+            }
+          },
+          fontFamily: {
+            sans: ['Sora', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+<!-- Google Fonts: Sora -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="custom-animations">
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 0 0 15px rgba(114, 240, 106, 0.25), inset 0 0 12px rgba(114, 240, 106, 0.15);
+      }
+      50% {
+        box-shadow: 0 0 28px rgba(114, 240, 106, 0.45), inset 0 0 20px rgba(114, 240, 106, 0.3);
+      }
+    }
+    .neon-glow-pulse {
+      animation: pulse-glow 3s infinite ease-in-out;
+    }
+    .neon-text-glow {
+      text-shadow: 0 0 8px rgba(114, 240, 106, 0.6);
+    }
+    .glass-backdrop {
+      backdrop-filter: blur(28px) saturate(140%);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+    }
+  </style>
+<meta content="web_standard" name="shell-type"/></head>
+<body class="bg-black text-gray-100 font-sans h-screen w-screen overflow-hidden select-none m-0 p-0 antialiased">
+<!-- BEGIN: MasterLandscapeWrapper -->
+<div class="relative w-full h-full flex flex-col justify-between overflow-hidden bg-black" data-purpose="viewport-container">
+<!-- Cinematic Background Plate with Blur & Dark Overlay -->
+<div class="absolute inset-0 z-0 overflow-hidden" data-purpose="cinematic-backdrop">
+<img alt="The Last Horizon Film Still" class="w-full h-full object-cover scale-105 filter blur-md transform translate-z-0 brightness-[0.45]" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<!-- Tint & Vignette Gradient Overlays -->
+<div class="absolute inset-0 bg-gradient-to-t from-[#090b0e] via-black/75 to-[#0b0e13]/90"></div>
+<div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(0,0,0,0.85)_100%)]"></div>
+</div>
+<!-- BEGIN: TopBar -->
+<header class="relative z-20 flex items-center justify-between px-8 py-5 border-b border-white/10 glass-backdrop bg-[#0d0f13]/60" data-purpose="header-navigation">
+<!-- Left: Title, Episode & Rating Pill -->
+<div class="flex items-center space-x-3.5" data-purpose="media-meta">
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-gray-300">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<div class="flex items-center space-x-3">
+<span class="text-lg font-bold tracking-tight text-white">The Last Horizon</span>
+<span class="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-[#72F06A] text-black">PLUS</span>
+<span class="text-sm text-gray-400 font-medium">S1 : E3 • The Neural Breach</span>
+<span class="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded border border-red-500/40 bg-red-950/40 text-red-400">18+ / Mature Audience</span>
+</div>
+</div>
+<!-- Right: Security Lock Status & System Indicators -->
+<div class="flex items-center space-x-4" data-purpose="status-specs">
+<div class="flex items-center space-x-2 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#181a1f] border border-white/10 text-gray-300">
+<span class="w-2 h-2 rounded-full bg-[#72F06A] animate-ping"></span>
+<span class="w-2 h-2 rounded-full bg-[#72F06A] -ml-3"></span>
+<span>Playback Security Guard Active</span>
+</div>
+<div class="h-4 w-[1px] bg-white/15"></div>
+<div class="flex items-center space-x-2 text-xs text-gray-400 font-medium tracking-wide">
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">4K ULTRA HD</span>
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">HDR10</span>
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">ATMOS 5.1</span>
+</div>
+<!-- Lock Icon Indicator -->
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:border-[#72F06A]/40 transition-colors">
+<svg class="w-5 h-5 text-[#72F06A]" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" fill-rule="evenodd"></path>
+</svg>
+</button>
+<!-- Exit Overlay Button -->
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- BEGIN: SecurityMatrixCentral -->
+<main class="relative z-10 flex-1 flex items-center justify-center px-12 py-4" data-purpose="central-security-matrix"><div class="flex flex-col w-full h-full relative overflow-hidden select-none font-headline-sm text-on-surface">
+<!-- Ambient Blurred Backdrop Preview Frame -->
+<div class="absolute inset-0 pointer-events-none -z-10 overflow-hidden">
+<div class="absolute inset-0 bg-gradient-to-t from-surface-container-lowest via-surface/85 to-surface-container-lowest/90 z-10"></div>
+<div class="absolute top-1/4 left-1/3 w-96 h-96 rounded-full bg-primary-container/10 filter blur-3xl pointer-events-none"></div>
+<div class="absolute bottom-10 right-1/4 w-80 h-80 rounded-full bg-secondary/5 filter blur-3xl pointer-events-none"></div>
+</div>
+<!-- Outer Landscape Modal Shell -->
+<div class="relative w-full h-full flex flex-col justify-between p-2 md:p-4 overflow-hidden">
+<!-- Top Modal Utility Header -->
+<div class="flex items-center justify-between px-4 py-2.5 rounded-2xl bg-surface-container/90 backdrop-blur-xl shadow-xl">
+<div class="flex items-center gap-3">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center text-primary-fixed-dim">
+<span class="material-symbols-outlined text-lg">cast_connected</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-md text-headline-md tracking-tight text-on-surface">Cast &amp; Audio Routing</span>
+<span class="px-2 py-0.5 rounded-full text-label-sm font-label-sm bg-primary-container text-on-primary-container tracking-wider uppercase">Active Sync</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant tracking-wider uppercase">Geniuz Connect™ • Spatial Multi-Room Mesh</span>
+</div>
+</div>
+<!-- Center Segmented View Pill Selector -->
+<div class="hidden lg:flex items-center bg-surface-container-lowest p-1 rounded-full gap-1">
+<button class="px-3.5 py-1.5 rounded-full text-label-md font-label-lg bg-primary-container text-on-primary-container shadow-sm flex items-center gap-1.5 transition-all">
+<span class="material-symbols-outlined text-sm">hub</span>
+<span>Matrix Overview</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full text-label-md font-label-md text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all">
+<span class="material-symbols-outlined text-sm">tv</span>
+<span>Displays (3)</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full text-label-md font-label-md text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all">
+<span class="material-symbols-outlined text-sm">speaker_group</span>
+<span>Speakers &amp; Pods (4)</span>
+</button>
+<button class="px-3.5 py-1.5 rounded-full text-label-md font-label-md text-on-surface-variant hover:text-on-surface flex items-center gap-1.5 transition-all">
+<span class="material-symbols-outlined text-sm">tune</span>
+<span>AV Latency</span>
+</button>
+</div>
+<!-- Beacon Scanner & Close Action -->
+<div class="flex items-center gap-2">
+<button class="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-primary flex items-center gap-2 transition-all">
+<span class="material-symbols-outlined text-sm animate-spin text-primary-fixed-dim">sync</span>
+<span class="font-label-md text-label-md">Scan Spectrum</span>
+</button>
+<button class="w-8 h-8 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface-variant hover:text-on-surface flex items-center justify-center transition-all">
+<span class="material-symbols-outlined text-base">close</span>
+</button>
+</div>
+</div>
+<!-- Main Multi-Column Device Routing Grid -->
+<div class="grid grid-cols-1 md:grid-cols-12 gap-3.5 my-2.5 flex-1 min-h-0 overflow-y-auto pr-0.5">
+<!-- COLUMN 1: Displays & Visual Endpoints (4 cols) -->
+<div class="md:col-span-4 flex flex-col gap-3">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-sm">tv</span>
+<span class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface">Video Endpoints</span>
+</div>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant">1 Connected</span>
+</div>
+<!-- Target Card 1: Active Connected Living Room OLED -->
+<div class="p-3.5 rounded-2xl bg-surface-container-high relative overflow-hidden transition-all shadow-md">
+<div class="flex items-start justify-between gap-3 mb-2.5">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-primary-container text-on-primary-container flex items-center justify-center font-bold">
+<span class="material-symbols-outlined text-xl">tv_gen</span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-on-surface">Living Room OLED G3</span>
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+</div>
+<span class="text-body-sm font-body-sm text-on-surface-variant">77" Master Display • eARC</span>
+</div>
+</div>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-primary-container/20 text-primary-fixed-dim font-bold">STREAMING</span>
+</div>
+<!-- Specs Matrix Tags -->
+<div class="flex flex-wrap gap-1.5 mb-3">
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-lowest text-on-surface-variant">4K UHD @ 60Hz</span>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-lowest text-secondary-fixed-dim">Dolby Vision</span>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-lowest text-primary">Ultra-Sync 12ms</span>
+</div>
+<!-- Display Output Volume & Source Switcher -->
+<div class="bg-surface-container-lowest/80 p-2.5 rounded-xl flex flex-col gap-2">
+<div class="flex items-center justify-between text-body-sm font-body-sm text-on-surface-variant">
+<span class="flex items-center gap-1"><span class="material-symbols-outlined text-xs">volume_up</span> Output Volume</span>
+<span class="text-on-surface font-label-md">68%</span>
+</div>
+<div class="relative w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-[68%] bg-primary-container rounded-full"></div>
+</div>
+</div>
+<div class="flex items-center justify-between mt-3 pt-2">
+<button class="text-body-sm font-body-sm text-on-surface-variant hover:text-error flex items-center gap-1">
+<span class="material-symbols-outlined text-sm">power_settings_new</span>
+<span>Disconnect</span>
+</button>
+<button class="px-3 py-1 rounded-full text-label-sm font-label-sm bg-surface-bright text-on-surface hover:bg-surface-variant">
+              Re-route Stream
+            </button>
+</div>
+</div>
+<!-- Target Card 2: Bedroom Frame TV -->
+<div class="p-3.5 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-all flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">desktop_windows</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">The Frame TV (QLED)</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Master Suite • AirPlay 2 Native</span>
+</div>
+</div>
+<button class="px-3.5 py-1.5 rounded-full text-label-sm font-label-sm bg-surface-variant hover:bg-primary-container hover:text-on-primary-container text-on-surface transition-all">
+            Cast Here
+          </button>
+</div>
+<!-- Target Card 3: Studio Projector -->
+<div class="p-3.5 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-all flex items-center justify-between">
+<div class="flex items-center gap-3">
+<div class="w-10 h-10 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">videocam</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Studio Laser Projector</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Azania Den • Chromecast 4K</span>
+</div>
+</div>
+<button class="px-3.5 py-1.5 rounded-full text-label-sm font-label-sm bg-surface-variant hover:bg-primary-container hover:text-on-primary-container text-on-surface transition-all">
+            Cast Here
+          </button>
+</div>
+<!-- UWB Handover Pill Toggle -->
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-secondary-fixed-dim text-base">near_me</span>
+<div class="flex flex-col">
+<span class="text-label-md font-label-md text-on-surface">UWB Room Handover</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Follows tablet between rooms</span>
+</div>
+</div>
+<div class="w-9 h-5 rounded-full bg-primary-container p-0.5 flex items-center justify-end">
+<div class="w-4 h-4 rounded-full bg-surface-container-lowest shadow-sm"></div>
+</div>
+</div>
+</div>
+<!-- COLUMN 2: Audio Routing & Spatial Zones (4 cols) -->
+<div class="md:col-span-4 flex flex-col gap-3">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-sm">spatial_audio</span>
+<span class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface">Audio Matrix &amp; Channels</span>
+</div>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-primary-container/20 text-primary-fixed-dim">Dual Sync Active</span>
+</div>
+<!-- Audio Node 1: Sonos Arc Cinema Group (Active Primary) -->
+<div class="p-3.5 rounded-2xl bg-surface-container-high transition-all shadow-md">
+<div class="flex items-start justify-between gap-2 mb-2">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-xl bg-primary-container/20 text-primary-fixed-dim flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">speaker</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Sonos Arc + Sub Gen 3</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Spatial 7.1.4 Surround • Linked to TV</span>
+</div>
+</div>
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container mt-1"></span>
+</div>
+<div class="flex items-center justify-between bg-surface-container-lowest/70 px-3 py-2 rounded-xl text-body-sm font-body-sm mt-1">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-sm text-primary">equalizer</span> Atmos Soundfield
+            </span>
+<span class="text-primary-fixed-dim font-label-md">Cinema Master</span>
+</div>
+</div>
+<!-- Audio Node 2: Private Midnight Listening (Active Dual Stream) -->
+<div class="p-3.5 rounded-2xl bg-surface-container-high transition-all shadow-md">
+<div class="flex items-start justify-between gap-2 mb-2">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-xl bg-surface-variant text-primary flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">headphones</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Geniuz Pulse Earbuds Pro</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Private Stream • Personal Wearer</span>
+</div>
+</div>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-lowest text-primary">88% Batt</span>
+</div>
+<div class="bg-surface-container-lowest/80 p-2.5 rounded-xl flex items-center justify-between">
+<div class="flex flex-col">
+<span class="text-label-md font-label-md text-on-surface">Private Night Mode</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Sub-15ms sync for quiet rooms</span>
+</div>
+<div class="w-9 h-5 rounded-full bg-primary-container p-0.5 flex items-center justify-end">
+<div class="w-4 h-4 rounded-full bg-surface-container-lowest shadow-sm"></div>
+</div>
+</div>
+</div>
+<!-- Audio Node 3: Secondary Multi-room Zone (Dining / Balcony) -->
+<div class="p-3.5 rounded-2xl bg-surface-container hover:bg-surface-container-high transition-all flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-9 h-9 rounded-xl bg-surface-container-highest text-on-surface-variant flex items-center justify-center">
+<span class="material-symbols-outlined text-lg">speaker_notes</span>
+</div>
+<div class="flex flex-col">
+<span class="font-headline-sm text-headline-sm text-on-surface">Terrace Dining Pod</span>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Multi-room Party Sync</span>
+</div>
+</div>
+<button class="w-7 h-7 rounded-lg bg-surface-variant hover:bg-surface-bright flex items-center justify-center text-on-surface-variant hover:text-on-surface">
+<span class="material-symbols-outlined text-base">add</span>
+</button>
+</div>
+<!-- Voice Clarity Calibration Strip -->
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-center justify-between">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-base">record_voice_over</span>
+<div class="flex flex-col">
+<span class="text-label-md font-label-md text-on-surface">Neural Dialogue Enhancer</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Boost centre voice frequency</span>
+</div>
+</div>
+<button class="px-2.5 py-1 rounded-full text-label-sm font-label-sm bg-surface-bright text-primary-fixed-dim">
+            Level 2
+          </button>
+</div>
+</div>
+<!-- COLUMN 3: Protocol Health, Latency & Live Telemetry (4 cols) -->
+<div class="md:col-span-4 flex flex-col gap-3">
+<div class="flex items-center justify-between px-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-sm">sensors</span>
+<span class="font-label-lg text-label-lg uppercase tracking-wider text-on-surface">Link Diagnostics</span>
+</div>
+<span class="text-label-sm font-label-sm px-2 py-0.5 rounded bg-surface-container-high text-on-surface-variant">Wi-Fi 6E Direct</span>
+</div>
+<!-- Telemetry Panel -->
+<div class="p-3.5 rounded-2xl bg-surface-container-high flex flex-col gap-3 shadow-md">
+<div class="flex items-center justify-between">
+<span class="text-label-md font-label-md text-on-surface">Link Protocol</span>
+<span class="text-label-sm font-label-sm font-bold text-primary-fixed-dim">GENIUZ ULTRA-SYNC V2.4</span>
+</div>
+<!-- Network Gauge Stats -->
+<div class="grid grid-cols-2 gap-2">
+<div class="p-2.5 rounded-xl bg-surface-container-lowest flex flex-col">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Transmission Bitrate</span>
+<span class="font-headline-md text-headline-md text-on-surface mt-0.5">34.8 <span class="text-body-sm text-primary">Mbps</span></span>
+<span class="text-label-sm font-label-sm text-on-surface-variant mt-0.5">Uncompressed HEVC</span>
+</div>
+<div class="p-2.5 rounded-xl bg-surface-container-lowest flex flex-col">
+<span class="text-label-sm font-label-sm text-on-surface-variant">Stream Latency</span>
+<span class="font-headline-md text-headline-md text-primary-container mt-0.5">11 <span class="text-body-sm text-primary">ms</span></span>
+<span class="text-label-sm font-label-sm text-on-surface-variant mt-0.5">Sub-frame locked</span>
+</div>
+</div>
+<!-- AV Sync Delay Calibration Slider -->
+<div class="p-2.5 rounded-xl bg-surface-container-lowest/80 flex flex-col gap-2">
+<div class="flex items-center justify-between text-body-sm font-body-sm">
+<span class="text-on-surface-variant flex items-center gap-1.5">
+<span class="material-symbols-outlined text-xs">tune</span> Lip-Sync Offset
+              </span>
+<span class="text-primary font-bold">+18 ms</span>
+</div>
+<div class="relative w-full h-1.5 bg-surface-variant rounded-full overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-[58%] bg-primary-fixed-dim rounded-full"></div>
+</div>
+<div class="flex justify-between items-center text-label-sm font-label-sm text-on-surface-variant">
+<span>-50ms</span>
+<button class="text-primary hover:underline font-label-sm">Play Sync Tone</button>
+<span>+100ms</span>
+</div>
+</div>
+</div>
+<!-- Protocol Switcher Chips -->
+<div class="p-3.5 rounded-2xl bg-surface-container flex flex-col gap-2">
+<span class="text-label-sm font-label-sm uppercase tracking-wider text-on-surface-variant">Streaming Standard</span>
+<div class="grid grid-cols-2 gap-1.5">
+<button class="px-2.5 py-1.5 rounded-xl text-label-sm font-label-sm bg-primary-container text-on-primary-container flex items-center justify-center gap-1.5 font-bold shadow-sm">
+<span class="material-symbols-outlined text-xs">bolt</span> Geniuz Direct
+            </button>
+<button class="px-2.5 py-1.5 rounded-xl text-label-sm font-label-sm bg-surface-variant text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1.5">
+              AirPlay 2
+            </button>
+<button class="px-2.5 py-1.5 rounded-xl text-label-sm font-label-sm bg-surface-variant text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1.5">
+              Google Cast
+            </button>
+<button class="px-2.5 py-1.5 rounded-xl text-label-sm font-label-sm bg-surface-variant text-on-surface-variant hover:text-on-surface flex items-center justify-center gap-1.5">
+              DLNA Spatial
+            </button>
+</div>
+</div>
+<!-- Security & Peer Status Capsule -->
+<div class="p-3 rounded-2xl bg-surface-container-low flex items-center justify-between text-body-sm font-body-sm">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary-fixed-dim text-base">verified_user</span>
+<div class="flex flex-col">
+<span class="text-label-md font-label-md text-on-surface">Zero-Drop Channel Guard</span>
+<span class="text-label-sm font-label-sm text-on-surface-variant">Encrypted Direct P2P Pipe</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary text-base">lock</span>
+</div>
+</div>
+</div>
+<!-- Active Routing Footer Action Bar -->
+<div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-5 py-3 rounded-2xl bg-surface-container-high/95 backdrop-blur-xl shadow-2xl">
+<div class="flex items-center gap-3">
+<div class="relative flex items-center justify-center">
+<span class="w-3 h-3 rounded-full bg-primary-container animate-ping absolute"></span>
+<span class="w-3 h-3 rounded-full bg-primary-container relative"></span>
+</div>
+<div class="flex flex-col">
+<div class="flex items-center gap-2">
+<span class="font-headline-sm text-headline-sm text-on-surface">Living Room OLED G3</span>
+<span class="text-on-surface-variant text-body-sm">•</span>
+<span class="text-primary-fixed-dim text-label-md font-label-md">Sonos Arc + Pulse Buds</span>
+</div>
+<span class="text-body-sm font-body-sm text-on-surface-variant">Dual Spatial Stream synchronized @ 34.8 Mbps • 0 frame jitter</span>
+</div>
+</div>
+<div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+<button class="px-4 py-2 rounded-xl text-label-md font-label-md text-on-surface-variant hover:text-on-surface bg-surface-variant hover:bg-surface-bright transition-all">
+          Stop Casting
+        </button>
+<button class="px-6 py-2.5 rounded-full text-label-lg font-label-lg bg-primary-container hover:bg-primary-fixed-dim text-on-primary-container flex items-center gap-2 shadow-lg shadow-primary-container/20 transition-all active:scale-95">
+<span>Apply Routing</span>
+<span class="material-symbols-outlined text-base">arrow_forward</span>
+</button>
+</div>
+</div>
+</div>
+<script>
+    // Lightweight tactile toggle interactivity for cast modal
+    document.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('click', function(e) {
+        if (!this.classList.contains('pointer-events-none')) {
+          this.classList.add('scale-[0.98]');
+          setTimeout(() => this.classList.remove('scale-[0.98]'), 120);
+        }
+      });
+    });
+  </script>
+</div></main>
+<!-- END: SecurityMatrixCentral -->
+<!-- BEGIN: BottomStatusBar -->
+<footer class="relative z-20 flex items-center justify-between px-8 py-4 border-t border-white/10 glass-backdrop bg-[#0a0c0f]/80" data-purpose="footer-controls">
+<!-- Identity Matrix Hash & Verification Status -->
+<div class="flex items-center space-x-3 text-xs text-gray-400 font-mono" data-purpose="session-tag">
+<svg class="w-4 h-4 text-[#72F06A]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Secured by GeniuzLab Identity Matrix</span>
+<span class="text-white/20">•</span>
+<span class="text-gray-400">Session ID: <span class="text-gray-300 font-semibold">GNZ-SEC-4921</span></span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center space-x-4" data-purpose="footer-actions">
+<!-- Secondary Cancel / Return Button -->
+<button class="px-5 py-2.5 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+          Dismiss Shield
+        </button>
+<!-- Primary Authorize & Resume Button -->
+<button class="px-7 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black bg-[#72F06A] hover:bg-[#56c84f] shadow-[0_0_20px_rgba(114,240,106,0.35)] active:scale-95 transition-all flex items-center space-x-2">
+<span>Authorize &amp; Continue</span>
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+</button>
+</div>
+</footer>
+<!-- END: BottomStatusBar -->
+</div>
+<!-- END: MasterLandscapeWrapper -->
+</body></html>

@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Sora:wght@400;600;700;800&amp;family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0..1,0&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@100..900&amp;family=Sora:wght@100..900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#111317;color:#e2e2e8;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "surface-variant": "#333539", "primary": "#cfffc3", "secondary-container": "#af8d11", "secondary-fixed-dim": "#e9c349", "tertiary-fixed-dim": "#eebca0", "on-background": "#e2e2e8", "inverse-on-surface": "#2f3035", "surface-container-highest": "#333539", "on-primary-fixed": "#002202", "surface-bright": "#37393e", "background": "#111317", "primary-container": "#72f06a", "on-primary-container": "#006c11", "tertiary-fixed": "#ffdbc9", "surface-dim": "#111317", "on-surface-variant": "#bdcbb6", "on-surface": "#e2e2e8", "on-primary": "#003a05", "tertiary": "#ffefe8", "primary-fixed-dim": "#62e05c", "secondary": "#e9c349", "on-error": "#690005", "on-tertiary-fixed-variant": "#623e2a", "surface-container": "#1e2024", "on-secondary-fixed-variant": "#574500", "on-secondary-container": "#342800", "surface-container-low": "#1a1c20", "outline": "#879582", "inverse-primary": "#006e11", "on-tertiary": "#482916", "on-primary-fixed-variant": "#00530a", "surface": "#111317", "on-tertiary-fixed": "#2f1404", "surface-tint": "#62e05c", "on-secondary-fixed": "#241a00", "tertiary-container": "#ffcbaf", "error": "#ffb4ab", "secondary-fixed": "#ffe088", "error-container": "#93000a", "surface-container-high": "#282a2e", "outline-variant": "#3e4a3a", "inverse-surface": "#e2e2e8", "primary-fixed": "#7ffd75", "on-tertiary-container": "#7a543e", "on-secondary": "#3c2f00", "surface-container-lowest": "#0c0e12", "on-error-container": "#ffdad6" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-lg": "1.5rem", "space-xs": "0.25rem", "margin": "1rem", "space-sm": "0.5rem", "space-xl": "2.25rem", "gutter": "0.75rem", "space-md": "1rem" }, fontFamily: { "body-sm": ["Hanken Grotesk"], "headline-md": ["Sora"], "headline-lg": ["Sora"], "body-lg": ["Hanken Grotesk"], "headline-sm": ["Sora"], "label-lg": ["Hanken Grotesk"], "body-md": ["Hanken Grotesk"], "display-hero": ["Sora"], "label-md": ["Hanken Grotesk"], "headline-lg-mobile": ["Sora"], "label-sm": ["Hanken Grotesk"], "display-hero-mobile": ["Sora"] }, fontSize: { "body-sm": ["12px", { lineHeight: "16px", fontWeight: "400" }], "headline-md": ["18px", { lineHeight: "24px", fontWeight: "600" }], "headline-lg": ["32px", { lineHeight: "38px", fontWeight: "700" }], "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }], "headline-sm": ["16px", { lineHeight: "22px", fontWeight: "600" }], "label-lg": ["14px", { lineHeight: "18px", fontWeight: "700" }], "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }], "display-hero": ["40px", { lineHeight: "46px", fontWeight: "800" }], "label-md": ["12px", { lineHeight: "16px", fontWeight: "600" }], "headline-lg-mobile": ["22px", { lineHeight: "28px", fontWeight: "700" }], "label-sm": ["10px", { lineHeight: "12px", fontWeight: "600" }], "display-hero-mobile": ["28px", { lineHeight: "34px", fontWeight: "800" }] } } } }</script></head><body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 w-full z-50 pt-safe bg-surface-container-lowest/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.3)]"><div class="h-16 px-space-sm flex items-center justify-between"><div class="flex items-center gap-space-xs"><button aria-label="Go Back" class="w-11 h-11 flex items-center justify-center text-on-surface hover:text-primary-container transition-colors rounded-full active:bg-surface-variant/40" onclick="history.back()"><span class="material-symbols-outlined">arrow_back</span></button><img alt="Brand logo. - Primary color: #72f06a
+- Font: sora
+- Mode: dark
+- Roundness: rounded-md
+" class="h-7 w-auto object-contain hidden xs:block" src="https://lh3.googleusercontent.com/aida/AEtjO1XpvYBbAGiVSxwBilgStwUPsgY_Y_jEAXo5yam5DtL-XniyspNRxshh92ihXvq_-7-Cf-363ff8ilLJxYdoz92O4gmK1-4VQxuFma25WM99uKC9gaRuVUJIJgLq8CjvLg431U7pt9uBfJ1o3o_phms64at_eaDkiv37zYBL4vXrQ0jeA5UAh2mBF9sHB9mWN1Gk5QoVMDRbt0T8F92ytLWKvCKoCR0qpl4BkoUT5o6s88sK1I9X_aNLr7t2"/></div><h1 class="font-headline-sm text-headline-sm text-on-surface truncate flex-1 text-center px-space-sm">Media Details</h1><div class="flex items-center gap-space-xs"><button aria-label="Cast to Screen" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-primary-container transition-colors rounded-full active:bg-surface-variant/40"><span class="material-symbols-outlined">cast</span></button><button aria-label="Share or Menu" class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface transition-colors rounded-full active:bg-surface-variant/40"><span class="material-symbols-outlined">share</span></button><div class="w-11 h-11 flex items-center justify-center"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VHSDKiej89POeUOSx3RQMekhDYjk_VCWDVJrKeymAtKbjkzdhhRZgzGgyrkf95WOO6Lgycj3OFJFMsLpILfEOguiAJM4arWF5ovg61sU0ncPcnUPxrxb_eeOqsIhawTZvqRi5QRd77-37-IEtBcnh9p7JsHV4mJ8K0FYhYycfjiaslF-BAi2ELiTYq7v5hCcizQWX2dc1RdIRydB0TO-A8VVJhtI_CbppGRRxJeemX38v1IU2zJrW93GuJ"/></div></div></div></header><main class="flex flex-col relative w-full pt-16 pb-24 bg-surface min-h-screen"><div class="flex flex-col w-full text-on-surface select-none">
+<!-- WIDESCREEN CINEMATIC BACKGROUND CANVAS (PAUSED FRAME FROM THE LAST HORIZON) -->
+<div class="relative w-full aspect-video min-h-[720px] max-h-[880px] overflow-hidden rounded-xl bg-surface-container-lowest flex flex-col justify-between shadow-2xl">
+<!-- Paused Cyberpunk Lagos Video Frame -->
+<div class="absolute inset-0 bg-cover bg-center transition-transform duration-700 scale-100 filter brightness-75" data-alt="Cinematic still from The Last Horizon sci-fi series showing two armed operators on an elevated wet industrial catwalk overlooking a dense futuristic neon-lit Lagos megacity at dusk. Towering glowing cyber-skyscrapers rise into a rainy twilight sky with hovering aerial vehicles and holographic signs in electric cyan and amber hues." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCKSeAR1cxwskkR7IdOpRpoP09Q3WEjPP1JCWkDRDBAxbjAJIMTHQsnRFMFvMlSrlW1blzeop-MJbh0YvhsNoBu7fZ_R8vQ5gobOvKxCUerwYOCXd7-DmmKqWAB4CywFZMd3b0Y1BxyIMXTXaAJaO2c1cKZXtSi17qXC6ZGUbCZErXTA2MQi7QVFrbJ0-vw0bu12xNBZDjQXBnlxaFTGIxabbV9AQV0vzHt-4TBEql1Z8ryMADdDDVwrg')"></div>
+<!-- Frosted Glass Overlay with Ambient Vignette -->
+<div class="absolute inset-0 bg-background/80 backdrop-blur-md"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-surface-dim via-transparent to-surface-dim/70 pointer-events-none"></div>
+<!-- HUD STREAM HEADER (Minimalist landscape player controls) -->
+<header class="relative z-10 w-full px-space-lg py-space-md flex items-center justify-between">
+<div class="flex items-center gap-space-md">
+<button aria-label="Return to playback" class="w-10 h-10 rounded-full bg-surface-container-high/80 text-on-surface flex items-center justify-center hover:bg-surface-bright transition-colors active:scale-95 shadow-md">
+<span class="material-symbols-outlined text-[20px]">arrow_back</span>
+</button>
+<div class="flex flex-col">
+<div class="flex items-center gap-space-xs">
+<span class="font-headline-sm text-headline-sm tracking-wide text-on-surface">The Last Horizon</span>
+<span class="px-space-xs py-0.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm tracking-widest font-extrabold uppercase">PLUS</span>
+<span class="px-space-xs py-0.5 rounded-full bg-secondary-container/40 text-secondary-fixed font-label-sm text-label-sm font-semibold uppercase tracking-wider">4K UHD</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface-variant flex items-center gap-space-xs">
+<span>S1 : E3 • The Neural Breach</span>
+<span>•</span>
+<span class="text-primary-container flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span> Direct Stream 4K Max (HEVC 60fps)
+            </span>
+</p>
+</div>
+</div>
+<div class="flex items-center gap-space-sm">
+<div class="flex items-center gap-space-xs px-space-sm py-1.5 rounded-full bg-surface-container-high/70 text-on-surface-variant font-label-md text-label-md shadow-sm">
+<span class="material-symbols-outlined text-primary-container text-[18px]">cast_connected</span>
+<span>Living Room TV (Dolby Atmos)</span>
+</div>
+<button aria-label="Audio sync diagnostics" class="w-10 h-10 rounded-full bg-surface-container-high/70 text-on-surface-variant flex items-center justify-center hover:text-on-surface hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined text-[20px]">sync</span>
+</button>
+<button aria-label="Dismiss preferences" class="w-10 h-10 rounded-full bg-surface-container-high/70 text-on-surface-variant flex items-center justify-center hover:text-on-surface hover:bg-surface-bright transition-colors">
+<span class="material-symbols-outlined text-[20px]">close</span>
+</button>
+</div>
+</header>
+<!-- ELEVATED WIDESCREEN DRAWER / PREFERENCE MODAL -->
+<div class="relative z-20 w-full flex-1 mx-auto max-w-[1240px] px-space-md pb-space-md flex flex-col justify-end">
+<div class="w-full bg-surface-container-low/95 backdrop-blur-2xl rounded-t-xl rounded-b-xl shadow-2xl flex flex-col max-h-[640px] overflow-hidden transition-all">
+<!-- MODAL DRAG HANDLE & CATEGORY NAVIGATION -->
+<div class="w-full pt-space-xs px-space-lg flex flex-col items-center gap-space-xs bg-surface-container-lowest/60">
+<div class="w-12 h-1 rounded-full bg-surface-variant/80 my-1"></div>
+<div class="w-full flex items-center justify-between py-space-xs">
+<div class="flex items-center gap-space-sm">
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-primary-container">
+<span class="material-symbols-outlined text-[18px]">tune</span>
+</div>
+<div>
+<h2 class="font-headline-sm text-headline-sm tracking-tight text-on-surface font-semibold">Audio &amp; Subtitle Preferences</h2>
+<span class="font-label-sm text-label-sm tracking-wider uppercase text-on-surface-variant">Studio Sound &amp; Neural Accessibility Matrix</span>
+</div>
+</div>
+<!-- Segmented View Tabs -->
+<div class="flex items-center gap-1 p-1 bg-surface-container rounded-full text-on-surface-variant font-label-md text-label-md">
+<button class="px-space-md py-1.5 rounded-full bg-surface-bright text-on-surface font-bold shadow-sm transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px] text-primary-container">volume_up</span>
+                Audio &amp; Dubs
+              </button>
+<button class="px-space-md py-1.5 rounded-full hover:text-on-surface transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">subtitles</span>
+                Captions
+              </button>
+<button class="px-space-md py-1.5 rounded-full hover:text-on-surface transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">palette</span>
+                Typography Styling
+              </button>
+<button class="px-space-md py-1.5 rounded-full hover:text-on-surface transition-all flex items-center gap-1.5">
+<span class="material-symbols-outlined text-[16px]">speed</span>
+                AV Offset
+              </button>
+</div>
+</div>
+</div>
+<!-- THREE-PANEL LANDSCAPE GRID LAYOUT -->
+<div class="grid grid-cols-12 gap-space-md p-space-lg flex-1 overflow-y-auto">
+<!-- COLUMN 1: AUDIO TRACKS & LOCALIZATION (Col span 4 -> ~33%) -->
+<div class="col-span-4 flex flex-col gap-space-sm min-w-0 pr-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">Audio Streams</span>
+<span class="px-2 py-0.5 rounded-full bg-primary-container/20 text-primary-container font-label-sm text-label-sm font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[13px]">spatial_audio_off</span>
+                Spatial Atmos Active
+              </span>
+</div>
+<!-- Scrollable Audio Stream Cards -->
+<div class="flex flex-col gap-space-xs overflow-y-auto max-h-[300px] pr-1">
+<!-- Item 1: Active English Dolby Atmos -->
+<div class="p-space-sm rounded-xl bg-surface-container-high/90 transition-all flex items-start justify-between cursor-pointer shadow-sm group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">English (Original)</span>
+<div class="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant mt-0.5">
+<span class="px-1.5 py-0.2 rounded bg-surface-container-lowest text-primary tracking-wider uppercase font-bold text-[10px]">DOLBY ATMOS</span>
+<span>5.1 • 768 kbps</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-container text-[18px]">graphic_eq</span>
+</div>
+<!-- Item 2: Nigerian Pidgin Studio Dub (VIP) -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-start justify-between cursor-pointer group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-surface-variant shrink-0 flex items-center justify-center">
+<div class="w-2 h-2 rounded-full bg-transparent group-hover:bg-on-surface-variant"></div>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Nigerian Pidgin Dub</span>
+<span class="px-1.5 py-0.5 rounded-full bg-secondary-container text-on-secondary font-label-sm text-label-sm font-black text-[10px] tracking-wide">VIP</span>
+</div>
+<div class="flex items-center gap-1.5 font-label-sm text-label-sm text-on-surface-variant mt-0.5">
+<span class="text-secondary-fixed">Voiced by Lagos All-Stars</span>
+<span>• 5.1</span>
+</div>
+</div>
+</div>
+<span class="material-symbols-outlined text-secondary text-[18px]">verified</span>
+</div>
+<!-- Item 3: Yorùbá Cinematic Dub -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-start justify-between cursor-pointer group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Yorùbá (Cinematic Dub)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">Lagos Contemporary • 5.1 Surround</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">HQ</span>
+</div>
+<!-- Item 4: Hausa Northern Track -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-start justify-between cursor-pointer group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Hausa (Northern Dialogue)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">Stereo 2.0 • ClearVoice™</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">2.0</span>
+</div>
+<!-- Item 5: Français West African -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-start justify-between cursor-pointer group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Français (Afrique de l'Ouest)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">5.1 Surround</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">5.1</span>
+</div>
+<!-- Item 6: Kiswahili Track -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-start justify-between cursor-pointer group">
+<div class="flex items-start gap-space-sm min-w-0">
+<div class="mt-0.5 w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Kiswahili (East African Release)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant mt-0.5">5.1 Surround</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">5.1</span>
+</div>
+</div>
+<!-- Audio Enhancement Modifiers -->
+<div class="mt-auto pt-space-xs flex flex-col gap-space-xs bg-surface-container-lowest/50 p-space-sm rounded-xl">
+<div class="flex items-center justify-between">
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-primary-container">record_voice_over</span>
+                  Dialogue Clarity Boost
+                </span>
+<span class="font-label-sm text-label-sm text-primary-container font-bold uppercase tracking-wider">Mild (+3dB)</span>
+</div>
+<div class="grid grid-cols-3 gap-1 p-0.5 bg-surface-container-high rounded-full text-center">
+<button class="py-1 rounded-full font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface">Off</button>
+<button class="py-1 rounded-full font-label-sm text-label-sm bg-primary-container text-on-primary-container font-bold shadow-sm">Mild</button>
+<button class="py-1 rounded-full font-label-sm text-label-sm text-on-surface-variant hover:text-on-surface">High</button>
+</div>
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[16px] text-secondary">bedtime</span>
+                  Night Mode Leveling
+                </span>
+<button class="w-10 h-5 bg-surface-bright rounded-full p-0.5 flex items-center transition-colors">
+<div class="w-4 h-4 rounded-full bg-on-surface-variant"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- COLUMN 2: SUBTITLES & CC SELECTION (Col span 4 -> ~33%) -->
+<div class="col-span-4 flex flex-col gap-space-sm min-w-0 px-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">Subtitles &amp; CC</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">7 Languages Available</span>
+</div>
+<!-- Subtitle Selection List -->
+<div class="flex flex-col gap-space-xs overflow-y-auto max-h-[300px] pr-1">
+<!-- Off Option -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<span class="font-label-lg text-label-lg text-on-surface">Off</span>
+</div>
+<span class="material-symbols-outlined text-on-surface-variant text-[18px]">subtitles_off</span>
+</div>
+<!-- Item 1: Active English [CC] -->
+<div class="p-space-sm rounded-xl bg-surface-container-high/90 transition-all flex items-center justify-between cursor-pointer shadow-sm group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined text-[14px] font-bold">check</span>
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">English [CC]</span>
+<span class="px-1.5 py-0.2 rounded bg-surface-container text-primary-container font-label-sm text-label-sm text-[10px]">ACTIVE</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Dialogue, Described Music &amp; Audio Effects</span>
+</div>
+</div>
+<span class="material-symbols-outlined text-primary-container text-[18px]">closed_caption</span>
+</div>
+<!-- Item 2: Nigerian Pidgin (Localized Notes) -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Nigerian Pidgin</span>
+<span class="px-1.5 py-0.2 rounded bg-primary-container/20 text-primary-container font-label-sm text-label-sm text-[10px]">Fan Fav</span>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Street Slang Glossary &amp; Cultural Context</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">NG</span>
+</div>
+<!-- Item 3: Yoruba -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Yorùbá</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Standard Diacritics Translation</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">YO</span>
+</div>
+<!-- Item 4: Francais -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Français</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Sous-titres complets</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">FR</span>
+</div>
+<!-- Item 5: Kiswahili -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">Kiswahili</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Manukuu ya Kiswahili Sanifu</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">SW</span>
+</div>
+<!-- Item 6: Arabic -->
+<div class="p-space-sm rounded-xl bg-surface-container/70 hover:bg-surface-container-high/60 transition-all flex items-center justify-between cursor-pointer group">
+<div class="flex items-center gap-space-sm min-w-0">
+<div class="w-5 h-5 rounded-full bg-surface-variant shrink-0"></div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-lg text-label-lg text-on-surface font-semibold truncate">العربية (Arabic)</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">ترجمة معتمدة</span>
+</div>
+</div>
+<span class="font-label-sm text-label-sm text-on-surface-variant">AR</span>
+</div>
+</div>
+<!-- Accessibility Switch: Non-speech sound descriptions -->
+<div class="mt-auto pt-space-xs flex flex-col gap-space-xs bg-surface-container-lowest/50 p-space-sm rounded-xl">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-on-surface flex items-center gap-1 font-semibold">
+<span class="material-symbols-outlined text-[16px] text-primary-container">hearing</span>
+                    Sound FX &amp; Cues
+                  </span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">E.g., [🎵 Synth Pulse], [Heavy Footsteps]</span>
+</div>
+<button class="w-11 h-6 bg-primary-container rounded-full p-0.5 flex items-center justify-end shadow-[0_2px_8px_rgba(114,240,106,0.4)]">
+<div class="w-5 h-5 rounded-full bg-on-primary-container shadow-sm"></div>
+</button>
+</div>
+</div>
+</div>
+<!-- COLUMN 3: LIVE SUBTITLE STYLING & ACCESSIBILITY PREVIEW (Col span 4 -> ~34%) -->
+<div class="col-span-4 flex flex-col gap-space-sm min-w-0 pl-1">
+<div class="flex items-center justify-between">
+<span class="font-headline-sm text-headline-sm text-on-surface">Style Customizer</span>
+<span class="font-label-sm text-label-sm text-secondary-fixed font-bold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">auto_fix_high</span>
+                Live Rendering
+              </span>
+</div>
+<!-- REAL-TIME INTERACTIVE SUBTITLE PREVIEW CARD -->
+<div class="relative w-full h-32 rounded-xl overflow-hidden bg-surface-container-lowest flex flex-col justify-end p-space-sm shadow-inner group">
+<!-- Mini Background cutout mimicking video scene -->
+<div class="absolute inset-0 bg-cover bg-center filter brightness-90 group-hover:scale-105 transition-transform duration-500" data-alt="Close up crop of dark cyberpunk metropolis with blue and green atmospheric smoke and rain." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBBkEyObAi06-ozAG2DIxk_347Cpc9KwKdU6EIQ9EV9unwR1X2CS14k0O4DeZWM0QdF3kByBxP5273MrhA4bKuROyjGIunQI6Ez3chyR5rI-WUxszc37HAPNpby0yVmynvA0S760lJLfERHxFiULpeADs3CU7z6eKPS95dXIATxeXqqRDz2Y11Kp92XHJ3Uzz1j62BTSzJQb9m7jYUWnG03lmjVVZyMMXH3zMtDSYbVfapAs0j5rQAjVg')"></div>
+<div class="absolute inset-0 bg-gradient-to-t from-background/90 via-background/40 to-transparent"></div>
+<!-- Subtitle Overlay Simulation -->
+<div class="relative z-10 mx-auto text-center max-w-[95%]">
+<div class="inline-block px-3 py-1.5 rounded-lg bg-surface-container-lowest/80 backdrop-blur-md shadow-lg transition-all" id="subtitle-preview-box">
+<span class="font-headline-sm text-headline-sm font-bold tracking-wide text-secondary drop-shadow-[0_2px_6px_rgba(0,0,0,0.9)]" id="subtitle-preview-text">
+<span class="text-primary-container font-semibold">[Kemi]:</span> Neural firewall breached. Rerouting power grid to Azania.
+                  </span>
+</div>
+</div>
+</div>
+<!-- STYLE CONTROLS -->
+<div class="flex flex-col gap-space-xs overflow-y-auto max-h-[260px] pr-1">
+<!-- Preset Pills Carousel -->
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold uppercase tracking-wider">Style Presets</span>
+<div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+<button class="px-2.5 py-1 rounded-full bg-secondary-container text-on-secondary font-label-sm text-label-sm font-bold shrink-0 shadow-sm flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-secondary"></span> Yellow Glow
+                  </button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm shrink-0 flex items-center gap-1">
+<span class="w-2 h-2 rounded-full bg-primary-container"></span> Cyber Neon
+                  </button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm shrink-0">Crisp White</button>
+<button class="px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant hover:text-on-surface font-label-sm text-label-sm shrink-0">Cinema Box</button>
+</div>
+</div>
+<!-- Font Size Selector -->
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">Font Size</span>
+<div class="flex items-center gap-1 bg-surface-container-high p-0.5 rounded-full font-label-sm text-label-sm">
+<button class="px-2.5 py-0.5 rounded-full hover:text-on-surface text-on-surface-variant">S</button>
+<button class="px-2.5 py-0.5 rounded-full bg-primary-container text-on-primary-container font-bold shadow-sm">M</button>
+<button class="px-2.5 py-0.5 rounded-full hover:text-on-surface text-on-surface-variant">L</button>
+<button class="px-2.5 py-0.5 rounded-full hover:text-on-surface text-on-surface-variant">XL</button>
+</div>
+</div>
+<!-- Color Swatches & Background Box Opacity -->
+<div class="grid grid-cols-2 gap-space-sm pt-1">
+<!-- Text Color -->
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">Color &amp; Hue</span>
+<div class="flex items-center gap-2">
+<button class="w-6 h-6 rounded-full bg-secondary ring-2 ring-primary-container ring-offset-2 ring-offset-surface-container-low shadow-sm"></button>
+<button class="w-6 h-6 rounded-full bg-white hover:scale-110 transition-transform"></button>
+<button class="w-6 h-6 rounded-full bg-primary-container hover:scale-110 transition-transform"></button>
+<button class="w-6 h-6 rounded-full bg-sky-400 hover:scale-110 transition-transform"></button>
+</div>
+</div>
+<!-- Box Opacity -->
+<div class="flex flex-col gap-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">Box Backdrop</span>
+<div class="flex items-center gap-1 bg-surface-container-high p-0.5 rounded-full font-label-sm text-label-sm text-center">
+<button class="flex-1 py-0.5 rounded-full hover:text-on-surface text-on-surface-variant">0%</button>
+<button class="flex-1 py-0.5 rounded-full bg-surface-bright text-on-surface font-bold">50%</button>
+<button class="flex-1 py-0.5 rounded-full hover:text-on-surface text-on-surface-variant">100%</button>
+</div>
+</div>
+</div>
+<!-- Screen Placement Toggle -->
+<div class="flex items-center justify-between pt-1">
+<span class="font-label-sm text-label-sm text-on-surface-variant font-semibold">Placement Position</span>
+<div class="flex items-center gap-1 font-label-sm text-label-sm text-on-surface-variant">
+<button class="px-2 py-1 rounded bg-surface-container-high text-on-surface font-semibold flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">vertical_align_bottom</span> Bottom
+                  </button>
+<button class="px-2 py-1 rounded hover:bg-surface-container-high hover:text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">expand_less</span> Raised (+40px)
+                  </button>
+<button class="px-2 py-1 rounded hover:bg-surface-container-high hover:text-on-surface flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px]">vertical_align_top</span> Top
+                  </button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- MODAL BOTTOM DOCKED FOOTER -->
+<div class="w-full px-space-lg py-space-sm bg-surface-container-lowest/80 backdrop-blur-md flex items-center justify-between shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+<div class="flex items-center gap-space-sm min-w-0">
+<span class="w-2.5 h-2.5 rounded-full bg-primary-container animate-pulse shrink-0"></span>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">
+<span class="text-on-surface font-semibold">Active:</span> English (Dolby Atmos 5.1) · <span class="text-on-surface font-semibold">Subtitles:</span> English [CC] (Yellow Glow Medium • 50% Box)
+            </p>
+</div>
+<div class="flex items-center gap-space-md shrink-0">
+<button class="px-space-md py-2 rounded-full font-label-md text-label-md text-on-surface-variant hover:text-on-surface hover:bg-surface-container-high transition-all">
+              Reset Styling
+            </button>
+<button class="px-space-lg py-2.5 rounded-full bg-primary-container text-on-primary-container font-label-lg text-label-lg font-bold flex items-center gap-2 shadow-[0_4px_16px_rgba(114,240,106,0.35)] hover:scale-[1.02] active:scale-[0.98] transition-all">
+<span>Apply &amp; Return to Stream</span>
+<span class="material-symbols-outlined text-[18px]">play_arrow</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div></main><aside class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-low/90 backdrop-blur-xl shadow-[0_-8px_24px_rgba(0,0,0,0.6)]"><div class="h-20 px-margin flex items-center justify-between gap-space-md"><div class="flex items-center gap-space-sm"><button aria-label="Download Content" class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-variant text-on-surface-variant hover:text-on-surface active:bg-surface-bright transition-all"><span class="material-symbols-outlined">download</span></button><button aria-label="Add to Watchlist" class="w-12 h-12 flex items-center justify-center rounded-full bg-surface-variant text-on-surface-variant hover:text-on-surface active:bg-surface-bright transition-all"><span class="material-symbols-outlined">bookmark_add</span></button></div><a class="flex-1 h-12 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center gap-space-xs px-space-lg shadow-[0_4px_16px_rgba(114,240,106,0.35)] active:scale-[0.98] transition-transform" data-path="active-player" href="#"><span class="material-symbols-outlined text-[22px]">play_arrow</span><span class="font-label-lg text-label-lg uppercase tracking-wide">Play Now</span></a></div></aside></body></html>

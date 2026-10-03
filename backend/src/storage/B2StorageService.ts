@@ -13,7 +13,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import { VIDEO_UPLOAD_PART_SIZE_BYTES } from '../../../src/constants/video';
 import type { Config } from '../config/config';
 import { HttpError } from '../http/errors';
-import { generateObjectKey, validatePartNumbers } from './uploadValidation';
+import { generateObjectKey, validatePartNumbers, type UploadInput } from './uploadValidation';
 
 const MAX_MULTIPART_PARTS = 64;
 const PLAY_URL_EXPIRY_SECONDS = 2 * 60 * 60;
@@ -43,8 +43,8 @@ export class B2StorageService {
     });
   }
 
-  async startMultipartUpload(fileName: string, contentType: string) {
-    const key = generateObjectKey(fileName);
+  async startMultipartUpload(fileName: string, contentType: string, objectType: UploadInput['objectType']) {
+    const key = generateObjectKey(fileName, undefined, objectType);
     const result = await this.client.send(
       new CreateMultipartUploadCommand({
         Bucket: this.config.s3Bucket,
@@ -129,7 +129,7 @@ export class B2StorageService {
   }
 
   private async verifyMultipartUpload(key: string, uploadId: string) {
-    if (!/^movies\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key) || !uploadId || uploadId.length > 2048) {
+    if (!/^(?:movies|episodes)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key) || !uploadId || uploadId.length > 2048) {
       throw new HttpError(400, 'INVALID_UPLOAD', 'The multipart upload details are invalid.');
     }
     try {

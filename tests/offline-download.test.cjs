@@ -165,3 +165,24 @@ test('download service retries a failed network download using a fresh signed UR
   assert.equal(service.getRecords()[0].status, 'downloaded');
   assert.equal(signedUrls.length, 2);
 });
+
+test('download queues start in order and allow canceling an episode before it starts', async () => {
+  const { service, signedUrls } = createDownloadService({ waitForCancel: true });
+  const first = downloadableItem({ id: 'episode-1', sourceId: 'episode-1', title: 'Episode 1' });
+  const second = downloadableItem({ id: 'episode-2', sourceId: 'episode-2', title: 'Episode 2' });
+  const third = downloadableItem({ id: 'episode-3', sourceId: 'episode-3', title: 'Episode 3' });
+
+  const queue = service.downloadSequentially([first, second, third]);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(signedUrls, ['episode-1']);
+  assert.equal(service.getRecords().find((record) => record.item.id === second.id).status, 'queued');
+
+  await service.cancel(second.id);
+  await service.cancel(first.id);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(signedUrls, ['episode-1', 'episode-3']);
+  await service.cancel(third.id);
+  await queue;
+  assert.equal(service.getRecords().find((record) => record.item.id === second.id).status, 'canceled');
+  assert.equal(service.getRecords().find((record) => record.item.id === third.id).status, 'canceled');
+});

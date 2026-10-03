@@ -1,13 +1,15 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useVideoPlayer, VideoView } from 'expo-video';
+import { useVideoPlayer } from 'expo-video';
 import React, { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { theme } from '../../src/theme';
+import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
 
 export default function WatchScreen() {
@@ -23,9 +25,34 @@ export default function WatchScreen() {
   const [isOfflinePlayback, setIsOfflinePlayback] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>();
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [playbackEnded, setPlaybackEnded] = useState(false);
+  const [nextEpisodeState, setNextEpisodeState] = useState<{
+    currentId: string;
+    episode?: ContentItem;
+  }>();
   const downloadRecord = downloads.records.find((record) => record.item.id === id);
   const isDownloading = downloadRecord?.status === 'downloading';
+  const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
+  const downloadedEpisodes = downloads.records
+    .map((record) => record.item)
+    .filter(
+      (item): item is ContentItem & { episodeNumber: number; seasonNumber: number } =>
+        item.parentSeriesId === movie?.parentSeriesId &&
+        typeof item.episodeNumber === 'number' &&
+        typeof item.seasonNumber === 'number',
+    );
+  const offlineNextEpisode =
+    movie && isOfflinePlayback
+      ? nextEpisodeInSeries(downloadedEpisodes, movie.id)
+      : undefined;
+  const nextEpisode =
+    isOfflinePlayback
+      ? offlineNextEpisode
+      : nextEpisodeState?.currentId === movie?.id
+      ? nextEpisodeState?.episode
+        : undefined;
 
   useEffect(() => {
     let active = true;
@@ -39,6 +66,8 @@ export default function WatchScreen() {
       setError(undefined);
       setPlaybackUrl(undefined);
       setMovie(undefined);
+      setIsOfflinePlayback(false);
+      setPlaybackEnded(false);
 
       if (localDownload) {
         const extension =
@@ -62,16 +91,22 @@ export default function WatchScreen() {
         return;
       }
 
-      if (!supabaseMovieRepository || !id.startsWith('geniuz:movie:')) {
-        setError('This movie is not available for streaming.');
+      const isEpisode = id.startsWith('geniuz:episode:');
+      if (
+        !supabaseMovieRepository ||
+        (!isEpisode && !id.startsWith('geniuz:movie:') && !id.startsWith('geniuz:series:'))
+      ) {
+        setError('This title is not available for streaming.');
         setIsLoading(false);
         return;
       }
 
       try {
-        const movie = await supabaseMovieRepository.getById(id);
+        const movie = isEpisode
+          ? await supabaseMovieRepository.getEpisodeById(id)
+          : await supabaseMovieRepository.getById(id);
         if (!movie?.availability.stream || !movie.mediaPath) {
-          throw new Error('This movie is not published for streaming.');
+          throw new Error('This title is not published for streaming.');
         }
 
         const extension = movie.fileExtension ?? getFileExtension(movie.mediaPath);
@@ -86,7 +121,9 @@ export default function WatchScreen() {
           throw new Error('This video format may not play on this device.');
         }
 
-        const url = await supabaseMovieRepository.getPlaybackUrl(movie);
+        const url = isEpisode
+          ? await supabaseMovieRepository.getEpisodePlaybackUrl(movie)
+          : await supabaseMovieRepository.getPlaybackUrl(movie);
         if (active) {
           setMovie(movie);
           setIsOfflinePlayback(false);
@@ -112,7 +149,7 @@ export default function WatchScreen() {
     return () => {
       active = false;
     };
-  }, [downloads.isLoading, id, localDownload]);
+  }, [downloads.isLoading, id, localDownload, retryAttempt]);
 
   useEffect(() => {
     if (!playbackUrl) {
@@ -130,7 +167,8 @@ export default function WatchScreen() {
       .catch(() => {
         console.error('[WatchScreen] Video player could not load the movie.');
         if (active) {
-          setError('This video format may not play on this device.');
+          setError('Could not load the video. Check your connection and retry.');
+          setIsLoading(false);
         }
       });
 
@@ -144,41 +182,74 @@ export default function WatchScreen() {
     const subscription = player.addListener('statusChange', ({ status }) => {
       if (status === 'error') {
         console.error('[WatchScreen] Video playback failed.');
-        setError('This video format may not play on this device.');
+        setError('Could not play this video. Check your connection and retry.');
+        setIsLoading(false);
         player.pause();
       }
     });
     return () => subscription.remove();
   }, [player]);
 
+  useEffect(() => {
+    const subscription = player.addListener('playToEnd', () => setPlaybackEnded(true));
+    return () => subscription.remove();
+  }, [player]);
+
+  useEffect(() => {
+    if (!movie?.parentSeriesId || !movie.episodeNumber || isOfflinePlayback) {
+      return;
+    }
+
+    let active = true;
+    void supabaseMovieRepository
+      ?.getSeasons(movie.parentSeriesId)
+      .then((seasons) => {
+        if (active) {
+          setNextEpisodeState({
+            currentId: movie.id,
+            episode: nextEpisodeInSeries(
+              seasons.flatMap((season) => season.episodes),
+              movie.id,
+            ),
+          });
+        }
+      })
+      .catch((sequenceError: unknown) => {
+        console.error('[WatchScreen] Could not load the next episode.', sequenceError);
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOfflinePlayback, movie?.id, movie?.parentSeriesId, movie?.episodeNumber]);
+
+  const retryPlayback = () => {
+    setError(undefined);
+    setIsLoading(true);
+    setPlaybackUrl(undefined);
+    setRetryAttempt((attempt) => attempt + 1);
+  };
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      <PlayerHeader
+        player={player}
+        playbackUrl={playbackUrl}
+        isLoading={isLoading}
+        error={error}
+        onRetry={retryPlayback}
+      />
       <View style={styles.header}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>‹  Back</Text>
         </Pressable>
         <Text style={styles.title}>Now playing</Text>
       </View>
-      <View style={styles.playerWrap}>
-        {playbackUrl ? (
-          <VideoView
-            player={player}
-            style={styles.player}
-            nativeControls
-            fullscreenOptions={{ enable: true }}
-            contentFit="contain"
-            allowsPictureInPicture
-          />
-        ) : null}
-        {isLoading ? <ContentNotice message="Preparing secure playback…" /> : null}
-        {error ? <ContentNotice message={error} tone="error" /> : null}
-      </View>
       {movie?.availability.download ? (
         <Pressable
           accessibilityRole="button"
           disabled={Boolean(isDownloaded)}
           onPress={() => {
-            if (isDownloading) {
+            if (isDownloading || isQueued) {
               void downloads.cancel(movie.id).catch((downloadError: unknown) =>
                 Alert.alert(
                   'Download error',
@@ -201,8 +272,20 @@ export default function WatchScreen() {
               ? 'Downloaded'
               : isDownloading
                 ? `Cancel download (${downloadRecord.progress}%)`
+                : isQueued
+                  ? 'Cancel queued download'
                 : 'Download'}
           </Text>
+        </Pressable>
+      ) : null}
+      {playbackEnded && nextEpisode ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.replace({ pathname: '/watch/[id]', params: { id: nextEpisode.id } })}
+          style={styles.nextEpisodeButton}
+        >
+          <Text style={styles.nextEpisodeText}>Next episode</Text>
+          <Text style={styles.nextEpisodeTitle} numberOfLines={1}>{nextEpisode.title}</Text>
         </Pressable>
       ) : null}
       {downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
@@ -241,16 +324,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginTop: 10,
   },
-  playerWrap: {
-    width: '100%',
-    aspectRatio: 16 / 9,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-  },
-  player: {
-    width: '100%',
-    height: '100%',
-  },
   downloadButton: {
     alignSelf: 'flex-start',
     backgroundColor: theme.surface,
@@ -267,6 +340,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
   },
+  nextEpisodeButton: {
+    minHeight: 52,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    marginHorizontal: 18,
+    marginTop: 12,
+    backgroundColor: theme.surface,
+    borderWidth: 1,
+    borderColor: theme.accent,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+  },
+  nextEpisodeText: { color: theme.accent, fontSize: 14, fontWeight: '800' },
+  nextEpisodeTitle: { color: theme.text, fontSize: 14, flex: 1, textAlign: 'right' },
   disabledButton: {
     opacity: 0.55,
   },

@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
 const {
+  requirePublishedOrAdmin,
   requireAdminRole,
 } = require('../.test-build/backend/backend/src/http/auth.js');
 const {
@@ -17,11 +18,13 @@ test('upload validation enforces names, video content types, and the shared 1 Gi
       fileName: 'movie.mkv',
       fileSize: 1073741824,
       contentType: 'video/x-matroska',
+      objectType: 'movie',
     }),
     {
       fileName: 'movie.mkv',
       fileSize: 1073741824,
       contentType: 'video/x-matroska',
+      objectType: 'movie',
     },
   );
   for (const input of [
@@ -40,6 +43,19 @@ test('admin role check accepts only trusted app_metadata.role values', () => {
   }
 });
 
+test('published movie playback is public while unpublished playback stays admin-only', () => {
+  assert.doesNotThrow(() => requirePublishedOrAdmin(true, false));
+  assert.doesNotThrow(() => requirePublishedOrAdmin(true, true));
+  assert.throws(() => requirePublishedOrAdmin(false, false), { status: 403 });
+  assert.doesNotThrow(() => requirePublishedOrAdmin(false, true));
+});
+
+test('published episode playback is public while unpublished episodes stay admin-only', () => {
+  assert.doesNotThrow(() => requirePublishedOrAdmin(true, false));
+  assert.throws(() => requirePublishedOrAdmin(false, false), { status: 403 });
+  assert.doesNotThrow(() => requirePublishedOrAdmin(false, true));
+});
+
 test('object keys are unique, scoped to movies, and preserve safe extensions', () => {
   const first = generateObjectKey('film.MKV', '00000000-0000-4000-8000-000000000001');
   const second = generateObjectKey('film.MKV', '00000000-0000-4000-8000-000000000002');
@@ -48,6 +64,14 @@ test('object keys are unique, scoped to movies, and preserve safe extensions', (
   assert.equal(
     generateObjectKey('film.invalid-extensiontoolong', '00000000-0000-4000-8000-000000000003'),
     'movies/00000000-0000-4000-8000-000000000003',
+  );
+  assert.equal(
+    generateObjectKey('episode.mkv', '00000000-0000-4000-8000-000000000004', 'episode'),
+    'episodes/00000000-0000-4000-8000-000000000004.mkv',
+  );
+  assert.throws(
+    () => validateUploadInput({ fileName: 'episode.mkv', fileSize: 1024, contentType: 'video/x-matroska', objectType: 'other' }),
+    { status: 400 },
   );
 });
 

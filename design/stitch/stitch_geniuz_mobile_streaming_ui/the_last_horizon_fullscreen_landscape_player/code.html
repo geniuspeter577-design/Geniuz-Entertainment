@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Geniuz+ Player | The Last Horizon: S1 E3</title>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Sora & Inter -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700&amp;family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'electric': '#72F06A',
+            'electric-glow': 'rgba(114, 240, 106, 0.4)',
+            'obsidian': '#08090C',
+            'glass-bg': 'rgba(14, 16, 20, 0.78)',
+            'glass-panel': 'rgba(20, 24, 30, 0.88)',
+            'glass-border': 'rgba(255, 255, 255, 0.12)'
+          },
+          fontFamily: {
+            sans: ['Sora', 'sans-serif'],
+            display: ['Space Grotesk', 'sans-serif']
+          },
+          boxShadow: {
+            'neon-green': '0 0 25px rgba(114, 240, 106, 0.45)',
+            'neon-glow-lg': '0 0 40px rgba(114, 240, 106, 0.35)',
+            'glass-card': '0 20px 40px -15px rgba(0, 0, 0, 0.7)'
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Styling Elements -->
+<style data-purpose="custom-enhancements">
+    /* Custom glassmorphism blur and noise simulation */
+    .glass-backdrop {
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+    }
+    .subtle-scrim-top {
+      background: linear-gradient(180deg, rgba(8, 9, 12, 0.95) 0%, rgba(8, 9, 12, 0.65) 45%, rgba(8, 9, 12, 0) 100%);
+    }
+    .subtle-scrim-bottom {
+      background: linear-gradient(0deg, rgba(8, 9, 12, 0.98) 0%, rgba(8, 9, 12, 0.75) 50%, rgba(8, 9, 12, 0) 100%);
+    }
+    /* Custom range scrubber style */
+    .glow-thumb::-webkit-slider-thumb {
+      appearance: none;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #72F06A;
+      box-shadow: 0 0 10px #72F06A, 0 0 20px #72F06A;
+      cursor: pointer;
+    }
+    /* Smooth animations */
+    @keyframes pulseSoft {
+      0%, 100% { opacity: 0.9; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(1.08); }
+    }
+    .pulse-ring {
+      animation: pulseSoft 2.5s infinite ease-in-out;
+    }
+  </style>
+<!-- END: Custom Styling Elements -->
+</head>
+<body class="bg-obsidian text-white font-sans antialiased overflow-hidden select-none w-screen h-screen">
+<!-- BEGIN: Main Video Canvas & Atmosphere -->
+<div class="relative w-full h-full overflow-hidden flex flex-col justify-between" data-purpose="cinema-viewport">
+<!-- Background Cinematic Video Frame from Requested DataStore -->
+<div class="absolute inset-0 z-0">
+<img alt="The Last Horizon - 4K Film Still" class="w-full h-full object-cover object-center filter saturate-105 contrast-105" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<!-- Cinematic Vignette & Scrims -->
+<div class="absolute inset-0 subtle-scrim-top h-44 pointer-events-none"></div>
+<div class="absolute inset-0 subtle-scrim-bottom top-auto h-64 pointer-events-none"></div>
+<div class="absolute inset-0 bg-radial-gradient from-transparent via-transparent to-black/50 pointer-events-none"></div>
+</div>
+<!-- END: Main Video Canvas & Atmosphere -->
+<!-- BEGIN: Top HUD Header -->
+<header class="relative z-30 flex items-center justify-between px-8 pt-7 pb-4" data-purpose="top-navigation-hud">
+<!-- Left: Title, Episode Details & Badges -->
+<div class="flex items-center space-x-5">
+<!-- Back Navigation Button -->
+<button class="w-11 h-11 rounded-full bg-glass-bg glass-backdrop border border-glass-border flex items-center justify-center text-white/90 hover:text-white hover:border-electric transition duration-200" title="Exit to Horizon Details">
+<svg class="w-6 h-6 stroke-current stroke-2 fill-none" viewbox="0 0 24 24">
+<path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Series / Episode Metadata -->
+<div class="flex flex-col">
+<div class="flex items-center space-x-3">
+<h1 class="text-xl font-bold tracking-tight text-white flex items-center">
+              The Last Horizon
+              <span class="ml-2.5 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-widest bg-electric text-black shadow-neon-green">
+                PLUS
+              </span>
+</h1>
+<span class="w-1.5 h-1.5 rounded-full bg-white/30"></span>
+<span class="text-sm font-medium text-white/80 tracking-wide font-display">S1 : E3 • The Neural Breach</span>
+</div>
+<!-- Format Quality Badges -->
+<div class="flex items-center space-x-2 mt-1">
+<div class="inline-flex items-center space-x-1.5 px-2 py-0.5 rounded bg-black/40 border border-white/10 text-[11px] font-semibold text-white/70">
+<span class="w-1.5 h-1.5 rounded-full bg-electric animate-ping"></span>
+<span class="text-white/90">4K ULTRA HD</span>
+<span>•</span>
+<span>HDR10</span>
+<span>•</span>
+<span class="text-white/90">DOLBY ATMOS 5.1</span>
+</div>
+<span class="text-[11px] text-white/40 tracking-wider">GENIUZLAB MASTER 2.39:1</span>
+</div>
+</div>
+</div>
+<!-- Right: Secondary Controls & Modal Triggers -->
+<div class="flex items-center space-x-3">
+<!-- Google Cast / AirPlay -->
+<button class="h-10 px-3.5 rounded-full bg-glass-bg glass-backdrop border border-glass-border flex items-center space-x-2 text-white/80 hover:text-white hover:border-white/40 transition text-xs font-medium">
+<svg class="w-4 h-4 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6M2 20h.01" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="hidden md:inline">Living Room TV</span>
+</button>
+<!-- Audio & Subtitles Active Trigger -->
+<button class="h-10 px-4 rounded-full bg-electric/20 border border-electric text-electric flex items-center space-x-2 text-xs font-semibold shadow-neon-green transition" id="audio-subtitle-btn">
+<svg class="w-4 h-4 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span>Audio &amp; CC</span>
+<span class="w-1.5 h-1.5 rounded-full bg-electric"></span>
+</button>
+<!-- Video Stream Quality Selector -->
+<div class="h-10 px-3 rounded-full bg-glass-bg glass-backdrop border border-glass-border flex items-center text-xs font-medium text-white/80 space-x-1.5 cursor-pointer hover:border-white/40 transition">
+<svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2 text-electric" viewbox="0 0 24 24">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round"></path>
+<circle cx="12" cy="12" r="3"></circle>
+</svg>
+<span class="font-semibold text-white">4K Max</span>
+<span class="text-[10px] text-white/40">▼</span>
+</div>
+<!-- Aspect Ratio Button -->
+<button class="w-10 h-10 rounded-full bg-glass-bg glass-backdrop border border-glass-border flex items-center justify-center text-white/80 hover:text-white transition" title="Aspect Ratio">
+<svg class="w-4 h-4 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<path d="M4 8V4m0 0h4M4 4l5 5m11-5h-4m4 0v4m0-4l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+<!-- Screen Lock Indicator -->
+<button class="w-10 h-10 rounded-full bg-glass-bg glass-backdrop border border-glass-border flex items-center justify-center text-white/70 hover:text-white transition" title="Lock Screen">
+<svg class="w-4 h-4 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<rect height="10" rx="2" width="14" x="5" y="11"></rect>
+<path d="M8 11V7a4 4 0 018 0v4"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: Top HUD Header -->
+<!-- BEGIN: Gesture HUD Pill Indicators (Left: Brightness, Right: Volume) -->
+<div class="absolute inset-y-0 left-8 flex items-center pointer-events-none z-20" data-purpose="gesture-brightness">
+<div class="bg-black/60 glass-backdrop border border-white/10 rounded-2xl p-2.5 flex flex-col items-center space-y-3 shadow-2xl">
+<svg class="w-4 h-4 text-electric" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<circle cx="12" cy="12" r="5"></circle>
+<path d="M12 1v2m0 18v2M4.22 4.22l1.42 1.42m12.72 12.72l1.42 1.42M1 12h2m18 0h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"></path>
+</svg>
+<!-- Vertical Level Bar -->
+<div class="w-1.5 h-28 bg-white/20 rounded-full overflow-hidden flex flex-col justify-end p-0.5">
+<div class="w-full bg-electric rounded-full shadow-neon-green" style="height: 78%;"></div>
+</div>
+<span class="text-[10px] font-mono text-white/80 font-bold">78%</span>
+</div>
+</div>
+<div class="absolute inset-y-0 right-8 flex items-center pointer-events-none z-20" data-purpose="gesture-volume">
+<div class="bg-black/60 glass-backdrop border border-white/10 rounded-2xl p-2.5 flex flex-col items-center space-y-3 shadow-2xl">
+<svg class="w-4 h-4 text-electric" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24">
+<polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+<path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+</svg>
+<!-- Vertical Level Bar -->
+<div class="w-1.5 h-28 bg-white/20 rounded-full overflow-hidden flex flex-col justify-end p-0.5">
+<div class="w-full bg-electric rounded-full shadow-neon-green" style="height: 85%;"></div>
+</div>
+<span class="text-[10px] font-mono text-white/80 font-bold">85%</span>
+</div>
+</div>
+<!-- END: Gesture HUD Pill Indicators -->
+<!-- BEGIN: Center Playback Controls & Forward/Rewind Gestures -->
+<div class="relative z-20 flex items-center justify-center w-full my-auto" data-purpose="center-playback-dock">
+<div class="flex items-center space-x-6 sm:space-x-10">
+<!-- Previous Episode -->
+<button class="w-12 h-12 rounded-full bg-glass-bg/70 glass-backdrop border border-white/10 hover:border-white/30 flex items-center justify-center text-white/80 hover:text-white transition group" title="Previous Episode">
+<svg class="w-5 h-5 fill-none stroke-current stroke-2 group-hover:-translate-x-0.5 transition" viewbox="0 0 24 24">
+<polygon points="19 20 9 12 19 4 19 20"></polygon>
+<line x1="5" x2="5" y1="19" y2="5"></line>
+</svg>
+</button>
+<!-- Skip 10s Backward -->
+<button class="relative w-14 h-14 rounded-full bg-glass-bg glass-backdrop border border-glass-border hover:border-electric/50 flex flex-col items-center justify-center text-white/90 hover:text-electric transition group" title="Rewind 10 seconds">
+<svg class="w-6 h-6 fill-none stroke-current stroke-2 group-hover:-rotate-12 transition transform" viewbox="0 0 24 24">
+<path d="M12.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0019 16V8a1 1 0 00-1.6-.8l-5.334 4zM4.066 11.2a1 1 0 000 1.6l5.334 4A1 1 0 0011 16V8a1 1 0 00-1.6-.8l-5.334 4z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[9px] font-mono font-bold tracking-tight mt-0.5">10s</span>
+</button>
+<!-- Primary Play/Pause Glow Button -->
+<div class="relative group">
+<!-- Ambient Glow Ring -->
+<div class="absolute -inset-1 rounded-full bg-electric opacity-60 blur-md group-hover:opacity-90 pulse-ring transition duration-500"></div>
+<button class="relative w-20 h-20 rounded-full bg-electric text-black flex items-center justify-center shadow-neon-glow-lg transform hover:scale-105 active:scale-95 transition duration-200">
+<!-- Pause Icon (currently in playing state) -->
+<svg class="w-9 h-9 fill-current" viewbox="0 0 24 24">
+<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+</svg>
+</button>
+</div>
+<!-- Skip 10s Forward with Animated Gesture Ripple -->
+<div class="relative flex items-center">
+<button class="relative w-14 h-14 rounded-full bg-glass-bg glass-backdrop border border-glass-border hover:border-electric/50 flex flex-col items-center justify-center text-white/90 hover:text-electric transition group" title="Forward 10 seconds">
+<svg class="w-6 h-6 fill-none stroke-current stroke-2 group-hover:rotate-12 transition transform" viewbox="0 0 24 24">
+<path d="M11.934 12.8a1 1 0 000-1.6l-5.334-4A1 1 0 005 8v8a1 1 0 001.6.8l5.334-4zM19.934 12.8a1 1 0 000-1.6l-5.334-4A1 1 0 0013 8v8a1 1 0 001.6.8l5.334-4z" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+<span class="text-[9px] font-mono font-bold tracking-tight mt-0.5">+10s</span>
+</button>
+<!-- Micro Pulse Cue for gesture response -->
+<div class="absolute -right-14 flex items-center space-x-1 px-2.5 py-1 rounded-full bg-black/60 border border-electric/30 text-electric text-[11px] font-mono opacity-80 animate-pulse pointer-events-none">
+<span>+10s</span>
+<svg class="w-3 h-3 fill-current" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" fill-rule="evenodd"></path>
+</svg>
+</div>
+</div>
+<!-- Next Episode Quick Action -->
+<button class="w-12 h-12 rounded-full bg-glass-bg/70 glass-backdrop border border-white/10 hover:border-white/30 flex items-center justify-center text-white/80 hover:text-white transition group" title="Next Episode">
+<svg class="w-5 h-5 fill-none stroke-current stroke-2 group-hover:translate-x-0.5 transition" viewbox="0 0 24 24">
+<polygon points="5 4 15 12 5 20 5 4"></polygon>
+<line x1="19" x2="19" y1="5" y2="19"></line>
+</svg>
+</button>
+</div>
+</div>
+<!-- END: Center Playback Controls -->
+<!-- BEGIN: Floating Audio & Subtitle Flyout Panel -->
+<div class="absolute top-20 right-10 w-[420px] bg-glass-panel glass-backdrop border border-white/15 rounded-3xl p-5 shadow-glass-card z-40 transition duration-300" data-purpose="audio-subtitles-modal" id="audio-panel">
+<!-- Modal Header -->
+<div class="flex items-center justify-between pb-3 border-b border-white/10">
+<div class="flex items-center space-x-2">
+<span class="w-2 h-2 rounded-full bg-electric shadow-neon-green"></span>
+<h2 class="text-sm font-bold tracking-wide uppercase font-display text-white">Audio &amp; Subtitle Settings</h2>
+</div>
+<button class="text-white/40 hover:text-white p-1 rounded-lg hover:bg-white/5 transition" title="Close Panel">
+<svg class="w-4 h-4 stroke-current stroke-2" viewbox="0 0 24 24">
+<line x1="18" x2="6" y1="6" y2="18"></line>
+<line x1="6" x2="18" y1="6" y2="18"></line>
+</svg>
+</button>
+</div>
+<!-- Two Column Selector: Audio vs Subtitles -->
+<div class="grid grid-cols-2 gap-4 mt-4">
+<!-- Audio Tracks Column -->
+<div class="space-y-1.5">
+<div class="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 px-2">Audio Tracks</div>
+<!-- English (Dolby Atmos) - Active Selected -->
+<div class="p-2.5 rounded-xl bg-electric/10 border border-electric/40 text-xs flex flex-col cursor-pointer transition">
+<div class="flex items-center justify-between text-white font-semibold">
+<span class="flex items-center">
+                English
+                <span class="ml-1 text-[9px] text-electric bg-electric/20 px-1 py-0.2 rounded font-mono">ORIG</span>
+</span>
+<svg class="w-4 h-4 text-electric" fill="none" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24">
+<polyline points="20 6 9 17 4 12"></polyline>
+</svg>
+</div>
+<span class="text-[10px] text-electric font-medium mt-0.5">Dolby Atmos 5.1</span>
+</div>
+<!-- Nigerian Pidgin (Dubbed) -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs flex flex-col cursor-pointer transition">
+<div class="flex items-center justify-between text-white/80 font-medium">
+<span>Nigerian Pidgin</span>
+<span class="text-[9px] font-bold text-amber-300 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/30">GENIUZ VIP</span>
+</div>
+<span class="text-[10px] text-white/40 mt-0.5">5.1 Studio Dubbed</span>
+</div>
+<!-- Yoruba -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs flex flex-col cursor-pointer transition">
+<div class="flex items-center justify-between text-white/80 font-medium">
+<span>Yorùbá</span>
+<span class="text-[10px] text-white/30">Stereo</span>
+</div>
+<span class="text-[10px] text-white/40 mt-0.5">Official Cast Voiceover</span>
+</div>
+<!-- French -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs flex flex-col cursor-pointer transition">
+<div class="flex items-center justify-between text-white/80 font-medium">
+<span>Français (West African)</span>
+</div>
+<span class="text-[10px] text-white/40 mt-0.5">5.1 Surround</span>
+</div>
+<!-- Swahili -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs flex flex-col cursor-pointer transition">
+<div class="flex items-center justify-between text-white/80 font-medium">
+<span>Kiswahili</span>
+</div>
+<span class="text-[10px] text-white/40 mt-0.5">Stereo</span>
+</div>
+</div>
+<!-- Subtitles Column -->
+<div class="space-y-1.5">
+<div class="text-[11px] font-bold uppercase tracking-wider text-white/40 mb-2 px-2">Subtitles / CC</div>
+<!-- Off Option -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent text-xs text-white/70 font-medium cursor-pointer">
+            Off
+          </div>
+<!-- English CC - Selected -->
+<div class="p-2.5 rounded-xl bg-electric/10 border border-electric/40 text-xs flex items-center justify-between font-semibold text-white cursor-pointer transition">
+<span>English [CC]</span>
+<svg class="w-4 h-4 text-electric" fill="none" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24">
+<polyline points="20 6 9 17 4 12"></polyline>
+</svg>
+</div>
+<!-- Nigerian Pidgin -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs text-white/80 font-medium cursor-pointer transition">
+            Nigerian Pidgin
+          </div>
+<!-- French -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs text-white/80 font-medium cursor-pointer transition">
+            Français
+          </div>
+<!-- Arabic -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs text-white/80 font-medium cursor-pointer transition">
+            العربية (Arabic)
+          </div>
+<!-- Swahili -->
+<div class="p-2.5 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/10 text-xs text-white/80 font-medium cursor-pointer transition">
+            Kiswahili
+          </div>
+</div>
+</div>
+<!-- Quick Subtitle Styling Bar -->
+<div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[11px] text-white/60">
+<span class="flex items-center space-x-1.5">
+<span>Appearance:</span>
+<span class="text-white font-medium bg-white/10 px-2 py-0.5 rounded">Medium • Yellow Glow</span>
+</span>
+<button class="text-electric hover:underline font-medium">Style Settings &gt;</button>
+</div>
+</div>
+<!-- END: Floating Audio & Subtitle Flyout Panel -->
+<!-- BEGIN: Bottom HUD Dock & Scrubber Timeline -->
+<footer class="relative z-30 px-8 pb-7 pt-2 flex flex-col space-y-3" data-purpose="bottom-timeline-and-dock">
+<!-- Scrubber Timeline Container with Scrub Thumbnail Tooltip -->
+<div class="relative w-full group py-2 cursor-pointer" data-purpose="scrubber-bar">
+<!-- Video Preview Tooltip (Pinned at 24:18 position ~ 41.5%) -->
+<div class="absolute -top-36 left-[41.5%] -translate-x-1/2 flex flex-col items-center pointer-events-none z-30 transition-all duration-200">
+<div class="p-1 rounded-xl bg-black/90 border border-electric/40 shadow-neon-glow-lg">
+<!-- Mini Thumbnail of scene -->
+<div class="w-44 h-24 rounded-lg overflow-hidden relative">
+<img alt="Scene Preview" class="w-full h-full object-cover object-left-bottom" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<div class="absolute inset-0 bg-black/20"></div>
+<div class="absolute bottom-1.5 left-2 px-1.5 py-0.5 rounded bg-black/80 font-mono text-[10px] text-electric font-bold">
+                24:18
+              </div>
+</div>
+<!-- Scene Description Subtitle -->
+<div class="px-2 py-1.5 max-w-[176px]">
+<p class="text-[10px] text-white/90 truncate font-medium">Kemi initiates network bypass</p>
+<p class="text-[9px] text-white/40">Chapter: Azania Overpass Infiltration</p>
+</div>
+</div>
+<!-- Little Arrow Pointer -->
+<div class="w-2.5 h-2.5 bg-black border-r border-b border-electric/40 rotate-45 -mt-1.5"></div>
+</div>
+<!-- The Scrub Track Rails -->
+<div class="relative w-full h-1.5 bg-white/20 group-hover:h-2.5 rounded-full transition-all duration-200 overflow-hidden flex items-center">
+<!-- Buffered Range -->
+<div class="absolute left-0 h-full bg-white/35 rounded-full" style="width: 65%;"></div>
+<!-- Played Range (Electric Green) -->
+<div class="absolute left-0 h-full bg-electric rounded-full shadow-neon-green" style="width: 41.5%;"></div>
+</div>
+<!-- Neon Scrubber Thumb Knob -->
+<div class="absolute top-1/2 -translate-y-1/2 left-[41.5%] -ml-2 w-4 h-4 rounded-full bg-white border-2 border-electric shadow-neon-green transform group-hover:scale-125 transition"></div>
+</div>
+<!-- Time and Core Controls Row -->
+<div class="flex items-center justify-between">
+<!-- Left Sub-controls: Play/Pause mini, Timecode, Skip Intro -->
+<div class="flex items-center space-x-5">
+<!-- Play Mini Toggle -->
+<button class="text-white hover:text-electric transition" title="Play/Pause">
+<svg class="w-6 h-6 fill-current" viewbox="0 0 24 24">
+<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"></path>
+</svg>
+</button>
+<!-- Current Time & Remaining Duration -->
+<div class="flex items-center space-x-1.5 font-mono text-xs tracking-wider">
+<span class="text-electric font-semibold">24:18</span>
+<span class="text-white/40">/</span>
+<span class="text-white/70">58:40</span>
+</div>
+<!-- Skip Intro Trigger Pill -->
+<button class="relative flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-glass-bg glass-backdrop border border-electric/80 hover:bg-electric hover:text-black text-white text-xs font-semibold shadow-neon-green transition duration-200">
+<svg class="w-3.5 h-3.5 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<polygon points="5 4 15 12 5 20 5 4"></polygon>
+<line x1="19" x2="19" y1="5" y2="19"></line>
+</svg>
+<span>Skip Intro</span>
+<!-- Circular countdown ring micro SVG -->
+<svg class="w-3.5 h-3.5 -rotate-90 text-electric fill-none stroke-current" viewbox="0 0 24 24">
+<circle class="opacity-25" cx="12" cy="12" r="9" stroke-width="2.5"></circle>
+<circle cx="12" cy="12" r="9" stroke-dasharray="56" stroke-dashoffset="18" stroke-width="2.5"></circle>
+</svg>
+</button>
+</div>
+<!-- Right Sub-controls: Speed, Chapters, Miniplayer, Fullscreen -->
+<div class="flex items-center space-x-4">
+<!-- Playback Speed Pill -->
+<button class="px-2.5 py-1 rounded-full bg-glass-bg border border-white/10 hover:border-white/30 text-white/80 text-xs font-mono font-medium hover:text-white transition">
+            1.0x
+          </button>
+<!-- Episode Selector Drawer Button -->
+<button class="h-8 px-3 rounded-full bg-glass-bg border border-white/10 hover:border-white/30 text-white/80 hover:text-white flex items-center space-x-1.5 text-xs font-medium transition">
+<svg class="w-3.5 h-3.5 stroke-current stroke-2 fill-none" viewbox="0 0 24 24">
+<line x1="8" x2="21" y1="6" y2="6"></line>
+<line x1="8" x2="21" y1="12" y2="12"></line>
+<line x1="8" x2="21" y1="18" y2="18"></line>
+<line x1="3" x2="3.01" y1="6" y2="6"></line>
+<line x1="3" x2="3.01" y1="12" y2="12"></line>
+<line x1="3" x2="3.01" y1="18" y2="18"></line>
+</svg>
+<span>Episodes (8)</span>
+</button>
+<!-- Picture in Picture (PiP) -->
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-white/70 hover:text-white transition" title="Picture in Picture">
+<svg class="w-4 h-4 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<rect height="16" rx="2" width="20" x="2" y="4"></rect>
+<rect class="fill-white/30" height="8" rx="1" width="8" x="12" y="10"></rect>
+</svg>
+</button>
+<!-- Fullscreen Exit / Mode Toggle -->
+<button class="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-electric transition" title="Exit Fullscreen">
+<svg class="w-4.5 h-4.5 fill-none stroke-current stroke-2" viewbox="0 0 24 24">
+<path d="M9 4.5v4.5m0 0H4.5m4.5 0L3 3m6 16.5V15m0 0H4.5m4.5 0L3 21m12-16.5v4.5m0 0h4.5m-4.5 0L21 3m-4.5 16.5V15m0 0h4.5m-4.5 0L21 21" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</div>
+</footer>
+<!-- END: Bottom HUD Dock & Scrubber Timeline -->
+</div>
+<!-- BEGIN: Interactive Toggle Script -->
+<script data-purpose="player-interaction">
+    document.addEventListener('DOMContentLoaded', () => {
+      const audioBtn = document.getElementById('audio-subtitle-btn');
+      const audioPanel = document.getElementById('audio-panel');
+
+      if (audioBtn && audioPanel) {
+        audioBtn.addEventListener('click', () => {
+          if (audioPanel.classList.contains('hidden')) {
+            audioPanel.classList.remove('hidden');
+          } else {
+            audioPanel.classList.add('hidden');
+          }
+        });
+      }
+    });
+  </script>
+<!-- END: Interactive Toggle Script -->
+</body></html>

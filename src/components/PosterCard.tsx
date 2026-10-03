@@ -11,17 +11,20 @@ type PosterCardProps = {
   item: ContentItem;
   onPress: () => void;
   compact?: boolean;
+  grid?: boolean;
   progress?: number;
 };
 
-export function PosterCard({ item, onPress, compact = false, progress }: PosterCardProps) {
+export function PosterCard({ item, onPress, compact = false, grid = false, progress }: PosterCardProps) {
   const { records, download, cancel } = useDownloads();
   const downloadRecord = records.find((record) => record.item.id === item.id);
   const isDownloading = downloadRecord?.status === 'downloading';
+  const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
+  const hasFailed = downloadRecord?.status === 'failed' || downloadRecord?.status === 'canceled';
 
   return (
-    <View style={[styles.card, compact && styles.compactCard]}>
+    <View style={[styles.card, compact && styles.compactCard, grid && styles.gridCard]}>
       <Pressable
         onPress={onPress}
         style={styles.cardPressable}
@@ -61,14 +64,18 @@ export function PosterCard({ item, onPress, compact = false, progress }: PosterC
           accessibilityLabel={
             isDownloading
               ? `Cancel download of ${item.title}`
+              : isQueued
+                ? `Cancel queued download of ${item.title}`
               : isDownloaded
                 ? `${item.title} downloaded`
+                : hasFailed
+                  ? `Retry download of ${item.title}`
                 : `Download ${item.title}`
           }
           accessibilityState={{ disabled: Boolean(isDownloaded) }}
           disabled={Boolean(isDownloaded)}
           onPress={() => {
-            if (isDownloading) {
+            if (isDownloading || isQueued) {
               void cancel(item.id).catch((error: unknown) =>
                 Alert.alert('Download error', error instanceof Error ? error.message : 'Could not cancel this download.'),
               );
@@ -78,13 +85,15 @@ export function PosterCard({ item, onPress, compact = false, progress }: PosterC
               );
             }
           }}
-          style={styles.downloadButton}
+          style={[styles.downloadButton, grid && styles.gridDownloadButton]}
         >
           {isDownloading ? (
             <Text style={styles.downloadProgress}>{downloadRecord.progress}%</Text>
+          ) : isQueued ? (
+            <Text style={styles.downloadProgress}>Queued</Text>
           ) : (
             <Ionicons
-              name={isDownloaded ? 'checkmark' : 'download-outline'}
+              name={isDownloaded ? 'checkmark' : hasFailed ? 'refresh' : 'download-outline'}
               size={19}
               color={theme.text}
             />
@@ -108,6 +117,10 @@ const styles = StyleSheet.create({
   compactCard: {
     width: 152,
   },
+  gridCard: {
+    width: '31%',
+    marginRight: 0,
+  },
   cardPressable: {
     flex: 1,
   },
@@ -130,14 +143,21 @@ const styles = StyleSheet.create({
     position: 'absolute',
     right: 10,
     top: 10,
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(15, 17, 22, 0.84)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.18)',
+  },
+  gridDownloadButton: {
+    right: 6,
+    top: 6,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   downloadProgress: {
     color: theme.text,

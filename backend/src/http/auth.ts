@@ -14,6 +14,46 @@ export function requireAdminRole(appMetadata: unknown) {
   }
 }
 
+export function requirePublishedOrAdmin(published: boolean, isAdmin: boolean) {
+  if (!published && !isAdmin) {
+    throw new HttpError(403, 'ADMIN_REQUIRED', 'Admin access is required.');
+  }
+}
+
+export async function authenticatePlayback(
+  config: Config,
+  authorization: string | undefined,
+) {
+  if (!config.supabaseUrl || !config.supabasePublishableKey) {
+    throw new HttpError(503, 'SUPABASE_NOT_CONFIGURED', 'Supabase authentication is not configured.');
+  }
+
+  const accessToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
+  if (authorization && !accessToken) {
+    throw new HttpError(401, 'UNAUTHENTICATED', 'A valid Supabase access token is required.');
+  }
+
+  const client = createClient(config.supabaseUrl, config.supabasePublishableKey, {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false,
+      detectSessionInUrl: false,
+    },
+    ...(accessToken ? { global: { headers: { Authorization: `Bearer ${accessToken}` } } } : {}),
+  });
+
+  if (!accessToken) {
+    return { client, isAdmin: false };
+  }
+
+  const { data, error } = await client.auth.getUser(accessToken);
+  if (error || !data.user) {
+    throw new HttpError(401, 'UNAUTHENTICATED', 'A valid Supabase access token is required.');
+  }
+
+  return { client, isAdmin: data.user.app_metadata?.role === 'admin' };
+}
+
 export async function authenticateAdmin(config: Config, authorization: string | undefined) {
   const accessToken = authorization?.match(/^Bearer\s+(\S+)$/i)?.[1];
   if (!accessToken) {

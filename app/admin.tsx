@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  type TextInputProps,
   View,
 } from 'react-native';
 
@@ -39,6 +40,14 @@ type SelectedMovieFile = {
   storageExtension: string;
   mimeType: string;
   contentType: string;
+};
+
+type AdminSeasonChoice = {
+  id: string;
+  series_id: string;
+  season_number: number;
+  release_year: number | null;
+  published: boolean;
 };
 
 async function readVideoPart(
@@ -86,6 +95,64 @@ function formatFileSize(bytes: number) {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function AdminTextField({
+  label,
+  value,
+  onChangeText,
+  multiline = false,
+  keyboardType = 'default',
+}: {
+  label: string;
+  value: string;
+  onChangeText: (value: string) => void;
+  multiline?: boolean;
+  keyboardType?: TextInputProps['keyboardType'];
+}) {
+  return (
+    <View style={styles.field}>
+      <Text style={styles.fieldLabel}>{label}</Text>
+      <TextInput
+        accessibilityLabel={label}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder={label}
+        placeholderTextColor={theme.secondaryText}
+        keyboardType={keyboardType}
+        multiline={multiline}
+        textAlignVertical={multiline ? 'top' : 'center'}
+        style={[styles.input, multiline && styles.multilineInput]}
+      />
+    </View>
+  );
+}
+
+function AdminCheckbox({
+  checked,
+  disabled,
+  label,
+  onPress,
+}: {
+  checked: boolean;
+  disabled: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked, disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      style={styles.checkRow}
+    >
+      <View style={[styles.checkbox, checked && styles.checkedBox]}>
+        {checked ? <Text style={styles.checkMark}>✓</Text> : null}
+      </View>
+      <Text style={styles.checkLabel}>{label}</Text>
+    </Pressable>
+  );
+}
+
 export default function AdminScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
@@ -101,6 +168,7 @@ export default function AdminScreen() {
   const [contentRating, setContentRating] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
   const [selectedFile, setSelectedFile] = useState<SelectedMovieFile | null>(null);
+  const [uploadingFile, setUploadingFile] = useState<SelectedMovieFile | null>(null);
   const [confirmedRights, setConfirmedRights] = useState(false);
   const [publishImmediately, setPublishImmediately] = useState(true);
   const [allowDownload, setAllowDownload] = useState(false);
@@ -109,9 +177,31 @@ export default function AdminScreen() {
   const [formMessage, setFormMessage] = useState<string>();
   const [formError, setFormError] = useState<string>();
   const [movies, setMovies] = useState<AdminMovie[]>([]);
+  const [seasons, setSeasons] = useState<AdminSeasonChoice[]>([]);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [moviesError, setMoviesError] = useState<string>();
   const [updatingMovieId, setUpdatingMovieId] = useState<string>();
+  const [seriesTitle, setSeriesTitle] = useState('');
+  const [seriesDescription, setSeriesDescription] = useState('');
+  const [seriesYear, setSeriesYear] = useState('');
+  const [seriesGenres, setSeriesGenres] = useState('');
+  const [seriesContentRating, setSeriesContentRating] = useState('');
+  const [seriesPosterUrl, setSeriesPosterUrl] = useState('');
+  const [seriesPublished, setSeriesPublished] = useState(true);
+  const [seriesRightsConfirmed, setSeriesRightsConfirmed] = useState(false);
+  const [seasonSeriesId, setSeasonSeriesId] = useState('');
+  const [seasonNumber, setSeasonNumber] = useState('');
+  const [seasonYear, setSeasonYear] = useState('');
+  const [episodeSeasonId, setEpisodeSeasonId] = useState('');
+  const [episodeNumber, setEpisodeNumber] = useState('');
+  const [episodeTitle, setEpisodeTitle] = useState('');
+  const [episodeDuration, setEpisodeDuration] = useState('');
+  const [episodeFile, setEpisodeFile] = useState<SelectedMovieFile | null>(null);
+  const [episodeRightsConfirmed, setEpisodeRightsConfirmed] = useState(false);
+  const [episodeAllowDownload, setEpisodeAllowDownload] = useState(false);
+  const [episodePublished, setEpisodePublished] = useState(true);
+  const [isSavingSeries, setIsSavingSeries] = useState(false);
+  const [isSavingSeason, setIsSavingSeason] = useState(false);
   const uploadAbortController = useRef<AbortController | null>(null);
 
   useEffect(
@@ -129,7 +219,12 @@ export default function AdminScreen() {
     setMoviesLoading(true);
     setMoviesError(undefined);
     try {
-      setMovies(await supabaseMovieRepository.getAdminMovies());
+      const [loadedMovies, loadedSeasons] = await Promise.all([
+        supabaseMovieRepository.getAdminMovies(),
+        supabaseMovieRepository.getAdminSeasons(),
+      ]);
+      setMovies(loadedMovies);
+      setSeasons(loadedSeasons);
     } catch (error) {
       console.error('[AdminScreen] Could not load movies.', error);
       setMoviesError('The movie catalog could not be loaded. Check your connection and retry.');
@@ -224,7 +319,7 @@ export default function AdminScreen() {
     }
   }, []);
 
-  const chooseMovie = useCallback(async () => {
+  const chooseVideoFile = useCallback(async () => {
     setFormError(undefined);
     try {
       const result = await DocumentPicker.getDocumentAsync({
@@ -233,14 +328,14 @@ export default function AdminScreen() {
         base64: false,
       });
       if (result.canceled) {
-        return;
+        return null;
       }
 
       const asset = result.assets[0];
       const detectedType = detectVideoFileType(asset.name, asset.mimeType);
       if (!detectedType) {
         setFormError('Choose a video file. Supported formats include MP4, MOV, MKV, AVI, WebM, M4V, 3GP, TS, FLV, and WMV.');
-        return;
+        return null;
       }
 
       const file = asset.file ?? new ExpoFile(asset.uri);
@@ -248,10 +343,10 @@ export default function AdminScreen() {
       const sizeValidation = validateVideoFileSize(fileSize, MAX_VIDEO_FILE_SIZE_BYTES);
       if (!sizeValidation.valid) {
         setFormError(sizeValidation.message);
-        return;
+        return null;
       }
 
-      setSelectedFile({
+      return {
         file,
         name: asset.name,
         size: fileSize,
@@ -259,12 +354,27 @@ export default function AdminScreen() {
         storageExtension: detectedType.extension,
         mimeType: asset.mimeType?.trim() || detectedType.mimeType,
         contentType: detectedType.mimeType,
-      });
+      } satisfies SelectedMovieFile;
     } catch (error) {
       console.error('[AdminScreen] Video picker failed.', error);
       setFormError('Could not open the video picker. Please try again.');
+      return null;
     }
   }, []);
+
+  const chooseMovie = useCallback(async () => {
+    const file = await chooseVideoFile();
+    if (file) {
+      setSelectedFile(file);
+    }
+  }, [chooseVideoFile]);
+
+  const chooseEpisodeFile = useCallback(async () => {
+    const file = await chooseVideoFile();
+    if (file) {
+      setEpisodeFile(file);
+    }
+  }, [chooseVideoFile]);
 
   const handleUpload = useCallback(async () => {
     if (!supabaseMovieRepository || !supabase || !selectedFile) {
@@ -308,6 +418,7 @@ export default function AdminScreen() {
     }
 
     setIsUploading(true);
+    setUploadingFile(selectedFile);
     setProgress(0);
     setFormError(undefined);
     setFormMessage(undefined);
@@ -388,6 +499,7 @@ export default function AdminScreen() {
       if (uploadAbortController.current === abortController) {
         uploadAbortController.current = null;
       }
+      setUploadingFile(null);
       setIsUploading(false);
     }
   }, [
@@ -403,6 +515,210 @@ export default function AdminScreen() {
     selectedFile,
     title,
     year,
+  ]);
+
+  const handleCreateSeries = useCallback(async () => {
+    if (!supabaseMovieRepository) {
+      setFormError('Connect Supabase before creating a series.');
+      return;
+    }
+    if (!seriesTitle.trim()) {
+      setFormError('Enter a series title.');
+      return;
+    }
+    if (!seriesRightsConfirmed) {
+      setFormError('Confirm that you have the rights to distribute this series.');
+      return;
+    }
+    const parsedYear = seriesYear.trim() ? Number(seriesYear) : undefined;
+    if (parsedYear !== undefined && (!Number.isInteger(parsedYear) || parsedYear < 1888 || parsedYear > 2200)) {
+      setFormError('Enter a valid series release year.');
+      return;
+    }
+    if (seriesPosterUrl.trim()) {
+      try {
+        if (new URL(seriesPosterUrl.trim()).protocol !== 'https:') {
+          throw new Error('Invalid poster URL.');
+        }
+      } catch {
+        setFormError('Enter a valid HTTPS poster image URL.');
+        return;
+      }
+    }
+
+    setIsSavingSeries(true);
+    setFormError(undefined);
+    try {
+      const seriesId = await supabaseMovieRepository.createSeries({
+        title: seriesTitle,
+        description: seriesDescription,
+        ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
+        genres: seriesGenres.split(',').map((genre) => genre.trim()).filter(Boolean),
+        ...(seriesPosterUrl.trim() ? { posterUrl: seriesPosterUrl.trim() } : {}),
+        ...(seriesContentRating.trim() ? { contentRating: seriesContentRating.trim() } : {}),
+        published: seriesPublished,
+      });
+      setSeriesTitle('');
+      setSeriesDescription('');
+      setSeriesYear('');
+      setSeriesGenres('');
+      setSeriesContentRating('');
+      setSeriesPosterUrl('');
+      setSeriesRightsConfirmed(false);
+      setSeasonSeriesId(seriesId.replace(/^geniuz:series:/, ''));
+      setFormMessage('Series created. Add seasons and episodes below.');
+      await loadMovies();
+    } catch (error) {
+      console.error('[AdminScreen] Could not create series.', error);
+      setFormError(error instanceof Error ? error.message : 'The series could not be created. Retry.');
+    } finally {
+      setIsSavingSeries(false);
+    }
+  }, [loadMovies, seriesContentRating, seriesDescription, seriesGenres, seriesPosterUrl, seriesPublished, seriesRightsConfirmed, seriesTitle, seriesYear]);
+
+  const handleCreateSeason = useCallback(async () => {
+    if (!supabaseMovieRepository || !seasonSeriesId) {
+      setFormError('Choose a series before adding a season.');
+      return;
+    }
+    const parsedNumber = Number(seasonNumber);
+    const parsedYear = seasonYear.trim() ? Number(seasonYear) : undefined;
+    if (!Number.isInteger(parsedNumber) || parsedNumber < 1) {
+      setFormError('Enter a valid season number.');
+      return;
+    }
+    if (parsedYear !== undefined && (!Number.isInteger(parsedYear) || parsedYear < 1888 || parsedYear > 2200)) {
+      setFormError('Enter a valid season year.');
+      return;
+    }
+
+    setIsSavingSeason(true);
+    setFormError(undefined);
+    try {
+      const seasonId = await supabaseMovieRepository.createSeason(
+        seasonSeriesId,
+        parsedNumber,
+        parsedYear,
+      );
+      setSeasonNumber('');
+      setSeasonYear('');
+      setEpisodeSeasonId(seasonId);
+      setFormMessage(`Season ${parsedNumber} created.`);
+      await loadMovies();
+    } catch (error) {
+      console.error('[AdminScreen] Could not create season.', error);
+      setFormError(error instanceof Error ? error.message : 'The season could not be created. Retry.');
+    } finally {
+      setIsSavingSeason(false);
+    }
+  }, [loadMovies, seasonNumber, seasonSeriesId, seasonYear]);
+
+  const handleUploadEpisode = useCallback(async () => {
+    if (!supabaseMovieRepository || !supabase || !episodeFile) {
+      setFormError('Choose a video before uploading the episode.');
+      return;
+    }
+    if (!episodeSeasonId) {
+      setFormError('Choose a season for this episode.');
+      return;
+    }
+    if (!episodeTitle.trim()) {
+      setFormError('Enter an episode title.');
+      return;
+    }
+    const parsedNumber = Number(episodeNumber);
+    const parsedDuration = Number(episodeDuration);
+    if (!Number.isInteger(parsedNumber) || parsedNumber < 1) {
+      setFormError('Enter a valid episode number.');
+      return;
+    }
+    if (!Number.isInteger(parsedDuration) || parsedDuration < 1 || parsedDuration > 86400) {
+      setFormError('Enter a valid episode duration in seconds.');
+      return;
+    }
+    if (!episodeRightsConfirmed) {
+      setFormError('Confirm that you have the rights to distribute this episode.');
+      return;
+    }
+    const sizeValidation = validateVideoFileSize(episodeFile.size, MAX_VIDEO_FILE_SIZE_BYTES);
+    if (!sizeValidation.valid) {
+      setFormError(sizeValidation.message);
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadingFile(episodeFile);
+    setProgress(0);
+    setFormError(undefined);
+    setFormMessage(undefined);
+    const abortController = new AbortController();
+    uploadAbortController.current = abortController;
+    try {
+      const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionResult.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error('Your admin session expired. Sign in again before uploading.', { cause: sessionError });
+      }
+      const storageKey = await uploadVideoToB2({
+        apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+        accessToken,
+        file: {
+          size: episodeFile.size,
+          readPart: (start, end, contentType) =>
+            readVideoPart(episodeFile.file, start, end, contentType),
+        },
+        fileName: episodeFile.name,
+        contentType: episodeFile.contentType,
+        objectType: 'episode',
+        signal: abortController.signal,
+        onProgress: setProgress,
+      });
+      if (abortController.signal.aborted) {
+        throw new Error('Upload canceled.');
+      }
+      await supabaseMovieRepository.createB2Episode(
+        {
+          seasonId: episodeSeasonId,
+          episodeNumber: parsedNumber,
+          title: episodeTitle,
+          durationSeconds: parsedDuration,
+          fileExtension: episodeFile.fileExtension,
+          mimeType: episodeFile.mimeType,
+          fileSizeBytes: episodeFile.size,
+          allowDownload: episodeAllowDownload,
+          published: episodePublished,
+        },
+        storageKey,
+      );
+      setEpisodeFile(null);
+      setEpisodeTitle('');
+      setEpisodeNumber('');
+      setEpisodeDuration('');
+      setEpisodeRightsConfirmed(false);
+      setEpisodeAllowDownload(false);
+      setFormMessage('Episode uploaded and saved.');
+      setProgress(100);
+      await loadMovies();
+    } catch (error) {
+      console.error('[AdminScreen] Episode upload failed.');
+      setFormError(error instanceof Error ? error.message : 'The episode could not be uploaded. Retry.');
+    } finally {
+      if (uploadAbortController.current === abortController) {
+        uploadAbortController.current = null;
+      }
+      setUploadingFile(null);
+      setIsUploading(false);
+    }
+  }, [
+    episodeAllowDownload,
+    episodeDuration,
+    episodeFile,
+    episodeNumber,
+    episodePublished,
+    episodeRightsConfirmed,
+    episodeSeasonId,
+    episodeTitle,
+    loadMovies,
   ]);
 
   const handleTogglePublishing = useCallback(
@@ -425,6 +741,9 @@ export default function AdminScreen() {
     },
     [loadMovies],
   );
+
+  const adminSeries = movies.filter((movie) => movie.type === 'series');
+  const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -625,7 +944,7 @@ export default function AdminScreen() {
 
               {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
               {formMessage ? <Text style={styles.successText}>{formMessage}</Text> : null}
-              {isUploading ? (
+              {isUploading && uploadingFile ? (
                 <>
                   <View
                     accessibilityRole="progressbar"
@@ -636,8 +955,8 @@ export default function AdminScreen() {
                       <View style={[styles.progressFill, { width: `${progress}%` }]} />
                     </View>
                     <Text style={styles.helper}>
-                      Uploading {progress}% · {formatFileSize((selectedFile?.size ?? 0) * progress / 100)} of{' '}
-                      {formatFileSize(selectedFile?.size ?? 0)}
+                      Uploading {progress}% · {formatFileSize(uploadingFile.size * progress / 100)} of{' '}
+                      {formatFileSize(uploadingFile.size)}
                     </Text>
                   </View>
                   <Pressable
@@ -659,13 +978,153 @@ export default function AdminScreen() {
                 ]}
               >
                 <Text style={styles.primaryButtonText}>
-                  {isUploading ? 'Uploading movie…' : 'Upload movie'}
+                  {isUploading ? 'Uploading…' : 'Upload movie'}
                 </Text>
               </Pressable>
             </View>
 
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Add series</Text>
+              <Text style={styles.helper}>Create a series title before adding seasons and episodes.</Text>
+              <AdminTextField label="Series title" value={seriesTitle} onChangeText={setSeriesTitle} />
+              <AdminTextField label="Description" value={seriesDescription} onChangeText={setSeriesDescription} multiline />
+              <AdminTextField label="Release year" value={seriesYear} onChangeText={setSeriesYear} keyboardType="number-pad" />
+              <AdminTextField label="Genres" value={seriesGenres} onChangeText={setSeriesGenres} />
+              <AdminTextField label="Content rating" value={seriesContentRating} onChangeText={setSeriesContentRating} />
+              <AdminTextField label="Poster image URL (optional)" value={seriesPosterUrl} onChangeText={setSeriesPosterUrl} />
+              <AdminCheckbox
+                checked={seriesRightsConfirmed}
+                disabled={isSavingSeries}
+                label="I confirm I have the legal rights to distribute this series."
+                onPress={() => setSeriesRightsConfirmed((current) => !current)}
+              />
+              <AdminCheckbox
+                checked={seriesPublished}
+                disabled={isSavingSeries}
+                label="Publish this series."
+                onPress={() => setSeriesPublished((current) => !current)}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSavingSeries || !seriesTitle.trim()}
+                onPress={() => void handleCreateSeries()}
+                style={[styles.primaryButton, (isSavingSeries || !seriesTitle.trim()) && styles.disabledButton]}
+              >
+                <Text style={styles.primaryButtonText}>{isSavingSeries ? 'Saving series…' : 'Add series'}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Add season</Text>
+              <Text style={styles.helper}>Choose a series and create a numbered season.</Text>
+              <Text style={styles.fieldLabel}>Series</Text>
+              <View style={styles.choiceList}>
+                {adminSeries.map((series) => {
+                  const seriesId = series.id.replace(/^geniuz:series:/, '');
+                  const selected = seasonSeriesId === seriesId;
+                  return (
+                    <Pressable
+                      key={series.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      disabled={isSavingSeason}
+                      onPress={() => {
+                        setSeasonSeriesId(seriesId);
+                        setEpisodeSeasonId('');
+                      }}
+                      style={[styles.choiceButton, selected && styles.selectedChoice]}
+                    >
+                      <Text style={[styles.choiceText, selected && styles.selectedChoiceText]}>{series.title}</Text>
+                    </Pressable>
+                  );
+                })}
+                {!adminSeries.length ? <Text style={styles.helper}>Create a series first.</Text> : null}
+              </View>
+              <AdminTextField label="Season number" value={seasonNumber} onChangeText={setSeasonNumber} keyboardType="number-pad" />
+              <AdminTextField label="Season year (optional)" value={seasonYear} onChangeText={setSeasonYear} keyboardType="number-pad" />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSavingSeason || !seasonSeriesId || !seasonNumber}
+                onPress={() => void handleCreateSeason()}
+                style={[styles.primaryButton, (isSavingSeason || !seasonSeriesId || !seasonNumber) && styles.disabledButton]}
+              >
+                <Text style={styles.primaryButtonText}>{isSavingSeason ? 'Saving season…' : 'Add season'}</Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Add episode</Text>
+              <Text style={styles.helper}>Episode videos upload to private Backblaze storage in 16 MiB parts.</Text>
+              <Text style={styles.fieldLabel}>Season</Text>
+              <View style={styles.choiceList}>
+                {availableSeasons.map((season) => {
+                  const series = adminSeries.find((item) => item.id.endsWith(season.series_id));
+                  const selected = episodeSeasonId === season.id;
+                  return (
+                    <Pressable
+                      key={season.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected }}
+                      disabled={isUploading}
+                      onPress={() => setEpisodeSeasonId(season.id)}
+                      style={[styles.choiceButton, selected && styles.selectedChoice]}
+                    >
+                      <Text style={[styles.choiceText, selected && styles.selectedChoiceText]}>
+                        {series?.title ?? 'Series'} · Season {season.season_number}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                {!availableSeasons.length ? (
+                  <Text style={styles.helper}>Choose a series and add a season first.</Text>
+                ) : null}
+              </View>
+              <AdminTextField label="Episode number" value={episodeNumber} onChangeText={setEpisodeNumber} keyboardType="number-pad" />
+              <AdminTextField label="Episode title" value={episodeTitle} onChangeText={setEpisodeTitle} />
+              <AdminTextField label="Duration (seconds)" value={episodeDuration} onChangeText={setEpisodeDuration} keyboardType="number-pad" />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isUploading}
+                onPress={() => void chooseEpisodeFile()}
+                style={styles.filePicker}
+              >
+                <Text style={styles.filePickerTitle}>{episodeFile?.name ?? 'Choose episode video'}</Text>
+                <Text style={styles.helper}>
+                  {episodeFile
+                    ? formatFileSize(episodeFile.size)
+                    : 'Any video format up to 1 GB. MP4 is the most compatible.'}
+                </Text>
+              </Pressable>
+              <AdminCheckbox
+                checked={episodeRightsConfirmed}
+                disabled={isUploading}
+                label="I confirm I have the legal rights to distribute this episode."
+                onPress={() => setEpisodeRightsConfirmed((current) => !current)}
+              />
+              <AdminCheckbox
+                checked={episodePublished}
+                disabled={isUploading}
+                label="Publish this episode when upload completes."
+                onPress={() => setEpisodePublished((current) => !current)}
+              />
+              <AdminCheckbox
+                checked={episodeAllowDownload}
+                disabled={isUploading}
+                label="Allow users to download this episode."
+                onPress={() => setEpisodeAllowDownload((current) => !current)}
+              />
+              <Pressable
+                accessibilityRole="button"
+                disabled={isUploading || !episodeFile || !episodeTitle.trim() || !episodeSeasonId}
+                onPress={() => void handleUploadEpisode()}
+                style={[styles.primaryButton, (isUploading || !episodeFile || !episodeTitle.trim() || !episodeSeasonId) && styles.disabledButton]}
+              >
+                <Text style={styles.primaryButtonText}>{isUploading ? 'Uploading…' : 'Add episode'}</Text>
+              </Pressable>
+            </View>
+
             <View style={styles.catalogHeader}>
-              <Text style={styles.sectionTitle}>Movie catalog</Text>
+              <Text style={styles.sectionTitle}>Content catalog</Text>
               <Pressable accessibilityRole="button" onPress={() => void loadMovies()}>
                 <Text style={styles.linkText}>Refresh</Text>
               </Pressable>
@@ -693,7 +1152,7 @@ export default function AdminScreen() {
                 <View style={[styles.statusPill, movie.published ? styles.published : styles.draft]}>
                   <Text style={styles.statusText}>{movie.published ? 'Live' : 'Draft'}</Text>
                 </View>
-                {movie.mediaPath ? (
+                {movie.mediaPath || movie.type === 'series' ? (
                   <Pressable
                     accessibilityRole="button"
                     disabled={updatingMovieId === movie.id}
@@ -800,6 +1259,31 @@ const styles = StyleSheet.create({
   multilineInput: {
     minHeight: 96,
   },
+  choiceList: {
+    gap: 8,
+    marginTop: 6,
+  },
+  choiceButton: {
+    minHeight: 44,
+    justifyContent: 'center',
+    backgroundColor: theme.background,
+    borderWidth: 1,
+    borderColor: theme.border,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+  },
+  selectedChoice: {
+    borderColor: theme.accent,
+    backgroundColor: theme.surfaceAlt,
+  },
+  choiceText: {
+    color: theme.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  selectedChoiceText: {
+    color: theme.accent,
+  },
   filePicker: {
     marginTop: 16,
     backgroundColor: theme.background,
@@ -874,7 +1358,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   errorText: {
-    color: '#FF8D8D',
+    color: theme.error,
     fontSize: 13,
     lineHeight: 19,
     marginTop: 12,

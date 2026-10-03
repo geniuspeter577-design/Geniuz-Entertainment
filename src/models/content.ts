@@ -42,8 +42,31 @@ export interface ContentItem {
   contentRating?: string;
   language?: string;
   runtimeMinutes?: number;
+  seasonCount?: number;
+  parentSeriesId?: string;
+  seasonId?: string;
+  seasonNumber?: number;
+  episodeNumber?: number;
+  durationSeconds?: number;
   isNewRelease?: boolean;
   availability: ContentAvailability;
+}
+
+export interface SeasonItem {
+  id: string;
+  seriesId: string;
+  seasonNumber: number;
+  year?: number;
+  published: boolean;
+  episodes: EpisodeItem[];
+}
+
+export interface EpisodeItem extends ContentItem {
+  seasonId: string;
+  episodeNumber: number;
+  durationSeconds: number;
+  parentSeriesId: string;
+  published: boolean;
 }
 
 export interface ContinueWatchingEntry {

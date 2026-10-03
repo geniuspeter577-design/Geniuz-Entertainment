@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Last Horizon - Touch Lock &amp; Parental Verification</title>
+<!-- Tailwind CSS CDN with forms and container queries -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration for Cyber-Neon Streaming Theme -->
+<script data-purpose="tailwind-config">
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              neon: '#72F06A',
+              neonDark: '#56c84f',
+              panel: '#111317',
+              panelElevated: '#1A1C20',
+              panelBorder: 'rgba(255, 255, 255, 0.08)',
+              glass: 'rgba(17, 19, 23, 0.78)',
+            }
+          },
+          fontFamily: {
+            sans: ['Sora', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
+          }
+        }
+      }
+    };
+  </script>
+<!-- Google Fonts: Sora -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<style data-purpose="custom-animations">
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 0 0 15px rgba(114, 240, 106, 0.25), inset 0 0 12px rgba(114, 240, 106, 0.15);
+      }
+      50% {
+        box-shadow: 0 0 28px rgba(114, 240, 106, 0.45), inset 0 0 20px rgba(114, 240, 106, 0.3);
+      }
+    }
+    .neon-glow-pulse {
+      animation: pulse-glow 3s infinite ease-in-out;
+    }
+    .neon-text-glow {
+      text-shadow: 0 0 8px rgba(114, 240, 106, 0.6);
+    }
+    .glass-backdrop {
+      backdrop-filter: blur(28px) saturate(140%);
+      -webkit-backdrop-filter: blur(28px) saturate(140%);
+    }
+  </style>
+</head>
+<body class="bg-black text-gray-100 font-sans h-screen w-screen overflow-hidden select-none m-0 p-0 antialiased">
+<!-- BEGIN: MasterLandscapeWrapper -->
+<div class="relative w-full h-full flex flex-col justify-between overflow-hidden bg-black" data-purpose="viewport-container">
+<!-- Cinematic Background Plate with Blur & Dark Overlay -->
+<div class="absolute inset-0 z-0 overflow-hidden" data-purpose="cinematic-backdrop">
+<img alt="The Last Horizon Film Still" class="w-full h-full object-cover scale-105 filter blur-md transform translate-z-0 brightness-[0.45]" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<!-- Tint & Vignette Gradient Overlays -->
+<div class="absolute inset-0 bg-gradient-to-t from-[#090b0e] via-black/75 to-[#0b0e13]/90"></div>
+<div class="absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_20%,rgba(0,0,0,0.85)_100%)]"></div>
+</div>
+<!-- BEGIN: TopBar -->
+<header class="relative z-20 flex items-center justify-between px-8 py-5 border-b border-white/10 glass-backdrop bg-[#0d0f13]/60" data-purpose="header-navigation">
+<!-- Left: Title, Episode & Rating Pill -->
+<div class="flex items-center space-x-3.5" data-purpose="media-meta">
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-gray-300">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<div class="flex items-center space-x-3">
+<span class="text-lg font-bold tracking-tight text-white">The Last Horizon</span>
+<span class="text-xs px-2 py-0.5 rounded font-bold uppercase tracking-wider bg-[#72F06A] text-black">PLUS</span>
+<span class="text-sm text-gray-400 font-medium">S1 : E3 • The Neural Breach</span>
+<span class="text-[11px] font-semibold tracking-wide px-2 py-0.5 rounded border border-red-500/40 bg-red-950/40 text-red-400">18+ / Mature Audience</span>
+</div>
+</div>
+<!-- Right: Security Lock Status & System Indicators -->
+<div class="flex items-center space-x-4" data-purpose="status-specs">
+<div class="flex items-center space-x-2 text-xs font-semibold px-3 py-1.5 rounded-full bg-[#181a1f] border border-white/10 text-gray-300">
+<span class="w-2 h-2 rounded-full bg-[#72F06A] animate-ping"></span>
+<span class="w-2 h-2 rounded-full bg-[#72F06A] -ml-3"></span>
+<span>Playback Security Guard Active</span>
+</div>
+<div class="h-4 w-[1px] bg-white/15"></div>
+<div class="flex items-center space-x-2 text-xs text-gray-400 font-medium tracking-wide">
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">4K ULTRA HD</span>
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">HDR10</span>
+<span class="border border-white/15 px-1.5 py-0.5 rounded text-[10px] text-gray-300">ATMOS 5.1</span>
+</div>
+<!-- Lock Icon Indicator -->
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-white hover:border-[#72F06A]/40 transition-colors">
+<svg class="w-5 h-5 text-[#72F06A]" fill="currentColor" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" fill-rule="evenodd"></path>
+</svg>
+</button>
+<!-- Exit Overlay Button -->
+<button class="w-10 h-10 rounded-full flex items-center justify-center bg-white/5 border border-white/10 text-gray-400 hover:text-white transition-colors">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: TopBar -->
+<!-- BEGIN: SecurityMatrixCentral -->
+<main class="relative z-10 flex-1 flex items-center justify-center px-12 py-4" data-purpose="central-security-matrix">
+<div class="w-full max-w-6xl grid grid-cols-12 gap-8 items-stretch">
+<!-- CARD A: Touch & Playback Lock (Left Column: 5 Cols) -->
+<section class="col-span-12 lg:col-span-5 bg-[#111317]/85 border border-white/10 rounded-2xl p-7 flex flex-col justify-between shadow-2xl glass-backdrop relative overflow-hidden" data-purpose="touch-lock-panel">
+<!-- Background Subtle Gradient Flare -->
+<div class="absolute -top-16 -left-16 w-48 h-48 bg-[#72F06A]/10 rounded-full filter blur-3xl pointer-events-none"></div>
+<!-- Section Header -->
+<div class="flex items-center justify-between pb-4 border-b border-white/10">
+<div class="flex items-center space-x-3">
+<div class="w-9 h-9 rounded-lg bg-[#72F06A]/15 border border-[#72F06A]/30 flex items-center justify-center text-[#72F06A]">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div>
+<h2 class="text-base font-bold text-white tracking-wide">Touch &amp; Playback Lock</h2>
+<p class="text-xs text-gray-400">Accidental touch shield active</p>
+</div>
+</div>
+<span class="text-[11px] font-semibold text-[#72F06A] bg-[#72F06A]/10 border border-[#72F06A]/30 px-2.5 py-1 rounded-full uppercase tracking-wider">Locked</span>
+</div>
+<!-- Circular Touch Unlock Indicator -->
+<div class="flex flex-col items-center justify-center my-6" data-purpose="gesture-hold-circle">
+<div class="relative w-44 h-44 flex items-center justify-center">
+<!-- Radial Progress Ring SVG -->
+<svg class="w-full h-full transform -rotate-90" viewbox="0 0 160 160">
+<!-- Base Circle -->
+<circle class="text-white/10" cx="80" cy="80" fill="transparent" r="70" stroke="currentColor" stroke-width="5"></circle>
+<!-- Animated Active Progress Arc -->
+<circle class="text-[#72F06A] transition-all duration-700 ease-out" cx="80" cy="80" fill="transparent" r="70" stroke="currentColor" stroke-dasharray="440" stroke-dashoffset="150" stroke-linecap="round" stroke-width="6"></circle>
+</svg>
+<!-- Central Hold Button -->
+<button class="absolute inset-4 rounded-full bg-gradient-to-br from-[#1a1e24] to-[#121519] border border-[#72F06A]/40 neon-glow-pulse flex flex-col items-center justify-center text-center p-3 group active:scale-95 transition-all">
+<svg class="w-8 h-8 text-[#72F06A] mb-1.5 transition-transform group-hover:scale-110" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8.003 8.003 0 0115.357-2m1.571 2.495A21.874 21.874 0 0020 11m-8 6a2 2 0 100-4 2 2 0 000 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+<span class="text-xs font-bold text-white tracking-wider uppercase">Hold 3s</span>
+<span class="text-[10px] text-gray-400 font-medium">To Unlock</span>
+</button>
+</div>
+<p class="text-xs text-center text-gray-400 max-w-xs mt-3 leading-relaxed">
+              Press &amp; hold center sensor for 3 seconds to re-enable player controls &amp; gestures.
+            </p>
+</div>
+<!-- Secondary Switches & Sleep Countdown -->
+<div class="space-y-3 pt-4 border-t border-white/10" data-purpose="lock-preferences">
+<!-- Toggle Slider Protection -->
+<div class="flex items-center justify-between py-1">
+<div class="pr-2">
+<div class="text-xs font-semibold text-gray-200">Lock Side Gestures</div>
+<div class="text-[11px] text-gray-400">Brightness &amp; Volume HUD touch sliders</div>
+</div>
+<label class="relative inline-flex items-center cursor-pointer">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-11 h-6 bg-[#252a32] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#72F06A]"></div>
+</label>
+</div>
+<!-- Auto Sleep Timer Badge -->
+<div class="flex items-center justify-between p-2.5 rounded-xl bg-[#181c22] border border-white/5 text-xs text-gray-300">
+<div class="flex items-center space-x-2">
+<svg class="w-4 h-4 text-[#72F06A]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium text-gray-300">Auto-Sleep Standby</span>
+</div>
+<span class="font-bold text-[#72F06A] tracking-wide">35 mins left</span>
+</div>
+</div>
+</section>
+<!-- CARD B: Parental Control PIN Gate (Right Column: 7 Cols) -->
+<section class="col-span-12 lg:col-span-7 bg-[#111317]/85 border border-white/10 rounded-2xl p-7 flex flex-col justify-between shadow-2xl glass-backdrop relative" data-purpose="parental-gate-panel">
+<!-- Section Header -->
+<div class="flex items-center justify-between pb-3 border-b border-white/10">
+<div class="flex items-center space-x-3">
+<div class="w-9 h-9 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center justify-center text-red-400">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</div>
+<div>
+<h2 class="text-base font-bold text-white tracking-wide">Viewer PIN Verification</h2>
+<p class="text-xs text-gray-400">Mature audience authorization required for Azania arc scenes</p>
+</div>
+</div>
+<!-- Profile Info Indicator -->
+<div class="flex items-center space-x-2 text-xs bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg text-gray-300">
+<span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+<span class="font-medium">Master Family Profile</span>
+</div>
+</div>
+<!-- Main Input Body: PIN Visual Dots & Keypad -->
+<div class="grid grid-cols-12 gap-6 my-4 items-center">
+<!-- Left Sub-column: Status + PIN Indicators (5 cols) -->
+<div class="col-span-12 sm:col-span-5 flex flex-col justify-center items-center sm:items-start space-y-4">
+<span class="text-xs uppercase font-bold tracking-widest text-gray-400">Enter Security PIN</span>
+<!-- PIN Dots Matrix -->
+<div class="flex items-center space-x-3.5" data-purpose="pin-digits-indicator">
+<!-- Dot 1 (Filled) -->
+<div class="w-4 h-4 rounded-full bg-[#72F06A] shadow-[0_0_12px_#72F06A] ring-2 ring-[#72F06A]/30"></div>
+<!-- Dot 2 (Filled) -->
+<div class="w-4 h-4 rounded-full bg-[#72F06A] shadow-[0_0_12px_#72F06A] ring-2 ring-[#72F06A]/30"></div>
+<!-- Dot 3 (Empty Outline) -->
+<div class="w-4 h-4 rounded-full border-2 border-gray-500 bg-white/5"></div>
+<!-- Dot 4 (Empty Outline) -->
+<div class="w-4 h-4 rounded-full border-2 border-gray-500 bg-white/5"></div>
+</div>
+<div class="text-[11px] text-gray-400 leading-normal text-center sm:text-left pr-2">
+                Restricted playback: Season contains mature language, cyber violence &amp; neural themes.
+              </div>
+<!-- Reset PIN Prompt -->
+<button class="text-xs text-[#72F06A] hover:underline font-semibold flex items-center space-x-1.5 transition-colors">
+<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Reset PIN via SMS</span>
+</button>
+</div>
+<!-- Right Sub-column: Tactile Keypad (7 cols) -->
+<div class="col-span-12 sm:col-span-7" data-purpose="numeric-keypad">
+<div class="grid grid-cols-3 gap-2.5 max-w-[280px] mx-auto sm:mr-0">
+<!-- Key 1 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  1
+                </button>
+<!-- Key 2 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  2
+                </button>
+<!-- Key 3 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  3
+                </button>
+<!-- Key 4 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  4
+                </button>
+<!-- Key 5 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  5
+                </button>
+<!-- Key 6 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  6
+                </button>
+<!-- Key 7 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  7
+                </button>
+<!-- Key 8 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  8
+                </button>
+<!-- Key 9 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  9
+                </button>
+<!-- Key Fingerprint Biometric -->
+<button class="h-11 rounded-xl bg-[#191d24]/60 border border-white/10 hover:border-[#72F06A]/40 text-[#72F06A] active:scale-95 transition flex items-center justify-center" title="Biometric Face/Touch ID">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 11c0 3.517-1.009 6.799-2.753 9.571m-3.44-2.04l.054-.09A13.916 13.916 0 008 11a4 4 0 118 0c0 1.017-.07 2.019-.203 3m-2.118 6.844A21.88 21.88 0 0015.171 17m3.839 1.132c.645-2.266.99-4.659.99-7.132A8 8 0 004 11m0 0a8.003 8.003 0 0115.357-2m1.571 2.495A21.874 21.874 0 0020 11m-8 6a2 2 0 100-4 2 2 0 000 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8"></path>
+</svg>
+</button>
+<!-- Key 0 -->
+<button class="h-11 rounded-xl bg-[#191d24] border border-white/10 hover:border-[#72F06A]/60 hover:bg-[#222832] active:scale-95 transition flex flex-col items-center justify-center font-bold text-base text-white">
+                  0
+                </button>
+<!-- Key Backspace -->
+<button class="h-11 rounded-xl bg-[#191d24]/60 border border-white/10 hover:border-red-400/40 text-gray-300 hover:text-red-400 active:scale-95 transition flex items-center justify-center" title="Backspace">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2M3 12l6.414 6.414a2 2 0 001.414.586H19a2 2 0 002-2V7a2 2 0 00-2-2h-8.172a2 2 0 00-1.414.586L3 12z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+</div>
+<!-- Bottom Config: Age Filter Selector & Guard Badges -->
+<div class="pt-4 border-t border-white/10 flex flex-wrap items-center justify-between gap-3" data-purpose="family-shield-options">
+<!-- Age Gate Pills -->
+<div class="flex items-center space-x-1.5" data-purpose="age-ratings">
+<span class="text-[11px] text-gray-400 mr-1 font-medium">Profile Gate:</span>
+<button class="px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white transition">Under 13</button>
+<button class="px-2.5 py-1 text-[11px] rounded-lg bg-white/5 border border-white/10 text-gray-400 hover:text-white transition">16+</button>
+<button class="px-2.5 py-1 text-[11px] rounded-lg bg-[#72F06A]/15 border border-[#72F06A]/40 text-[#72F06A] font-semibold">18+ Unrestricted</button>
+</div>
+<!-- Content Filter & Limit Status -->
+<div class="flex items-center space-x-3 text-[11px] text-gray-300">
+<div class="flex items-center space-x-1">
+<span class="w-1.5 h-1.5 rounded-full bg-[#72F06A]"></span>
+<span class="text-gray-400">Curse Dialogue Filter: <strong class="text-gray-200">Active</strong></span>
+</div>
+<div class="flex items-center space-x-1">
+<span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+<span class="text-gray-400">Night Cap: <strong class="text-amber-300">45m left</strong></span>
+</div>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- END: SecurityMatrixCentral -->
+<!-- BEGIN: BottomStatusBar -->
+<footer class="relative z-20 flex items-center justify-between px-8 py-4 border-t border-white/10 glass-backdrop bg-[#0a0c0f]/80" data-purpose="footer-controls">
+<!-- Identity Matrix Hash & Verification Status -->
+<div class="flex items-center space-x-3 text-xs text-gray-400 font-mono" data-purpose="session-tag">
+<svg class="w-4 h-4 text-[#72F06A]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Secured by GeniuzLab Identity Matrix</span>
+<span class="text-white/20">•</span>
+<span class="text-gray-400">Session ID: <span class="text-gray-300 font-semibold">GNZ-SEC-4921</span></span>
+</div>
+<!-- Action Buttons -->
+<div class="flex items-center space-x-4" data-purpose="footer-actions">
+<!-- Secondary Cancel / Return Button -->
+<button class="px-5 py-2.5 rounded-xl text-xs font-semibold text-gray-300 hover:text-white bg-white/5 border border-white/10 hover:bg-white/10 transition-colors">
+          Dismiss Shield
+        </button>
+<!-- Primary Authorize & Resume Button -->
+<button class="px-7 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider text-black bg-[#72F06A] hover:bg-[#56c84f] shadow-[0_0_20px_rgba(114,240,106,0.35)] active:scale-95 transition-all flex items-center space-x-2">
+<span>Authorize &amp; Continue</span>
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
+</svg>
+</button>
+</div>
+</footer>
+<!-- END: BottomStatusBar -->
+</div>
+<!-- END: MasterLandscapeWrapper -->
+</body></html>

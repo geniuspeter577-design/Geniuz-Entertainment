@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import type { ContentItem, ContentType, ContinueWatchingEntry } from '../models/content';
+import { toggleWatchlistItem } from '../utils/watchlist';
 
 const STORAGE_KEY = '@geniuz/library/v1';
 const CONTENT_TYPES = new Set<ContentType>([
@@ -203,12 +204,9 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
   const toggleWatchlist = useCallback(
     (item: ContentItem) =>
       commitLibrary((current) => {
-        const exists = current.watchlist.some((savedItem) => savedItem.id === item.id);
         return {
           ...current,
-          watchlist: exists
-            ? current.watchlist.filter((savedItem) => savedItem.id !== item.id)
-            : [item, ...current.watchlist],
+          watchlist: toggleWatchlistItem(current.watchlist, item),
         };
       }),
     [commitLibrary],

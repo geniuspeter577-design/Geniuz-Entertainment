@@ -14,7 +14,11 @@ const sources = [
   'src/api/ApiClient.ts',
   'src/services/ContentService.ts',
   'src/constants/video.ts',
+  'src/config/features.ts',
   'src/utils/videoFile.ts',
+  'src/utils/watchlist.ts',
+  'src/utils/downloadQueue.ts',
+  'src/utils/episodeSelection.ts',
   'src/services/OfflineDownloadService.ts',
 ];
 
@@ -67,6 +71,7 @@ try {
       'tests/mobile-api.test.cjs',
       'tests/offline-download.test.cjs',
       'tests/backend-storage.test.cjs',
+      'tests/detail-features.test.cjs',
     ]);
   }
 } finally {

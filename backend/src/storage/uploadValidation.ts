@@ -8,6 +8,7 @@ export type UploadInput = {
   fileName: string;
   fileSize: number;
   contentType: string;
+  objectType: 'movie' | 'episode';
 };
 
 export function validateUploadInput(value: unknown): UploadInput {
@@ -19,6 +20,7 @@ export function validateUploadInput(value: unknown): UploadInput {
   const contentType =
     typeof input.contentType === 'string' ? input.contentType.trim().toLowerCase() : '';
   const fileSize = input.fileSize;
+  const objectType = input.objectType ?? 'movie';
 
   if (
     !fileName ||
@@ -40,14 +42,21 @@ export function validateUploadInput(value: unknown): UploadInput {
   if (!(contentType.startsWith('video/') || contentType === 'application/octet-stream')) {
     throw new HttpError(400, 'INVALID_CONTENT_TYPE', 'Choose a video with a valid video content type.');
   }
+  if (objectType !== 'movie' && objectType !== 'episode') {
+    throw new HttpError(400, 'INVALID_OBJECT_TYPE', 'Choose a valid video type.');
+  }
 
-  return { fileName, fileSize, contentType };
+  return { fileName, fileSize, contentType, objectType };
 }
 
-export function generateObjectKey(fileName: string, id = randomUUID()) {
+export function generateObjectKey(
+  fileName: string,
+  id = randomUUID(),
+  objectType: 'movie' | 'episode' = 'movie',
+) {
   const extension = extname(fileName).toLowerCase();
   const safeExtension = /^\.[a-z0-9]{1,12}$/.test(extension) ? extension : '';
-  return `movies/${id}${safeExtension}`;
+  return `${objectType === 'episode' ? 'episodes' : 'movies'}/${id}${safeExtension}`;
 }
 
 export function validatePartNumbers(value: unknown, maximumParts: number) {

@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_stack" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:ital,wght@0,300..900;1,300..900&amp;family=Sora:wght@100..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#111317;color:#e2e2e8;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "error": "#ffb4ab", "tertiary-fixed": "#ffdbc9", "on-primary-container": "#006c11", "primary-container": "#72f06a", "tertiary": "#ffefe8", "on-surface-variant": "#bdcbb6", "surface-container-lowest": "#0c0e12", "on-tertiary": "#482916", "on-tertiary-fixed-variant": "#623e2a", "on-error-container": "#ffdad6", "inverse-on-surface": "#2f3035", "on-primary-fixed-variant": "#00530a", "on-secondary-container": "#342800", "secondary": "#e9c349", "surface-dim": "#111317", "on-secondary": "#3c2f00", "on-tertiary-fixed": "#2f1404", "primary": "#cfffc3", "primary-fixed-dim": "#62e05c", "background": "#111317", "inverse-surface": "#e2e2e8", "outline": "#879582", "error-container": "#93000a", "surface-container-high": "#282a2e", "outline-variant": "#3e4a3a", "on-error": "#690005", "on-secondary-fixed-variant": "#574500", "surface-container-highest": "#333539", "surface-tint": "#62e05c", "surface-container-low": "#1a1c20", "tertiary-container": "#ffcbaf", "secondary-fixed-dim": "#e9c349", "on-secondary-fixed": "#241a00", "on-primary": "#003a05", "secondary-container": "#af8d11", "surface-bright": "#37393e", "surface-container": "#1e2024", "surface-variant": "#333539", "tertiary-fixed-dim": "#eebca0", "secondary-fixed": "#ffe088", "on-background": "#e2e2e8", "inverse-primary": "#006e11", "on-primary-fixed": "#002202", "on-surface": "#e2e2e8", "surface": "#111317", "on-tertiary-container": "#7a543e", "primary-fixed": "#7ffd75" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "gutter": "0.75rem", "space-xs": "0.25rem", "margin": "1rem", "space-sm": "0.5rem", "space-lg": "1.5rem", "space-md": "1rem", "space-xl": "2.25rem" }, fontFamily: { "body-lg": ["Hanken Grotesk"], "body-sm": ["Hanken Grotesk"], "label-lg": ["Hanken Grotesk"], "headline-lg": ["Sora"], "headline-md": ["Sora"], "label-md": ["Hanken Grotesk"], "display-hero": ["Sora"], "body-md": ["Hanken Grotesk"], "label-sm": ["Hanken Grotesk"], "headline-sm": ["Sora"], "display-hero-mobile": ["Sora"], "headline-lg-mobile": ["Sora"] }, fontSize: { "body-lg": ["16px", { lineHeight: "24px", fontWeight: "400" }], "body-sm": ["12px", { lineHeight: "16px", fontWeight: "400" }], "label-lg": ["14px", { lineHeight: "18px", fontWeight: "700" }], "headline-lg": ["32px", { lineHeight: "38px", fontWeight: "700" }], "headline-md": ["18px", { lineHeight: "24px", fontWeight: "600" }], "label-md": ["12px", { lineHeight: "16px", fontWeight: "600" }], "display-hero": ["40px", { lineHeight: "46px", fontWeight: "800" }], "body-md": ["14px", { lineHeight: "20px", fontWeight: "400" }], "label-sm": ["10px", { lineHeight: "12px", fontWeight: "600" }], "headline-sm": ["16px", { lineHeight: "22px", fontWeight: "600" }], "display-hero-mobile": ["28px", { lineHeight: "34px", fontWeight: "800" }], "headline-lg-mobile": ["22px", { lineHeight: "28px", fontWeight: "700" }] } } } };</script><style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head><body class="bg-surface font-body-md text-on-surface flex flex-col min-h-screen"><header class="fixed top-0 inset-x-0 z-50 bg-surface-container-lowest/80 backdrop-blur-xl pt-safe shadow-[0_4px_20px_rgba(0,0,0,0.5)]"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><button class="w-11 h-11 -ml-space-xs flex items-center justify-center text-on-surface hover:text-primary transition-colors" onclick="history.back()"><span class="material-symbols-outlined text-[24px]">arrow_back</span></button><img alt="Brand logo. - Primary color: #72f06a
+- Font: sora
+- Mode: dark
+- Roundness: rounded-md
+" class="h-7 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1XpvYBbAGiVSxwBilgStwUPsgY_Y_jEAXo5yam5DtL-XniyspNRxshh92ihXvq_-7-Cf-363ff8ilLJxYdoz92O4gmK1-4VQxuFma25WM99uKC9gaRuVUJIJgLq8CjvLg431U7pt9uBfJ1o3o_phms64at_eaDkiv37zYBL4vXrQ0jeA5UAh2mBF9sHB9mWN1Gk5QoVMDRbt0T8F92ytLWKvCKoCR0qpl4BkoUT5o6s88sK1I9X_aNLr7t2"/><h1 class="font-headline-sm text-headline-sm font-bold tracking-tight text-on-surface truncate max-w-[160px]">Live Party Room</h1></div><div class="flex items-center gap-space-sm"><button class="w-11 h-11 flex items-center justify-center text-on-surface-variant hover:text-on-surface"><span class="material-symbols-outlined text-[22px]">share</span></button><a class="flex items-center justify-center p-0.5 rounded-full ring-2 ring-primary-container/40 hover:ring-primary-container transition-all" data-path="account-profile" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VHSDKiej89POeUOSx3RQMekhDYjk_VCWDVJrKeymAtKbjkzdhhRZgzGgyrkf95WOO6Lgycj3OFJFMsLpILfEOguiAJM4arWF5ovg61sU0ncPcnUPxrxb_eeOqsIhawTZvqRi5QRd77-37-IEtBcnh9p7JsHV4mJ8K0FYhYycfjiaslF-BAi2ELiTYq7v5hCcizQWX2dc1RdIRydB0TO-A8VVJhtI_CbppGRRxJeemX38v1IU2zJrW93GuJ"/></a></div></div></header><main class="flex flex-col relative w-full pt-16 pb-safe bg-surface min-h-screen"><div class="flex flex-col w-full text-on-surface select-none pb-24">
+<!-- Live Stream Video Stage -->
+<div class="relative w-full aspect-video bg-surface-container-lowest overflow-hidden">
+<!-- Stream Backdrop Artwork -->
+<div class="w-full h-full bg-cover bg-center brightness-90" data-alt="Cinematic cyberpunk scene of Lagos neo-futuristic sci-fi film The Last Horizon with glowing cyan neon skyscrapers, flying aerocars, rainy elevated bridge combat with elite tactical agents in high-tech glowing power armor, dramatic explosive cinematic lighting." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDVj9xDFsR18to58A4yK6azulSziq1MWNH3ahRb_6TYm4FZNSHSThNCHAS8rjMQpiFci4PSCPvFHReSVlwad6vC0r5LV9bQA-HmHHotBMXTqEkXTgK3B9z6QPJ4DytF-Trf7T22ShE9C7TI4B5XA3XGjdQxPjoRpRgT4LemAxzsAwag0fEFwQnOB0KFKbq2uW4ua1O52QUGsu9r4mbo2-tTxOKNnF3b2LjdMcFZFFUucWqRE8ny6Ezigw')">
+</div>
+<!-- Scrim Gradients -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface-dim via-transparent to-black/60 pointer-events-none"></div>
+<!-- Top Overlay Badges: Live count, Sync drift, Resolution -->
+<div class="absolute top-2 inset-x-3 flex items-center justify-between pointer-events-auto">
+<div class="flex items-center gap-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full">
+<span class="w-2 h-2 rounded-full bg-error animate-ping"></span>
+<span class="w-2 h-2 rounded-full bg-error -ml-3.5"></span>
+<span class="font-label-sm text-label-sm uppercase tracking-wider text-white font-bold">LIVE</span>
+<span class="text-outline-variant font-body-sm text-body-sm">|</span>
+<span class="font-label-sm text-label-sm text-on-surface font-semibold tracking-tight">42,850</span>
+</div>
+<div class="flex items-center gap-1.5">
+<div class="flex items-center gap-1 bg-surface-container-high/80 backdrop-blur-md px-2.5 py-1 rounded-full">
+<span class="material-symbols-outlined text-primary-fixed-dim text-[14px]">lock_reset</span>
+<span class="font-label-sm text-label-sm text-primary-fixed-dim font-bold">0ms Drift</span>
+</div>
+<button class="w-7 h-7 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-on-surface hover:text-primary transition-colors" id="toggle-theatre">
+<span class="material-symbols-outlined text-[16px]">fullscreen</span>
+</button>
+</div>
+</div>
+<!-- Playback Scrubber & Dynamic Time Sync -->
+<div class="absolute bottom-2 inset-x-3 flex flex-col gap-1 pointer-events-auto">
+<div class="flex items-center justify-between font-label-sm text-label-sm text-on-surface-variant font-medium">
+<span class="flex items-center gap-1 text-primary-container">
+<span class="w-1.5 h-1.5 rounded-full bg-primary-container animate-pulse"></span>
+          Act II: Neon Siege of Marina Bridge
+        </span>
+<span class="text-on-surface-variant font-body-sm text-body-sm">01:14:28 / 02:20:00</span>
+</div>
+<!-- Timeline Bar -->
+<div class="w-full h-1 bg-surface-container-highest rounded-full overflow-hidden relative">
+<div class="h-full bg-primary-container rounded-full" style="width: 53%;"></div>
+</div>
+</div>
+</div>
+<!-- Premiere Metadata & Host Lineage -->
+<div class="px-margin pt-3 pb-2 flex flex-col gap-2 bg-surface-container-low">
+<div class="flex items-center justify-between">
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="px-2 py-0.5 rounded-full bg-secondary-container/30 text-secondary-fixed font-label-sm text-label-sm uppercase tracking-wider font-bold">World Premiere</span>
+<span class="text-on-surface-variant font-label-sm text-label-sm">4K Ultra HD • Atmos</span>
+</div>
+<h2 class="font-headline-sm text-headline-sm font-bold text-on-surface truncate mt-0.5">The Last Horizon: Eko 2088</h2>
+</div>
+<!-- Quick Room Actions -->
+<div class="flex items-center gap-1.5">
+<button class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:text-primary-container transition-all" id="bookmark-btn">
+<span class="material-symbols-outlined text-[18px]">bookmark_border</span>
+</button>
+<button class="w-9 h-9 rounded-full bg-surface-container flex items-center justify-center text-on-surface hover:text-primary-container transition-all" id="invite-btn">
+<span class="material-symbols-outlined text-[18px]">person_add</span>
+</button>
+</div>
+</div>
+<!-- Host & Guest Stage Strip -->
+<div class="flex items-center justify-between p-2 rounded-xl bg-surface-container/60 backdrop-blur-sm">
+<div class="flex items-center gap-2 min-w-0">
+<div class="relative">
+<div class="w-8 h-8 rounded-full bg-cover bg-center" data-alt="Portrait photo of acclaimed Nigerian film director Kemi wearing futuristic designer glasses with neon green rim lighting in a high-tech studio." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCApd-QCMWkU_V9RlW8FodTg6pmdvKjiG0WS_o-YZvrYHB8UJsdPrXOBrN7_6q_Awk-j8kRoFnmECzlb2cxNKrqYT_ojfR_u6o8fJjp9H6JXKqKWSvJMOPZXI7Kz5jIk9NopWP4Cyq5DdAFEuufsO3ZoWQab92hdpWzuVA46zWb7LMGfXz7lVY3If6KGXI8dVRr-jIkn6-A2zynEgvw-rJMSlZqNaEiw4AvjcMSf5035AW8MZasNZCBwA')">
+</div>
+<span class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[9px] text-surface-container-lowest font-bold">verified</span>
+</span>
+</div>
+<div class="flex flex-col min-w-0">
+<span class="font-label-md text-label-md text-on-surface font-bold truncate">Dir. Kemi Adesanya &amp; Special Cast</span>
+<span class="font-body-sm text-body-sm text-primary-container truncate font-medium">Room Host • Live Q&amp;A after credits</span>
+</div>
+</div>
+<!-- VIP Host Pin Badge -->
+<div class="flex items-center gap-1 px-2 py-1 rounded-full bg-gradient-to-r from-secondary-container/40 to-secondary/20">
+<span class="material-symbols-outlined text-secondary text-[14px]">stars</span>
+<span class="font-label-sm text-label-sm font-bold text-secondary-fixed">Host VIP</span>
+</div>
+</div>
+<!-- Live Audio Stage Mini-Drawer (Speakers active) -->
+<div class="flex items-center justify-between px-3 py-2 rounded-xl bg-surface-container-highest/40">
+<div class="flex items-center gap-2 min-w-0">
+<span class="w-2 h-2 rounded-full bg-primary-container animate-pulse"></span>
+<span class="font-label-sm text-label-sm text-on-surface font-semibold uppercase tracking-wider">Voice Lounge</span>
+<div class="flex -space-x-2 overflow-hidden items-center ml-1">
+<div class="inline-block h-6 w-6 rounded-full ring-2 ring-surface-container-lowest bg-cover bg-center" data-alt="Avatar photo of actor Tunde smiling warmly with neon studio backlight." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBTiFg66j9XPXSruxOE8eZEXRHrSA7NXfGtuuHaoQNw8HEg_YZUuPwEA6h4cs_1RmPgQmADU_4cUIswiip04LIMjs5hyUmzFeMooy-jwWprGlibPXPggUnDaL8-ipWV9k2jJzMD79aQmXEsyVTwbPpFySOUliSt1Izsbb6WuD34-wImFWlkxJW9OUV3wuAkyLKndD4eRc4sPsqibcRlGMtwkB7TabZm8d7tOjxeOFrBxNkSQbHNCAwUaw')"></div>
+<div class="inline-block h-6 w-6 rounded-full ring-2 ring-surface-container-lowest bg-cover bg-center" data-alt="Avatar of lead actress Amina with braided hair and futuristic cyan cheek glow." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuDoZ5YsIdErhGtruD4NUfCBncpqyKSEPjB09tVW1b8QVxcTgJhQlOwqPbG5IVQFBjP8LTj1ZPt6NnH4ybn4vLVh5ir5rGRN-6vBWXRjbBfYIqdtCv1RrRpQSlP45-Hfa7iaJQPJDJzVngtLrXyRnAbgHSPD1xxOL8gCDXdmFLGB60CFYXAwMQnAslFlZ_UZIU1_jlOTcyoTfLaShepizmajlVIwezjNRDwrnflphLvIvQs55eCbQRsesQ')"></div>
+<div class="inline-block h-6 w-6 rounded-full ring-2 ring-surface-container-lowest bg-cover bg-center" data-alt="Avatar of sci-fi sound engineer wearing headphones in audio suite." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBBzH5ZcHLSiw-PVVsO8_WiTqIBIjPjlEQep7aVltqJQqSL0u_rjxhH2KVxOL28ZnDj1uhSe4rYjBE_w6zILKepmkw8jioXII5FJHx06KADMKrXRUxoKcqorbgJa6xj1pxryu1hGtyft0Fo7Lrf_2BWgtnegLknnUn48DaJXortiKqpWMcZebVoe3BoV_nCrDPoVSdW36p3uJZDXCZk4sGfdFkdVZI00wNDzlvcM_7NJta5mrkQzuJYRg')"></div>
+<span class="inline-flex items-center justify-center h-6 w-6 rounded-full bg-surface-container-high text-on-surface-variant font-label-sm text-label-sm font-bold">+5</span>
+</div>
+</div>
+<button class="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm font-medium transition-colors" id="mic-toggle-btn">
+<span class="material-symbols-outlined text-[15px] text-error">mic_off</span>
+<span>Muted</span>
+</button>
+</div>
+</div>
+<!-- Interactive Segmented Tabs -->
+<div class="px-margin mt-2">
+<div class="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+<button class="tab-pill active px-4 py-2 rounded-full bg-primary-container text-on-primary-container font-label-md text-label-md font-bold transition-all shadow-sm">
+        Live Chat
+      </button>
+<button class="tab-pill px-4 py-2 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md font-semibold hover:text-on-surface transition-all">
+        Watchers <span class="ml-1 opacity-70 font-normal">42.8k</span>
+</button>
+<button class="tab-pill px-4 py-2 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md font-semibold hover:text-on-surface transition-all">
+        Lounge <span class="ml-1 opacity-70 font-normal">8</span>
+</button>
+<button class="tab-pill px-4 py-2 rounded-full bg-surface-container text-on-surface-variant font-label-md text-label-md font-semibold hover:text-on-surface transition-all flex items-center gap-1">
+<span class="material-symbols-outlined text-[14px] text-secondary">local_mall</span>
+        Perks
+      </button>
+</div>
+</div>
+<!-- Live Chat Feed Stream -->
+<div class="px-margin mt-3 flex flex-col gap-2.5">
+<!-- SuperChat Tip Card 1 -->
+<div class="p-3 rounded-2xl bg-gradient-to-r from-secondary-container/40 via-surface-container-high to-surface-container-high relative overflow-hidden">
+<div class="flex items-center justify-between mb-1.5">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-cover bg-center" data-alt="Profile photo of Nigerian movie fan smiling with neon Lagos night skyline in background." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCAPY_a-LhLIhbIOLX57pPE7RBcdfDatBqFcBXtqsKglLKJZ7xUXvEl7t-eOKSBxI-EvLu1gg6HOgR_P2Enpvxu5JhfHvst7_XhZh57Irh05GcOaG6uLPtU0RFViV6M8zZCGZgbHbWdGh-GE5uU6mrRuC-Z-MKyEBK2uH95Nj0H7O1pSMN3IioGM1iQxOjWmJK6NpjJTQ2Kak_tWoH2z14RklbGEK8JqnlbOIk0h2yn2_TERWX9WrhZeg')">
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-secondary-fixed font-bold">Chidi Eze</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Tipped ₦5,000 SuperChat</span>
+</div>
+</div>
+<div class="px-2 py-0.5 rounded-full bg-secondary text-on-secondary font-label-sm text-label-sm font-bold shadow-sm">
+          🔥 TOP FAN
+        </div>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium pl-9">
+        "That Marina chase sequence literally made my jaw drop! Nollywood Sci-Fi is in good hands!! 🚀🍿"
+      </p>
+</div>
+<!-- Regular VIP Chat Bubble -->
+<div class="flex items-start gap-2.5 p-2 rounded-xl bg-surface-container/50">
+<div class="w-7 h-7 rounded-full bg-cover bg-center shrink-0 mt-0.5" data-alt="Avatar portrait of African digital artist with dreadlocks dyed electric lime green." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCh9s_J5JQhKKK0Or0fMptlIoIhmCl9WEq_P9xq8UqkwRdnddIzx9QyjxuDtLtoRFNtyfT_DeEC36lKbp7ZyY5XvcbiFIHeOXHA5FxTEecTKITDGoZ1umMKXS3y5gDt94qDF_uTP9B9Z2f_t_2RFf3ulp6HutjcTn0eJ3a_Kf0iienptZQhiqzGAtCbdczAi9gY7tc9RmgD4NQCRmyygZlmei_4QP1-HiVssysS4FxSuVO2kpyuD83nzA')">
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-primary font-bold">Zara_VFX</span>
+<span class="px-1.5 py-0.2 rounded bg-primary-container/20 text-primary font-label-sm text-label-sm">VIP Pro</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">21:14</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface mt-0.5">
+          Notice the sound design when the EMP detonates? Subwoofers went CRAZY in my headphones 🎧✨
+        </p>
+</div>
+</div>
+<!-- Director Comment Message (Pinned Style) -->
+<div class="flex items-start gap-2.5 p-2.5 rounded-xl bg-surface-container-high relative overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 w-1 bg-primary-container"></div>
+<div class="w-7 h-7 rounded-full bg-cover bg-center shrink-0 mt-0.5" data-alt="Close up thumbnail of Director Kemi speaking on film set with headset." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAiJGj6mUqiIm8DEwfvbr2NN901ZeltZcG7oEeNCQDloNNkAvid4VPhk8Rfa4v3kSbrB2WdvHA8UJAjAhk5wggDR4RZx7XxKwlX3Ox4zw3K8qDllbpbxpa_PPxTGonWxCROy68jePZb3YePOVMYgnApyNyBK6ErfnJ8MAAduuqzCLFb2nvnq5sr2yoqsECw_lQ4HVbH0Au0tm7GPedjlT2yzR5esaVU_Mst6F-ZnS2eInra9TlPvSsVbw')">
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-label-md text-label-md text-primary-container font-bold">Dir. Kemi Adesanya</span>
+<span class="material-symbols-outlined text-primary-container text-[14px]">verified</span>
+<span class="px-1.5 py-0.2 rounded bg-surface-bright text-on-surface-variant font-label-sm text-label-sm">DIRECTOR</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface mt-0.5 font-medium">
+          We shot that bridge scene over 11 rainy nights in Lekki! Keep your eyes on Commander Bola right now...
+        </p>
+</div>
+</div>
+<!-- Regular Community Chat Bubble -->
+<div class="flex items-start gap-2.5 p-2 rounded-xl bg-surface-container/30">
+<div class="w-7 h-7 rounded-full bg-cover bg-center shrink-0 mt-0.5" data-alt="Avatar portrait of young woman with sunglasses reflecting neon blue stadium lights." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBW6cVHgWYf0Vfe-dEO4nF-wUgeHAoNAhjP15uFS0Ht7FNUyt_V_2Ihbv8Au5U2xdmIlufdYTW0vmVDc1S_CO722wI5hQgv9TLi9O1XiYV9uMmzKqGgqE5RvkE0FbegT732AAEieOjA8STVFQwDGPR9b8ZDuM2WPGZCIIeq4JM317Ed4VFN8naurcXfxdK4WgOtiks7-GUsy8VyEe6-yLCN1AQFxUmVeKxRX4aA4mAfhvovQAnwfqHwQw')">
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Titi_Stream</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">21:15</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface mt-0.5">
+          The pacing is so cinematic!! Nigeria to the universe 🇳🇬⚡️
+        </p>
+</div>
+</div>
+<!-- SuperChat Tip Card 2 -->
+<div class="p-3 rounded-2xl bg-gradient-to-r from-primary-container/20 via-surface-container-high to-surface-container-high relative overflow-hidden">
+<div class="flex items-center justify-between mb-1.5">
+<div class="flex items-center gap-2">
+<div class="w-7 h-7 rounded-full bg-cover bg-center" data-alt="Avatar photo of tech founder with warm smile and dark turtleneck." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuADiGxL0DojfpnGWzYka_yMK-Ms7mk88v3OQ-kQlbNa_GckK0Z4XRNUgkqRxlK7eSvcWHWhbz3uiuKErSBKTuB9HnAK57z2APFIuBDz8dCsV9osCrTWFqiw4ZCT1aWLXtO0oXrfJbVWkl0As3jMXloo2zoRvcmnsOu6Cu50-guF-8FkS_gNG_azMDSccfpUsklZi1tuVtbyuLpnOC1Yjw5lAQ-hUfjXTnu6-MCCUiAionO5v0VxSZvt9A')">
+</div>
+<div class="flex flex-col">
+<span class="font-label-md text-label-md text-primary font-bold">OluwaFemi.eth</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant">Tipped ₦10,000 SuperChat</span>
+</div>
+</div>
+<div class="px-2 py-0.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm font-bold">
+          ⚡️ HERO SPONSOR
+        </div>
+</div>
+<p class="font-body-md text-body-md text-on-surface font-medium pl-9">
+        "Buying the official cyber-bomber jacket as soon as the merch drop unlocks! Huge respect to the cast!"
+      </p>
+</div>
+<!-- Regular Community Chat Bubble -->
+<div class="flex items-start gap-2.5 p-2 rounded-xl bg-surface-container/30">
+<div class="w-7 h-7 rounded-full bg-cover bg-center shrink-0 mt-0.5" data-alt="Cool avatar of a man with glowing cybernetic visor glasses." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAbFkMEsuJjo1yV-AJboHxmk2s_xfiFZriurhawD8lQBlwZEiionTnlN9cmGCe73DqZEDZhXLH13mf1mlVxXoImnqLDr8hHAnFPmSGVOKHkJL8MGS36DQYZAgoaNXOgosBJ5vs57oXShaiPgFz7w0hBgs8wqHV-4YVolGzwlxWTR6FiPpkm684_DWktdciCQ8Fpzpxbt2IfCPS91T7Rma8GG1fbBQHHLB1RgndCx4gT0DXSGJgIiX5Qtg')">
+</div>
+<div class="flex flex-col min-w-0">
+<div class="flex items-center gap-2">
+<span class="font-label-md text-label-md text-on-surface font-semibold">Kwame_Accra</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">21:15</span>
+</div>
+<p class="font-body-md text-body-md text-on-surface mt-0.5">
+          Wait did anyone catch the easter egg on the Danfo bus hologram?! 😂🤯
+        </p>
+</div>
+</div>
+</div>
+<!-- Interactive Floating Reaction Bar (Quick-Fire) -->
+<div class="sticky bottom-16 inset-x-0 px-margin flex items-center justify-between pointer-events-none mt-2">
+<div class="flex items-center gap-2 bg-surface-container-high/90 backdrop-blur-xl px-3 py-1.5 rounded-full shadow-xl pointer-events-auto mx-auto">
+<button class="reaction-btn flex items-center gap-1 px-2 py-1 rounded-full hover:bg-surface-bright transition-transform active:scale-125" data-emoji="🔥">
+<span class="text-base">🔥</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-bold count">1.4k</span>
+</button>
+<button class="reaction-btn flex items-center gap-1 px-2 py-1 rounded-full hover:bg-surface-bright transition-transform active:scale-125" data-emoji="🤯">
+<span class="text-base">🤯</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-bold count">892</span>
+</button>
+<button class="reaction-btn flex items-center gap-1 px-2 py-1 rounded-full hover:bg-surface-bright transition-transform active:scale-125" data-emoji="👏">
+<span class="text-base">👏</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-bold count">640</span>
+</button>
+<button class="reaction-btn flex items-center gap-1 px-2 py-1 rounded-full hover:bg-surface-bright transition-transform active:scale-125" data-emoji="❤️">
+<span class="text-base">❤️</span>
+<span class="font-label-sm text-label-sm text-on-surface-variant font-bold count">2.1k</span>
+</button>
+<button class="reaction-btn flex items-center gap-1 px-2 py-1 rounded-full hover:bg-surface-bright transition-transform active:scale-125" data-emoji="🚀">
+<span class="text-base">🚀</span>
+<span class="font-label-sm text-label-sm text-primary font-bold count">3.5k</span>
+</button>
+</div>
+</div>
+<!-- Reaction Floating Canvas (Particle Target) -->
+<div class="fixed inset-0 pointer-events-none z-40 overflow-hidden" id="reaction-particles"></div>
+<!-- Bottom Message Input Dock -->
+<div class="fixed bottom-0 inset-x-0 z-50 bg-surface-container-lowest/95 backdrop-blur-xl px-margin py-2.5 pb-safe">
+<div class="flex items-center gap-2 max-w-md mx-auto">
+<!-- Gift / SuperChat Token Trigger -->
+<button class="w-10 h-10 rounded-full bg-gradient-to-tr from-secondary-container to-secondary flex items-center justify-center text-on-secondary shrink-0 shadow-sm active:scale-95 transition-transform" id="gift-modal-btn">
+<span class="material-symbols-outlined text-[20px]">monetization_on</span>
+</button>
+<!-- Input Field -->
+<div class="flex-1 flex items-center bg-surface-container rounded-full px-3 py-1.5 focus-within:bg-surface-container-high transition-colors">
+<input class="w-full bg-transparent text-on-surface placeholder:text-on-surface-variant/70 font-body-md text-body-md focus:outline-none" id="chat-input" placeholder="Share your thoughts with 42k fans..." type="text"/>
+<button class="text-on-surface-variant hover:text-on-surface px-1" id="emoji-picker-btn">
+<span class="material-symbols-outlined text-[20px]">sentiment_satisfied</span>
+</button>
+</div>
+<!-- Send Action Button -->
+<button class="w-10 h-10 rounded-full bg-primary-container flex items-center justify-center text-on-primary-container shrink-0 shadow-[0_4px_16px_rgba(114,240,106,0.28)] active:scale-95 transition-transform" id="send-msg-btn">
+<span class="material-symbols-outlined text-[20px] font-bold">send</span>
+</button>
+</div>
+</div>
+<!-- Micro-interactions Script -->
+<script>
+    (function() {
+      // Audio Mic Toggle
+      const micBtn = document.getElementById('mic-toggle-btn');
+      let isMuted = true;
+      if (micBtn) {
+        micBtn.addEventListener('click', () => {
+          isMuted = !isMuted;
+          if (isMuted) {
+            micBtn.innerHTML = '<span class="material-symbols-outlined text-[15px] text-error">mic_off</span><span>Muted</span>';
+            micBtn.classList.remove('bg-primary-container', 'text-on-primary-container');
+            micBtn.classList.add('bg-surface-container-high', 'text-on-surface');
+          } else {
+            micBtn.innerHTML = '<span class="material-symbols-outlined text-[15px] text-on-primary-container animate-pulse">mic</span><span class="font-bold">Live</span>';
+            micBtn.classList.remove('bg-surface-container-high', 'text-on-surface');
+            micBtn.classList.add('bg-primary-container', 'text-on-primary-container');
+          }
+        });
+      }
+
+      // Bookmark / Watchlist Heart Toggle
+      const bookmarkBtn = document.getElementById('bookmark-btn');
+      let bookmarked = false;
+      if (bookmarkBtn) {
+        bookmarkBtn.addEventListener('click', () => {
+          bookmarked = !bookmarked;
+          bookmarkBtn.innerHTML = bookmarked 
+            ? '<span class="material-symbols-outlined text-[18px] text-primary-container" style="font-variation-settings: \'FILL\' 1;">bookmark</span>' 
+            : '<span class="material-symbols-outlined text-[18px]">bookmark_border</span>';
+        });
+      }
+
+      // Floating Reaction Particles Effect
+      const particleContainer = document.getElementById('reaction-particles');
+      const reactionButtons = document.querySelectorAll('.reaction-btn');
+
+      function spawnReaction(emoji) {
+        if (!particleContainer) return;
+        const el = document.createElement('div');
+        el.textContent = emoji;
+        el.className = 'absolute text-2xl select-none pointer-events-none transform transition-all duration-1000 ease-out';
+        
+        // Random horizontal position near right bottom
+        const startX = Math.random() * 80 + (window.innerWidth - 120);
+        const startY = window.innerHeight - 100;
+        
+        el.style.left = startX + 'px';
+        el.style.top = startY + 'px';
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0) scale(0.6)';
+        
+        particleContainer.appendChild(el);
+
+        requestAnimationFrame(() => {
+          const deltaX = (Math.random() - 0.5) * 80;
+          el.style.transform = `translate(${deltaX}px, -240px) scale(1.4)`;
+          el.style.opacity = '0';
+        });
+
+        setTimeout(() => {
+          el.remove();
+        }, 1100);
+      }
+
+      reactionButtons.forEach(btn => {
+        btn.addEventListener('click', () => {
+          const emoji = btn.getAttribute('data-emoji');
+          spawnReaction(emoji);
+
+          // Update count badge visually
+          const countEl = btn.querySelector('.count');
+          if (countEl) {
+            let val = countEl.textContent;
+            if (val.includes('k')) {
+              // keep string intact
+            } else {
+              countEl.textContent = parseInt(val, 10) + 1;
+            }
+          }
+        });
+      });
+
+      // Simple Chat Input Post simulator
+      const chatInput = document.getElementById('chat-input');
+      const sendBtn = document.getElementById('send-msg-btn');
+      
+      function postMessage() {
+        if (!chatInput) return;
+        const msg = chatInput.value.trim();
+        if (!msg) return;
+
+        // Visual feedback
+        spawnReaction('💬');
+        chatInput.value = '';
+        chatInput.blur();
+      }
+
+      if (sendBtn) {
+        sendBtn.addEventListener('click', postMessage);
+      }
+      if (chatInput) {
+        chatInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') postMessage();
+        });
+      }
+    })();
+  </script>
+</div></main></body></html>

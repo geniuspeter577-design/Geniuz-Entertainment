@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Last Horizon - Video Quality &amp; Stream Diagnostics</title>
+<!-- Tailwind CSS CDN with forms and container queries plugins -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Google Fonts: Sora and Inter for ultra-sharp Afro-Modern futuristic UI typography -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500;600&amp;family=Sora:wght@400;600;700;800&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              green: '#72F06A',
+              greenDark: '#45AA3E',
+              glow: 'rgba(114, 240, 106, 0.25)',
+              bgDark: '#0A0C0E',
+              surface: '#0E1014',
+              card: '#16191F',
+              cardHover: '#1D2128',
+              border: '#242932',
+              borderLight: '#2F3642',
+              muted: '#8A93A2',
+              pill: '#1E232B'
+            }
+          },
+          fontFamily: {
+            sora: ['Sora', 'sans-serif'],
+            sans: ['Inter', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace']
+          },
+          keyframes: {
+            pulseSubtle: {
+              '0%, 100%': { opacity: '1', transform: 'scale(1)' },
+              '50%': { opacity: '0.4', transform: 'scale(0.95)' }
+            }
+          },
+          animation: {
+            pulseSubtle: 'pulseSubtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
+          }
+        }
+      }
+    }
+  </script>
+<!-- BEGIN: Custom Stylesheet -->
+<style data-purpose="custom-scrollbars">
+    /* Sleek custom scrollbars for diagnostics telemetry log and option lists */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #0E1014;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #272C36;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #3A4250;
+    }
+  </style>
+<style data-purpose="cinematic-backdrop">
+    /* Futuristic grid and glow accents */
+    .telemetry-grid-bg {
+      background-size: 24px 24px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    }
+    .neon-border-active {
+      box-shadow: 0 0 15px -3px rgba(114, 240, 106, 0.35), inset 0 0 10px -2px rgba(114, 240, 106, 0.15);
+    }
+    .neon-pill-active {
+      box-shadow: 0 0 12px rgba(114, 240, 106, 0.4);
+    }
+  </style>
+<!-- END: Custom Stylesheet -->
+</head>
+<body class="bg-brand-bgDark text-white font-sans antialiased overflow-hidden select-none w-screen h-screen">
+<!-- BEGIN: VideoPlayerBackground -->
+<!-- Simulated 16:9 4K streaming scene from 'The Last Horizon' (S1:E3 • The Neural Breach) -->
+<div class="relative w-full h-full overflow-hidden bg-black" data-purpose="fullscreen-player-container">
+<!-- Video Still Simulation with Cyberpunk Lagos Aesthetic -->
+<div class="absolute inset-0 bg-cover bg-center scale-105 filter blur-[6px] brightness-50 contrast-125 transition-all duration-700" data-purpose="blurred-video-frame" style="background-image: radial-gradient(ellipse at 70% 30%, rgba(14, 16, 20, 0.4) 0%, rgba(10, 12, 14, 0.95) 100%), linear-gradient(to bottom, rgba(14, 16, 20, 0.85) 0%, rgba(14, 16, 20, 0.7) 50%, rgba(10, 12, 14, 0.98) 100%), url('https://lh3.googleusercontent.com/aida-public/AB6AXuB-XXd9soqS7V1fErKatuPJMQcPQowCBa_fCAYxVXcCnfj3KRV886hW3JlG7Tl0Xmr2wWIbTPjKGnvsDfdoPxpY1c2wDC3zWY9LmvwsUQ_O8_0tAnoW9fEB0hz_AA2b8ViT5oxk4ek1V2jUqhYWtO_Y-oGWbvBAYBZA25KivcwGb-W__b9yGcawPEJ_HHffPSS6wgYyXrJgGop8DwbGK0SX0kKwIHgRiiNxRVv8-cPosxcx6Ow-nlYCkQ');">
+</div>
+<!-- Background Vignette & Noise Scrim Overlay -->
+<div class="absolute inset-0 bg-gradient-to-t from-[#0A0C0E] via-[#0E1014]/75 to-transparent pointer-events-none"></div>
+<!-- BEGIN: TopStreamBar -->
+<header class="absolute top-0 left-0 right-0 z-10 px-8 py-5 flex items-center justify-between pointer-events-auto bg-gradient-to-b from-black/80 to-transparent backdrop-blur-sm" data-purpose="player-navigation-header">
+<!-- Left: Back button, Title & Stream Badges -->
+<div class="flex items-center space-x-4">
+<!-- Back Navigation Pill -->
+<button class="w-10 h-10 rounded-full bg-white/10 hover:bg-white/20 border border-white/10 flex items-center justify-center transition-all group" title="Return to browsing">
+<svg class="w-5 h-5 text-gray-200 group-hover:text-white group-hover:-translate-x-0.5 transition-transform" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</button>
+<!-- Title Meta & Geniuz+ Badges -->
+<div class="flex items-center space-x-3">
+<h1 class="text-xl font-sora font-bold tracking-tight text-white flex items-center gap-2">
+            The Last Horizon
+            <span class="px-2 py-0.5 text-[11px] font-extrabold uppercase rounded bg-brand-green text-black tracking-wider">PLUS</span>
+</h1>
+<span class="text-gray-400 text-sm font-medium">·</span>
+<span class="text-gray-300 text-sm font-medium tracking-wide">S1 : E3 • The Neural Breach</span>
+</div>
+<!-- Master Tech Spec Pill -->
+<div class="hidden lg:flex items-center space-x-2 pl-3 border-l border-white/15 text-[11px] font-mono tracking-wider text-gray-400">
+<span class="inline-flex items-center text-brand-green font-semibold">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-green mr-1.5 animate-pulse"></span>
+            4K ULTRA HD
+          </span>
+<span class="text-gray-600">•</span>
+<span>HDR10</span>
+<span class="text-gray-600">•</span>
+<span class="text-gray-200 font-semibold">DOLBY ATMOS 5.1</span>
+<span class="text-gray-600">•</span>
+<span class="text-gray-400">GENIUZLAB MASTER 2.39:1</span>
+</div>
+</div>
+<!-- Right: Cast, CC/Audio, Quality (Triggered), Fullscreen & Lock Icons -->
+<div class="flex items-center space-x-3 text-sm">
+<!-- Living Room TV Cast -->
+<div class="hidden md:flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer">
+<svg class="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="text-xs font-medium">Living Room TV</span>
+</div>
+<!-- Audio & Subtitles Menu Trigger -->
+<button class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 transition">
+<svg class="w-4 h-4 text-brand-green" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="text-xs font-medium">Audio &amp; CC</span>
+<span class="w-1.5 h-1.5 rounded-full bg-brand-green"></span>
+</button>
+<!-- Video Quality & Diagnostics Active Pill Button -->
+<button class="flex items-center space-x-2 px-3.5 py-1.5 rounded-full bg-brand-green/20 border border-brand-green/50 text-white font-medium text-xs shadow-lg neon-pill-active">
+<svg class="w-4 h-4 text-brand-green" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+<path d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="text-brand-green font-semibold">4K Max Diagnostics</span>
+<svg class="w-3 h-3 text-brand-green ml-0.5" fill="none" stroke="currentColor" viewbox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path></svg>
+</button>
+<!-- Fullscreen Expand -->
+<button class="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+<!-- Screen Lock -->
+<button class="w-9 h-9 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-gray-300 hover:text-white hover:bg-white/10 transition">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</header>
+<!-- END: TopStreamBar -->
+<!-- BEGIN: DiagnosticsDrawerOverlay -->
+<!-- Slide-up landscape modal container with backdrop blur -->
+<div class="absolute inset-0 z-20 flex flex-col justify-end bg-black/60 backdrop-blur-md transition-all duration-300 pointer-events-auto" data-purpose="diagnostics-drawer-container">
+<!-- Drawer Outer Surface -->
+<section class="w-full max-h-[88vh] bg-brand-surface/95 border-t border-brand-border rounded-t-3xl shadow-2xl flex flex-col overflow-hidden telemetry-grid-bg transition-transform duration-300" data-purpose="diagnostics-modal-sheet">
+<!-- Drawer Header Section -->
+<div class="px-8 pt-4 pb-3 border-b border-brand-border/80 flex flex-col space-y-3 bg-[#0E1014]/90">
+<!-- Grab handle for tactile landscape touch dragging -->
+<div class="w-full flex justify-center">
+<div class="w-12 h-1.2 rounded-full bg-gray-600/70 hover:bg-gray-500 transition-colors cursor-grab" style="height: 4.5px;"></div>
+</div>
+<!-- Title Bar with NOC Status Indicator & Close Button -->
+<div class="flex items-center justify-between">
+<div class="flex items-center space-x-3.5">
+<h2 class="text-xl font-sora font-bold text-white tracking-tight flex items-center gap-3">
+                Video Quality &amp; Stream Diagnostics
+              </h2>
+<!-- Live Telemetry Pill -->
+<div class="flex items-center space-x-2 px-2.5 py-0.5 rounded-full bg-brand-green/10 border border-brand-green/30 text-[11px] font-mono font-medium text-brand-green tracking-wide">
+<span class="w-2 h-2 rounded-full bg-brand-green animate-pulseSubtle"></span>
+<span>LIVE NOC TELEMETRY</span>
+</div>
+<!-- Edge Node Info -->
+<span class="hidden sm:inline-block text-xs font-mono text-gray-400">
+                PoP: <span class="text-gray-200">LOS-MAINLAND-IXPN-02</span> · <span class="text-brand-green">Direct Peer 100GbE</span>
+</span>
+</div>
+<!-- Tab Pills & Close Button -->
+<div class="flex items-center space-x-4">
+<!-- Sub-Category Tab Pills -->
+<nav class="hidden md:flex items-center p-1 rounded-xl bg-brand-card border border-brand-border text-xs font-medium" data-purpose="diagnostics-tabs">
+<button class="px-3.5 py-1.5 rounded-lg bg-brand-green text-black font-bold tracking-tight shadow-sm transition">Video Quality</button>
+<button class="px-3.5 py-1.5 rounded-lg text-gray-400 hover:text-white transition">Audio Codec</button>
+<button class="px-3.5 py-1.5 rounded-lg text-gray-400 hover:text-white transition">Stream Diagnostics</button>
+<button class="px-3.5 py-1.5 rounded-lg text-gray-400 hover:text-white transition">Buffer &amp; CDN</button>
+</nav>
+<!-- Close Modal Trigger -->
+<button class="w-8 h-8 rounded-full bg-brand-card hover:bg-brand-cardHover border border-brand-border flex items-center justify-center text-gray-400 hover:text-white transition" title="Close Diagnostics">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</button>
+</div>
+</div>
+</div>
+<!-- Main Body: Two-Panel Responsive Landscape Grid -->
+<div class="px-8 py-5 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6" data-purpose="drawer-main-content">
+<!-- LEFT PANEL: Quality Presets & Manual Resolution Selector (Col span 5) -->
+<div class="lg:col-span-5 flex flex-col space-y-4" data-purpose="quality-selection-column">
+<div class="flex items-center justify-between">
+<span class="text-xs font-sora font-semibold uppercase tracking-wider text-gray-400">Stream Resolution &amp; Bitrate Preset</span>
+<span class="text-[11px] font-mono text-brand-green">Bandwidth: Uncapped (Wi-Fi 6)</span>
+</div>
+<!-- Resolution Selection Cards List -->
+<div class="space-y-2.5" data-purpose="quality-preset-cards">
+<!-- 1. Auto Option (Active Selected) -->
+<div class="p-3.5 rounded-xl bg-brand-card border-2 border-brand-green neon-border-active flex items-center justify-between cursor-pointer transition-all hover:bg-brand-cardHover relative group" data-purpose="option-auto">
+<div class="flex items-start space-x-3">
+<div class="mt-0.5 w-4 h-4 rounded-full bg-brand-green flex items-center justify-center text-black">
+<svg class="w-2.5 h-2.5 fill-current stroke-current" viewbox="0 0 20 20">
+<path clip-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="font-sora font-bold text-sm text-white">Auto (Recommended)</span>
+<span class="px-1.5 py-0.5 text-[10px] font-mono font-semibold rounded bg-brand-green/20 text-brand-green uppercase">Selected</span>
+</div>
+<p class="text-xs text-gray-400 mt-0.5">Dynamically switches up to 4K Ultra HD based on connection stability</p>
+</div>
+</div>
+<div class="text-right">
+<span class="block text-xs font-mono font-semibold text-brand-green">~18.4 Mbps</span>
+<span class="block text-[10px] font-mono text-gray-400">4K HDR Target</span>
+</div>
+</div>
+<!-- 2. 4K Ultra HD Preset (VIP PLUS) -->
+<div class="p-3.5 rounded-xl bg-brand-card/70 border border-brand-border flex items-center justify-between cursor-pointer transition hover:border-gray-500 hover:bg-brand-card" data-purpose="option-4k">
+<div class="flex items-start space-x-3">
+<div class="mt-1 w-4 h-4 rounded-full border border-gray-500"></div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="font-sora font-semibold text-sm text-gray-200">4K Ultra HD (2160p)</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] font-mono font-bold bg-[#E5B834]/20 text-[#F5C739] border border-[#E5B834]/40">GENIUZ VIP</span>
+</div>
+<p class="text-xs text-gray-400 mt-0.5">2160p • 60fps • HDR10 / Dolby Vision • Uncompressed Audio</p>
+</div>
+</div>
+<div class="text-right">
+<span class="block text-xs font-mono font-medium text-gray-300">~22.0 Mbps</span>
+<span class="block text-[10px] font-mono text-gray-500">Peak Bitrate</span>
+</div>
+</div>
+<!-- 3. Full HD (1080p) -->
+<div class="p-3.5 rounded-xl bg-brand-card/70 border border-brand-border flex items-center justify-between cursor-pointer transition hover:border-gray-500 hover:bg-brand-card" data-purpose="option-1080p">
+<div class="flex items-start space-x-3">
+<div class="mt-1 w-4 h-4 rounded-full border border-gray-500"></div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="font-sora font-semibold text-sm text-gray-200">Full HD (1080p)</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-white/5 text-gray-300">1080p60</span>
+</div>
+<p class="text-xs text-gray-400 mt-0.5">Crisp HD definition with enhanced color fidelity (SDR)</p>
+</div>
+</div>
+<div class="text-right">
+<span class="block text-xs font-mono font-medium text-gray-300">~6.5 Mbps</span>
+<span class="block text-[10px] font-mono text-gray-500">Standard</span>
+</div>
+</div>
+<!-- 4. HD (720p - Data Saver) -->
+<div class="p-3.5 rounded-xl bg-brand-card/70 border border-brand-border flex items-center justify-between cursor-pointer transition hover:border-gray-500 hover:bg-brand-card" data-purpose="option-720p">
+<div class="flex items-start space-x-3">
+<div class="mt-1 w-4 h-4 rounded-full border border-gray-500"></div>
+<div>
+<div class="flex items-center space-x-2">
+<span class="font-sora font-semibold text-sm text-gray-200">HD (720p)</span>
+<span class="px-1.5 py-0.2 rounded text-[10px] font-mono bg-blue-500/10 text-blue-400">DATA SAVER</span>
+</div>
+<p class="text-xs text-gray-400 mt-0.5">Recommended for metered mobile hotspot or slower networks</p>
+</div>
+</div>
+<div class="text-right">
+<span class="block text-xs font-mono font-medium text-gray-300">~3.0 Mbps</span>
+<span class="block text-[10px] font-mono text-gray-500">Economy</span>
+</div>
+</div>
+<!-- 5. SD (480p) -->
+<div class="p-3 rounded-xl bg-brand-card/40 border border-brand-border/60 flex items-center justify-between cursor-pointer transition hover:bg-brand-card" data-purpose="option-480p">
+<div class="flex items-start space-x-3">
+<div class="mt-1 w-4 h-4 rounded-full border border-gray-600"></div>
+<div>
+<span class="font-sora font-medium text-sm text-gray-300">Standard Definition (480p)</span>
+<p class="text-xs text-gray-500">Ultra low data footprint (1.1 Mbps)</p>
+</div>
+</div>
+<span class="text-xs font-mono text-gray-500">~500 MB / hr</span>
+</div>
+</div>
+<!-- Hardware & Stream Feature Toggles -->
+<div class="pt-2 border-t border-brand-border/80 grid grid-cols-2 gap-3" data-purpose="hardware-toggles">
+<!-- Toggle 1: HDR -->
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-brand-card/60 border border-brand-border cursor-pointer hover:border-gray-600">
+<div class="flex flex-col">
+<span class="text-xs font-medium text-gray-200">Enable HDR10</span>
+<span class="text-[10px] font-mono text-gray-500">BT.2020 Color</span>
+</div>
+<input checked="" class="rounded border-gray-700 bg-brand-card text-brand-green focus:ring-0 focus:ring-offset-0 h-4 w-4" type="checkbox"/>
+</label>
+<!-- Toggle 2: AV1 Hardware Acceleration -->
+<label class="flex items-center justify-between p-2.5 rounded-lg bg-brand-card/60 border border-brand-border cursor-pointer hover:border-gray-600">
+<div class="flex flex-col">
+<span class="text-xs font-medium text-gray-200">AV1 GPU Decode</span>
+<span class="text-[10px] font-mono text-brand-green">Hardware VPU</span>
+</div>
+<input checked="" class="rounded border-gray-700 bg-brand-card text-brand-green focus:ring-0 focus:ring-offset-0 h-4 w-4" type="checkbox"/>
+</label>
+</div>
+</div>
+<!-- RIGHT PANEL: Real-time Telemetry, Live Sparkline Chart & NOC Specs (Col span 7) -->
+<div class="lg:col-span-7 flex flex-col space-y-4" data-purpose="telemetry-diagnostics-column">
+<div class="flex items-center justify-between">
+<span class="text-xs font-sora font-semibold uppercase tracking-wider text-gray-400">Real-Time NOC Diagnostics &amp; Buffer Monitor</span>
+<div class="flex items-center space-x-2 text-[11px] font-mono">
+<span class="text-gray-400">Sync Clock:</span>
+<span class="text-brand-green font-semibold">24:18.420 / 58:40.000</span>
+</div>
+</div>
+<!-- Real-Time Metrics 4-Box Highlight Grid -->
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5" data-purpose="telemetry-stat-boxes">
+<!-- Metric 1: Current Bitrate -->
+<div class="p-3 rounded-xl bg-brand-card border border-brand-border relative overflow-hidden">
+<span class="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Live Video Bitrate</span>
+<div class="flex items-baseline space-x-1 mt-1">
+<span class="text-xl font-mono font-bold text-white tracking-tight">18.42</span>
+<span class="text-xs font-mono text-brand-green font-medium">Mbps</span>
+</div>
+<span class="text-[10px] font-mono text-gray-500 block mt-0.5">Peak: 23.10 Mbps</span>
+<!-- Subtle indicator accent line -->
+<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-brand-green"></div>
+</div>
+<!-- Metric 2: Forward Buffer -->
+<div class="p-3 rounded-xl bg-brand-card border border-brand-border relative overflow-hidden">
+<span class="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Buffer Health</span>
+<div class="flex items-baseline space-x-1 mt-1">
+<span class="text-xl font-mono font-bold text-brand-green tracking-tight">42.6</span>
+<span class="text-xs font-mono text-brand-green font-medium">sec</span>
+</div>
+<div class="w-full bg-gray-700/50 rounded-full h-1 mt-1.5 overflow-hidden">
+<div class="bg-brand-green h-1 rounded-full" style="width: 85%"></div>
+</div>
+</div>
+<!-- Metric 3: Edge Latency -->
+<div class="p-3 rounded-xl bg-brand-card border border-brand-border relative overflow-hidden">
+<span class="text-[10px] font-mono text-gray-400 uppercase tracking-wider">CDN Edge RTT</span>
+<div class="flex items-baseline space-x-1 mt-1">
+<span class="text-xl font-mono font-bold text-white tracking-tight">18</span>
+<span class="text-xs font-mono text-blue-400 font-medium">ms</span>
+</div>
+<span class="text-[10px] font-mono text-brand-green block mt-0.5">0.02ms Jitter</span>
+</div>
+<!-- Metric 4: Dropped Frames -->
+<div class="p-3 rounded-xl bg-brand-card border border-brand-border relative overflow-hidden">
+<span class="text-[10px] font-mono text-gray-400 uppercase tracking-wider">Dropped Frames</span>
+<div class="flex items-baseline space-x-1 mt-1">
+<span class="text-xl font-mono font-bold text-brand-green tracking-tight">0</span>
+<span class="text-xs font-mono text-gray-400">/ 87.4k</span>
+</div>
+<span class="text-[10px] font-mono text-gray-400 block mt-0.5">0.000% Loss</span>
+</div>
+</div>
+<!-- Live Bitrate & Buffer Health Sparkline Graph -->
+<div class="p-4 rounded-xl bg-brand-card border border-brand-border flex flex-col justify-between" data-purpose="telemetry-svg-graph">
+<div class="flex items-center justify-between mb-2">
+<div class="flex items-center space-x-4 text-xs font-mono">
+<span class="flex items-center text-brand-green">
+<span class="w-2.5 h-0.5 bg-brand-green mr-1.5 rounded-full inline-block"></span>
+                    Bitrate (Mbps)
+                  </span>
+<span class="flex items-center text-blue-400">
+<span class="w-2.5 h-0.5 bg-blue-400 mr-1.5 rounded-full inline-block"></span>
+                    Buffer Length (s)
+                  </span>
+</div>
+<span class="text-[10px] font-mono text-gray-500">60-Second Sliding Window</span>
+</div>
+<!-- SVG Area Chart -->
+<div class="w-full h-24 relative">
+<svg class="w-full h-full overflow-visible" preserveaspectratio="none" viewbox="0 0 600 100">
+<defs>
+<!-- Green Glow Gradient for Bitrate -->
+<lineargradient id="bitrateGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#72F06A" stop-opacity="0.35"></stop>
+<stop offset="100%" stop-color="#72F06A" stop-opacity="0.0"></stop>
+</lineargradient>
+<!-- Blue Gradient for Buffer -->
+<lineargradient id="bufferGradient" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#38BDF8" stop-opacity="0.15"></stop>
+<stop offset="100%" stop-color="#38BDF8" stop-opacity="0.0"></stop>
+</lineargradient>
+</defs>
+<!-- Horizontal Guide Lines -->
+<line stroke="#252A33" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="600" y1="20" y2="20"></line>
+<line stroke="#252A33" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="600" y1="50" y2="50"></line>
+<line stroke="#252A33" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="600" y1="80" y2="80"></line>
+<!-- Buffer Fill Area (Blue) -->
+<path d="M 0,60 Q 50,55 100,50 T 200,45 T 300,40 T 400,42 T 500,38 T 600,35 L 600,100 L 0,100 Z" fill="url(#bufferGradient)"></path>
+<path d="M 0,60 Q 50,55 100,50 T 200,45 T 300,40 T 400,42 T 500,38 T 600,35" fill="none" stroke="#38BDF8" stroke-dasharray="4,2" stroke-width="1.5"></path>
+<!-- Bitrate Fill Area (Electric Green) -->
+<path d="M 0,70 C 40,65 70,30 110,38 C 150,45 180,25 220,28 C 260,32 290,55 330,48 C 370,40 400,20 440,24 C 480,28 510,18 550,22 C 570,25 585,15 600,18 L 600,100 L 0,100 Z" fill="url(#bitrateGradient)"></path>
+<path d="M 0,70 C 40,65 70,30 110,38 C 150,45 180,25 220,28 C 260,32 290,55 330,48 C 370,40 400,20 440,24 C 480,28 510,18 550,22 C 570,25 585,15 600,18" fill="none" stroke="#72F06A" stroke-width="2.5"></path>
+<!-- Current Live Marker Point -->
+<circle class="animate-pulse" cx="600" cy="18" fill="#72F06A" r="4.5" stroke="#0E1014" stroke-width="2"></circle>
+</svg>
+</div>
+</div>
+<!-- Deep Diagnostics Technical Specs Sheet -->
+<div class="p-3.5 rounded-xl bg-brand-card/90 border border-brand-border font-mono text-xs" data-purpose="telemetry-table-specs">
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">Viewport Render:</span>
+<span class="text-gray-100 font-semibold">3840 × 2160 @ 59.940 fps</span>
+</div>
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">Video Decoder:</span>
+<span class="text-brand-green font-medium">AV01.0.12M.10 (AV1 Main 10-bit)</span>
+</div>
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">Audio Stream:</span>
+<span class="text-gray-100 font-medium">E-AC-3 JOC (Atmos 768kbps, 48kHz)</span>
+</div>
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">Color Primaries:</span>
+<span class="text-purple-300 font-medium">BT.2020 / SMPTE ST 2084 (PQ)</span>
+</div>
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">DRM Security:</span>
+<span class="text-gray-100">Widevine L1 (Hardware Secure)</span>
+</div>
+<div class="flex items-center justify-between border-b border-brand-border/60 pb-1">
+<span class="text-gray-400">Edge Peering:</span>
+<span class="text-gray-100">MTN / Airtel Lagos IXPN Node 04</span>
+</div>
+<div class="flex items-center justify-between pt-0.5">
+<span class="text-gray-400">Playback Engine:</span>
+<span class="text-gray-300">GeniuzStream Core v4.18.2-r88</span>
+</div>
+<div class="flex items-center justify-between pt-0.5">
+<span class="text-gray-400">NOC Session UUID:</span>
+<span class="text-brand-green font-mono">GNZ-LOS-9982-XE</span>
+</div>
+</div>
+</div>
+<!-- Diagnostics Action Buttons -->
+<div class="flex flex-wrap items-center gap-2.5 pt-1" data-purpose="diagnostic-tools-bar">
+<button class="px-3.5 py-2 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border text-xs font-mono text-gray-200 hover:text-white flex items-center space-x-2 transition">
+<svg class="w-3.5 h-3.5 text-brand-green" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Run Edge Speed Test</span>
+</button>
+<button class="px-3.5 py-2 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border text-xs font-mono text-gray-200 hover:text-white flex items-center space-x-2 transition">
+<svg class="w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Copy Diagnostic Log (#GNZ-88219)</span>
+</button>
+<button class="px-3.5 py-2 rounded-lg bg-brand-card hover:bg-red-500/10 border border-brand-border hover:border-red-500/30 text-xs font-mono text-gray-400 hover:text-red-400 flex items-center space-x-2 transition ml-auto">
+<svg class="w-3.5 h-3.5 text-red-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span>Report Stream Glitch</span>
+</button>
+</div>
+</div>
+</div>
+<!-- BEGIN: DrawerFooter -->
+<footer class="px-8 py-3.5 bg-[#0A0C0E] border-t border-brand-border flex items-center justify-between" data-purpose="drawer-action-footer">
+<!-- Current Live Configuration Summary -->
+<div class="flex items-center space-x-2.5">
+<span class="w-2 h-2 rounded-full bg-brand-green"></span>
+<span class="text-xs font-mono text-gray-300">
+              Active: <strong class="text-white font-medium">4K Ultra HD (AV1)</strong> via <span class="text-brand-green">Lagos IXPN POP-02</span> • Bitrate: <strong class="text-white">18.42 Mbps</strong> • Buffer: <strong class="text-brand-green font-medium">+42.6s</strong>
+</span>
+</div>
+<!-- Bottom Action Buttons -->
+<div class="flex items-center space-x-3">
+<!-- Reset to Auto Button -->
+<button class="px-4 py-2 rounded-full bg-brand-card hover:bg-brand-cardHover border border-brand-border text-xs font-sora font-semibold text-gray-300 hover:text-white transition">
+              Reset to Auto
+            </button>
+<!-- Apply & Close Primary Green Button -->
+<button class="px-6 py-2 rounded-full bg-brand-green hover:bg-[#85f57e] active:scale-95 text-black text-xs font-sora font-bold tracking-tight shadow-md transition-all flex items-center space-x-2">
+<span>Apply &amp; Return to Stream</span>
+<svg class="w-3.5 h-3.5 stroke-[2.5]" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M14 5l7 7m0 0l-7 7m7-7H3" stroke-linecap="round" stroke-linejoin="round"></path>
+</svg>
+</button>
+</div>
+</footer>
+<!-- END: DrawerFooter -->
+</section>
+</div>
+<!-- END: DiagnosticsDrawerOverlay -->
+<!-- BEGIN: UnderlyingPlayerControls -->
+<!-- Mimics bottom player scrubber bar matching SCREEN_3 -->
+<div class="absolute bottom-0 left-0 right-0 p-6 flex flex-col space-y-2 pointer-events-none opacity-40 filter blur-[1px]">
+<!-- Video Progress Scrubber Bar -->
+<div class="w-full flex items-center space-x-3">
+<div class="relative w-full h-1.5 bg-gray-700 rounded-full overflow-hidden">
+<div class="absolute left-0 top-0 bottom-0 bg-brand-green w-[41%] rounded-full"></div>
+<div class="absolute left-[41%] top-0 bottom-0 bg-gray-500 w-[25%] rounded-full opacity-60"></div>
+</div>
+</div>
+<!-- Playback Time & Controls Row -->
+<div class="flex items-center justify-between text-xs font-mono text-gray-400">
+<div class="flex items-center space-x-4">
+<span class="text-white font-semibold">24:18 / 58:40</span>
+<span class="px-3 py-1 rounded-full bg-white/10 text-white font-sans text-xs">Skip Intro ↻</span>
+</div>
+<div class="flex items-center space-x-4 font-sans">
+<span>1.0x</span>
+<span class="px-2.5 py-1 rounded-full bg-white/10 text-white">Episodes (8)</span>
+</div>
+</div>
+</div>
+<!-- END: UnderlyingPlayerControls -->
+</div>
+<!-- END: VideoPlayerBackground -->
+</body></html>

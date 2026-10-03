@@ -9,6 +9,7 @@ type UploadOptions = {
   file: UploadFile;
   fileName: string;
   contentType: string;
+  objectType?: 'movie' | 'episode';
   signal: AbortSignal;
   onProgress: (progress: number) => void;
 };
@@ -152,6 +153,7 @@ export async function uploadVideoToB2({
   file,
   fileName,
   contentType,
+  objectType = 'movie',
   signal,
   onProgress,
 }: UploadOptions) {
@@ -164,6 +166,7 @@ export async function uploadVideoToB2({
       fileName,
       fileSize: file.size,
       contentType,
+      objectType,
     });
     if (signal.aborted) {
       throw new Error('Upload canceled.');

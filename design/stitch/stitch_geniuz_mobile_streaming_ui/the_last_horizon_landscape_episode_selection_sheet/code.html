@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>The Last Horizon - Landscape Episode Selection Sheet</title>
+<!-- Tailwind CSS v3 CDN -->
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<!-- Tailwind Configuration -->
+<script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              primary: '#72F06A',
+              dark: '#0E1014',
+              surface: '#12151B',
+              card: '#1A1D23',
+              cardHover: '#22262D',
+              border: '#2A2E36',
+              borderLight: '#383D48'
+            }
+          },
+          fontFamily: {
+            sans: ['Sora', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif']
+          }
+        }
+      }
+    };
+  </script>
+<!-- Typography Font: Sora -->
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<!-- Core Layout Styles -->
+<style data-purpose="custom-scrollbars">
+    /* Subtle horizontal scrollbar */
+    .custom-scrollbar::-webkit-scrollbar {
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: rgba(14, 16, 20, 0.6);
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #2A2E36;
+      border-radius: 9999px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+      background: #72F06A;
+    }
+  </style>
+<style data-purpose="glow-effects">
+    .glow-green {
+      box-shadow: 0 0 24px -2px rgba(114, 240, 106, 0.35), 0 0 8px 0 rgba(114, 240, 106, 0.2);
+    }
+    .glow-subtle {
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.65);
+    }
+  </style>
+</head>
+<body class="bg-brand-dark text-slate-200 font-sans antialiased overflow-hidden select-none w-screen h-screen">
+<!-- BEGIN: MainContainer -->
+<div class="relative w-full h-full flex flex-col justify-between overflow-hidden">
+<!-- BEGIN: VideoPlayerBackground -->
+<!-- Background Frame representing paused media with cinematic blur -->
+<div class="absolute inset-0 z-0 overflow-hidden" data-purpose="video-background-layer">
+<img alt="The Last Horizon Film Scene" class="w-full h-full object-cover scale-105 filter blur-md brightness-[0.38] contrast-125 transition-transform duration-700" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<!-- Ambient dark radial and gradient vignettes -->
+<div class="absolute inset-0 bg-gradient-to-t from-brand-dark via-brand-dark/70 to-transparent"></div>
+<div class="absolute inset-0 bg-radial-gradient from-transparent via-brand-dark/40 to-brand-dark"></div>
+</div>
+<!-- END: VideoPlayerBackground -->
+<!-- BEGIN: MinimalPlayerHeader -->
+<!-- Translucent top player bar providing context & back actions -->
+<header class="relative z-10 w-full px-8 py-5 flex items-center justify-between" data-purpose="player-top-navigation">
+<div class="flex items-center space-x-4">
+<!-- Back Button -->
+<button aria-label="Return to playback" class="w-10 h-10 rounded-full bg-brand-surface/80 hover:bg-brand-card border border-brand-border flex items-center justify-center text-slate-200 hover:text-white transition">
+<svg class="w-5 h-5" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15 19l-7-7 7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</button>
+<!-- Show Title & Meta -->
+<div>
+<div class="flex items-center space-x-2.5">
+<span class="text-white font-bold tracking-tight text-lg">The Last Horizon</span>
+<span class="bg-brand-primary text-brand-dark text-[11px] font-extrabold px-1.5 py-0.5 rounded tracking-wide">PLUS</span>
+<span class="text-slate-400 text-sm">·</span>
+<span class="text-slate-300 text-sm font-medium">S1 : E3 • The Neural Breach</span>
+</div>
+<div class="flex items-center space-x-2 mt-0.5 text-xs text-slate-400">
+<span class="inline-flex items-center">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-primary mr-1.5"></span>
+              4K ULTRA HD
+            </span>
+<span>•</span>
+<span>HDR10</span>
+<span>•</span>
+<span>DOLBY ATMOS 5.1</span>
+<span>•</span>
+<span class="tracking-wider uppercase text-[10px] text-slate-500">GENIUZLAB MASTER 2.39:1</span>
+</div>
+</div>
+</div>
+<!-- Top Right Status Indicators -->
+<div class="flex items-center space-x-3 text-xs">
+<div class="px-3.5 py-1.5 rounded-full bg-brand-surface/80 border border-brand-border text-slate-300 flex items-center space-x-2">
+<svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium">Living Room TV</span>
+</div>
+<div class="px-3.5 py-1.5 rounded-full bg-brand-primary/10 border border-brand-primary/40 text-brand-primary flex items-center space-x-2">
+<span class="w-2 h-2 rounded-full bg-brand-primary animate-pulse"></span>
+<span class="font-medium">Direct Stream 4K Max</span>
+</div>
+</div>
+</header>
+<!-- END: MinimalPlayerHeader -->
+<!-- BEGIN: BottomSheetDrawer -->
+<!-- Sliding Bottom Sheet Occupying approx 68% height with Frosted Acrylic Glass -->
+<section class="relative z-20 w-full max-h-[72vh] flex flex-col bg-brand-surface/95 backdrop-blur-2xl border-t border-brand-border rounded-t-3xl shadow-2xl glow-subtle transition-all duration-300" data-purpose="episode-chapter-drawer">
+<!-- Drag Handle Bar -->
+<div class="w-full flex justify-center pt-3 pb-1 cursor-grab" data-purpose="drag-affordance">
+<div class="w-12 h-1.5 rounded-full bg-slate-600/70 hover:bg-slate-500 transition"></div>
+</div>
+<!-- BEGIN: DrawerHeader -->
+<div class="px-8 pt-2 pb-4 flex flex-wrap items-center justify-between border-b border-brand-border/60 gap-4" data-purpose="drawer-toolbar">
+<!-- Left: Titles and Season Picker -->
+<div class="flex items-center space-x-6">
+<div>
+<h2 class="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+              Episodes &amp; Chapters
+            </h2>
+<p class="text-xs text-slate-400 mt-0.5">The Last Horizon · Season 1 <span class="text-slate-500">(8 Episodes Available)</span></p>
+</div>
+<!-- Season Dropdown Pill -->
+<div class="relative">
+<button class="flex items-center space-x-2 bg-brand-card hover:bg-brand-cardHover border border-brand-border px-3.5 py-1.5 rounded-full text-xs font-semibold text-white transition">
+<span>Season 1</span>
+<svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M19 9l-7 7-7-7" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+<!-- Filter Navigation Tabs -->
+<nav class="hidden md:flex items-center space-x-1.5 bg-brand-dark/70 p-1 rounded-full border border-brand-border/80 text-xs">
+<button class="px-3.5 py-1 rounded-full bg-brand-card text-brand-primary font-semibold shadow-sm">Episodes</button>
+<button class="px-3.5 py-1 rounded-full text-slate-400 hover:text-white transition">Bonus Content</button>
+<button class="px-3.5 py-1 rounded-full text-slate-400 hover:text-white transition">Recaps</button>
+</nav>
+</div>
+<!-- Right: Autoplay Toggle & Close Button -->
+<div class="flex items-center space-x-5">
+<!-- Autoplay Switch -->
+<label class="flex items-center space-x-2.5 cursor-pointer">
+<span class="text-xs text-slate-300 font-medium">Autoplay Next</span>
+<div class="relative inline-flex items-center">
+<input checked="" class="sr-only peer" type="checkbox"/>
+<div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-brand-dark after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-primary"></div>
+</div>
+</label>
+<div class="h-4 w-[1px] bg-brand-border"></div>
+<!-- Close Drawer Button -->
+<button aria-label="Dismiss sheet" class="w-8 h-8 rounded-full bg-brand-card hover:bg-brand-border border border-brand-border flex items-center justify-center text-slate-400 hover:text-white transition">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M6 18L18 6M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- END: DrawerHeader -->
+<!-- BEGIN: ContentBody -->
+<div class="flex-1 overflow-y-auto px-8 py-4 space-y-5 custom-scrollbar">
+<!-- BEGIN: HorizontalEpisodesCarousel -->
+<div class="relative">
+<div class="flex items-center justify-between mb-2.5">
+<span class="text-xs font-semibold uppercase tracking-wider text-slate-400">All Episodes</span>
+<span class="text-xs text-slate-500">Showing 1-6 of 8</span>
+</div>
+<!-- Horizontal Carousel Track -->
+<div class="flex space-x-4 overflow-x-auto pb-3 custom-scrollbar" data-purpose="episode-cards-carousel">
+<!-- EPISODE 1: Completed -->
+<div class="flex-shrink-0 w-80 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded-xl overflow-hidden transition group cursor-pointer flex flex-col justify-between">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-900">
+<img alt="Episode 1 Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-75" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<div class="absolute inset-0 bg-gradient-to-t from-brand-card via-transparent to-transparent"></div>
+<!-- Completed Badge -->
+<div class="absolute top-2.5 left-2.5 bg-brand-dark/85 backdrop-blur-md border border-brand-border px-2 py-0.5 rounded text-[11px] font-medium text-brand-primary flex items-center gap-1">
+<svg class="w-3 h-3" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+</svg>
+                    Completed
+                  </div>
+<span class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-300">54m</span>
+<!-- Finished Progress Bar -->
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-brand-primary"></div>
+</div>
+<div class="p-3.5">
+<h3 class="text-sm font-semibold text-white group-hover:text-brand-primary transition">1. Neon Dawn</h3>
+<p class="text-xs text-slate-400 line-clamp-2 mt-1">A routine data run encounters unexpected turbulence across New Eko high-altitude conduits.</p>
+</div>
+</div>
+<div class="px-3.5 pb-3 pt-0 flex items-center justify-between text-[11px] text-slate-500">
+<span>Original Release: May 12</span>
+<span class="text-slate-400 hover:text-white">Rewatch</span>
+</div>
+</div>
+<!-- EPISODE 2: Completed -->
+<div class="flex-shrink-0 w-80 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded-xl overflow-hidden transition group cursor-pointer flex flex-col justify-between">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-900">
+<img alt="Episode 2 Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-80" src="https://lh3.googleusercontent.com/aida/AEtjO1WissQyowKRXAjY3gWX5Gceyl8C9spUk4zy1chEnUC4OMmFgmQ90e8_GZvefOVZOn7WC30XBuFJmxfXsfBY5Px7MB8ehiixPRNuzRzngCel5eSg6DKPnQd_i2sWLY3_xC6Qb26N83r8wEi7LDBvIJd6x5cOKITZd0bNr6hRfdxqBq7eeXXOP2cXAOs1bpt-jLSSO51y4_g5p_V8-65MgsUA23a6r3GJ1fY0x5uswggq0ZaC2oImjc13iQL2"/>
+<div class="absolute inset-0 bg-gradient-to-t from-brand-card via-transparent to-transparent"></div>
+<!-- Completed Badge -->
+<div class="absolute top-2.5 left-2.5 bg-brand-dark/85 backdrop-blur-md border border-brand-border px-2 py-0.5 rounded text-[11px] font-medium text-brand-primary flex items-center gap-1">
+<svg class="w-3 h-3" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" stroke-width="3"></path>
+</svg>
+                    Completed
+                  </div>
+<span class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-300">48m</span>
+<!-- Finished Progress Bar -->
+<div class="absolute bottom-0 left-0 right-0 h-1 bg-brand-primary"></div>
+</div>
+<div class="p-3.5">
+<h3 class="text-sm font-semibold text-white group-hover:text-brand-primary transition">2. Bridge of Shadows</h3>
+<p class="text-xs text-slate-400 line-clamp-2 mt-1">Tactical units clash on the Third Mainland Skybridge in a storm of EMP countermeasures.</p>
+</div>
+</div>
+<div class="px-3.5 pb-3 pt-0 flex items-center justify-between text-[11px] text-slate-500">
+<span>Original Release: May 19</span>
+<span class="text-slate-400 hover:text-white">Rewatch</span>
+</div>
+</div>
+<!-- EPISODE 3: CURRENT ACTIVE -->
+<div class="flex-shrink-0 w-80 bg-brand-card border-2 border-brand-primary rounded-xl overflow-hidden shadow-lg glow-green relative group cursor-pointer flex flex-col justify-between" data-purpose="current-playing-episode">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-900">
+<img alt="Episode 3 Current" class="w-full h-full object-cover" src="https://lh3.googleusercontent.com/aida/AEtjO1VSmws_t9_UY_tHmHc0kZRtiWbEQNVtAxeJufyZpt5U1oxtOhnACmT_Wn90RALIvrwsYiHRSfEyMUD2d6efLWobDyWOMjoYIutcrD3blZ-Y4H4vMizdpC0y07lTrj1qBkHlNDV4LIIjBx2jYYvtAEySpFk9Ar9fYBnDDnjiFFHirud--RyvtXMMLQ5FCn8Cy9wXbPNpH_iuqug8InE7Rdt5ObSglymo2w6bhLRigoqhAqKjQtzgS4nPec2H"/>
+<div class="absolute inset-0 bg-black/30"></div>
+<!-- Play Overlay Icon -->
+<div class="absolute inset-0 flex items-center justify-center">
+<div class="w-10 h-10 rounded-full bg-brand-primary text-brand-dark flex items-center justify-center shadow-lg group-hover:scale-110 transition">
+<svg class="w-5 h-5 fill-current ml-0.5" viewbox="0 0 24 24">
+<path d="M8 5v14l11-7z"></path>
+</svg>
+</div>
+</div>
+<!-- Now Playing Badge -->
+<div class="absolute top-2.5 left-2.5 bg-brand-primary text-brand-dark font-extrabold px-2 py-0.5 rounded text-[10px] tracking-wide flex items-center gap-1 shadow">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-dark animate-ping"></span>
+                    NOW PLAYING
+                  </div>
+<span class="absolute bottom-2 right-2 bg-black/85 px-1.5 py-0.5 rounded text-[10px] font-mono text-brand-primary font-bold">24:18 / 58:40</span>
+<!-- In-Progress Bar (42%) -->
+<div class="absolute bottom-0 left-0 right-0 h-1.5 bg-brand-border">
+<div class="h-full bg-brand-primary relative" style="width: 42%;">
+<span class="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow"></span>
+</div>
+</div>
+</div>
+<div class="p-3.5">
+<div class="flex items-center justify-between">
+<h3 class="text-sm font-bold text-brand-primary">3. The Neural Breach</h3>
+<span class="text-[11px] font-mono text-brand-primary font-semibold">58m</span>
+</div>
+<p class="text-xs text-slate-300 line-clamp-2 mt-1">Kemi infiltrates the Azania energy core and discovers an AI ghost lingering in the power grid.</p>
+</div>
+</div>
+<!-- Active Chapter Callout -->
+<div class="mx-3 mb-3 p-2 rounded-lg bg-brand-surface/90 border border-brand-primary/30 flex items-center justify-between text-xs">
+<div class="flex items-center space-x-1.5 truncate">
+<span class="w-2 h-2 rounded-full bg-brand-primary"></span>
+<span class="text-white text-[11px] font-medium truncate">Ch 3: Network Bypass</span>
+</div>
+<span class="text-[10px] font-mono text-brand-primary">Active</span>
+</div>
+</div>
+<!-- EPISODE 4: UP NEXT -->
+<div class="flex-shrink-0 w-80 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded-xl overflow-hidden transition group cursor-pointer flex flex-col justify-between">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-900">
+<img alt="Episode 4 Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition duration-500" src="https://lh3.googleusercontent.com/aida/AEtjO1VNCYcJnhSFGj-USDwKqEAs93yqiI_9NtvtI-mrPyLx-rCzkOFnXXa0v8eXuRG3ycPdNqEgBGrxFMTeG0fg9444j1wpx_zZPX8iQqoqj5dLfrqGk1-XG60Lt0SaCJlHlzu11C8JWld4j3ViefmBtk24oDeEsI1PsLi63DWnBIN2gE9rASaj7yl5Jg73HHd2qukAZjcHDshwOsMw6teGYMx6glj45zKH0l5nDS-gnnWGKprJczfr54KX2DTK"/>
+<div class="absolute inset-0 bg-gradient-to-t from-brand-card via-transparent to-transparent"></div>
+<!-- Up Next Tag -->
+<div class="absolute top-2.5 left-2.5 bg-blue-600/90 backdrop-blur-md px-2 py-0.5 rounded text-[10px] font-bold text-white tracking-wide">
+                    UP NEXT
+                  </div>
+<span class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-300">51m</span>
+</div>
+<div class="p-3.5">
+<h3 class="text-sm font-semibold text-white group-hover:text-brand-primary transition">4. Electric Rain</h3>
+<p class="text-xs text-slate-400 line-clamp-2 mt-1">A power surge sweeps the coastal towers, severing satellite relays and unmasking undercover scouts.</p>
+</div>
+</div>
+<div class="px-3.5 pb-3 pt-0 flex items-center justify-between text-xs">
+<span class="text-[11px] text-slate-400">Available in 4K HDR</span>
+<button class="text-slate-400 hover:text-brand-primary transition p-1" title="Download Episode">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- EPISODE 5 -->
+<div class="flex-shrink-0 w-80 bg-brand-card hover:bg-brand-cardHover border border-brand-border rounded-xl overflow-hidden transition group cursor-pointer flex flex-col justify-between">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-900">
+<img alt="Episode 5 Thumbnail" class="w-full h-full object-cover group-hover:scale-105 transition duration-500 opacity-60" src="https://lh3.googleusercontent.com/aida/AEtjO1WissQyowKRXAjY3gWX5Gceyl8C9spUk4zy1chEnUC4OMmFgmQ90e8_GZvefOVZOn7WC30XBuFJmxfXsfBY5Px7MB8ehiixPRNuzRzngCel5eSg6DKPnQd_i2sWLY3_xC6Qb26N83r8wEi7LDBvIJd6x5cOKITZd0bNr6hRfdxqBq7eeXXOP2cXAOs1bpt-jLSSO51y4_g5p_V8-65MgsUA23a6r3GJ1fY0x5uswggq0ZaC2oImjc13iQL2"/>
+<div class="absolute inset-0 bg-gradient-to-t from-brand-card via-transparent to-transparent"></div>
+<span class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-300">56m</span>
+</div>
+<div class="p-3.5">
+<h3 class="text-sm font-semibold text-white group-hover:text-brand-primary transition">5. Echoes of the Past</h3>
+<p class="text-xs text-slate-400 line-clamp-2 mt-1">Decrypted archive footage yields coordinates to an obsolete military orbital bunker.</p>
+</div>
+</div>
+<div class="px-3.5 pb-3 pt-0 flex items-center justify-between text-xs">
+<span class="text-[11px] text-slate-500">Unwatched</span>
+<button class="text-slate-400 hover:text-brand-primary transition p-1" title="Download Episode">
+<svg class="w-4 h-4" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+</button>
+</div>
+</div>
+<!-- EPISODE 6: VIP Locked -->
+<div class="flex-shrink-0 w-80 bg-brand-card/60 border border-brand-border rounded-xl overflow-hidden transition relative flex flex-col justify-between opacity-80">
+<div>
+<div class="relative aspect-video w-full overflow-hidden bg-slate-950 flex items-center justify-center">
+<img alt="Episode 6 Locked" class="w-full h-full object-cover filter blur-sm grayscale opacity-30" src="https://lh3.googleusercontent.com/aida/AEtjO1VNCYcJnhSFGj-USDwKqEAs93yqiI_9NtvtI-mrPyLx-rCzkOFnXXa0v8eXuRG3ycPdNqEgBGrxFMTeG0fg9444j1wpx_zZPX8iQqoqj5dLfrqGk1-XG60Lt0SaCJlHlzu11C8JWld4j3ViefmBtk24oDeEsI1PsLi63DWnBIN2gE9rASaj7yl5Jg73HHd2qukAZjcHDshwOsMw6teGYMx6glj45zKH0l5nDS-gnnWGKprJczfr54KX2DTK"/>
+<div class="absolute inset-0 bg-black/60"></div>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<svg class="w-6 h-6 text-amber-400 mb-1" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="text-[11px] font-bold text-amber-400 uppercase tracking-widest">VIP Pass</span>
+</div>
+<span class="absolute bottom-2 right-2 bg-black/80 px-1.5 py-0.5 rounded text-[10px] font-mono text-slate-400">52m</span>
+</div>
+<div class="p-3.5">
+<h3 class="text-sm font-semibold text-slate-300">6. Skyfall Protocol</h3>
+<p class="text-xs text-slate-500 line-clamp-2 mt-1">Air defense systems lock down the central megastructure as the syndicate makes their bid.</p>
+</div>
+</div>
+<div class="px-3.5 pb-3 pt-0 flex items-center justify-between text-xs">
+<span class="text-[11px] text-amber-500/80 font-medium">Releases Friday 00:00</span>
+<span class="text-xs text-slate-500">Early Access</span>
+</div>
+</div>
+</div>
+</div>
+<!-- END: HorizontalEpisodesCarousel -->
+<!-- BEGIN: ChapterScrubberNavigationStrip -->
+<!-- Interactive Chapters strip for Episode 3 -->
+<div class="pt-1 pb-2 border-t border-brand-border/70" data-purpose="episode-chapters-section">
+<div class="flex items-center justify-between mb-2.5">
+<div class="flex items-center space-x-2">
+<span class="text-xs font-bold uppercase tracking-wider text-slate-300">Episode 3 Chapters</span>
+<span class="text-[11px] text-brand-primary font-mono bg-brand-primary/10 border border-brand-primary/20 px-2 py-0.5 rounded-full">5 Chapters</span>
+</div>
+<span class="text-[11px] text-slate-400 hover:text-brand-primary cursor-pointer transition">View Key Scene Timestamps</span>
+</div>
+<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2.5">
+<!-- Ch 1 -->
+<button class="flex flex-col text-left p-2.5 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border transition group">
+<div class="flex items-center justify-between w-full text-[11px] text-slate-400 mb-1">
+<span class="font-mono">Ch 1</span>
+<span class="text-slate-500 font-mono text-[10px]">00:00</span>
+</div>
+<span class="text-xs font-semibold text-slate-200 group-hover:text-white truncate">Azania Infiltration</span>
+<span class="text-[10px] text-slate-500 truncate mt-0.5">Tactical breach at sewer line</span>
+</button>
+<!-- Ch 2 -->
+<button class="flex flex-col text-left p-2.5 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border transition group">
+<div class="flex items-center justify-between w-full text-[11px] text-slate-400 mb-1">
+<span class="font-mono">Ch 2</span>
+<span class="text-slate-500 font-mono text-[10px]">14:20</span>
+</div>
+<span class="text-xs font-semibold text-slate-200 group-hover:text-white truncate">Skybridge Clash</span>
+<span class="text-[10px] text-slate-500 truncate mt-0.5">Heavy armor firefight</span>
+</button>
+<!-- Ch 3 - ACTIVE -->
+<button class="flex flex-col text-left p-2.5 rounded-lg bg-brand-primary/10 border-2 border-brand-primary shadow-sm transition relative overflow-hidden group">
+<div class="flex items-center justify-between w-full text-[11px] text-brand-primary mb-1 font-semibold">
+<span class="font-mono flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-brand-primary"></span>
+                  Ch 3
+                </span>
+<span class="font-mono text-[10px]">24:18</span>
+</div>
+<span class="text-xs font-bold text-white truncate">Network Bypass</span>
+<span class="text-[10px] text-brand-primary truncate mt-0.5 font-medium">Currently Playing</span>
+</button>
+<!-- Ch 4 -->
+<button class="flex flex-col text-left p-2.5 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border transition group">
+<div class="flex items-center justify-between w-full text-[11px] text-slate-400 mb-1">
+<span class="font-mono">Ch 4</span>
+<span class="text-slate-500 font-mono text-[10px]">39:45</span>
+</div>
+<span class="text-xs font-semibold text-slate-200 group-hover:text-white truncate">Core Incursion</span>
+<span class="text-[10px] text-slate-500 truncate mt-0.5">Sub-level terminal lockdown</span>
+</button>
+<!-- Ch 5 -->
+<button class="flex flex-col text-left p-2.5 rounded-lg bg-brand-card hover:bg-brand-cardHover border border-brand-border transition group">
+<div class="flex items-center justify-between w-full text-[11px] text-slate-400 mb-1">
+<span class="font-mono">Ch 5</span>
+<span class="text-slate-500 font-mono text-[10px]">52:10</span>
+</div>
+<span class="text-xs font-semibold text-slate-200 group-hover:text-white truncate">Protocol Zero</span>
+<span class="text-[10px] text-slate-500 truncate mt-0.5">Escape sequence &amp; cliffhanger</span>
+</button>
+</div>
+</div>
+<!-- END: ChapterScrubberNavigationStrip -->
+</div>
+<!-- END: ContentBody -->
+<!-- BEGIN: DrawerFooter -->
+<!-- Quick Action bar and audio subtitle specifiers -->
+<footer class="px-8 py-3.5 bg-brand-dark/95 border-t border-brand-border flex flex-wrap items-center justify-between gap-4" data-purpose="sheet-action-footer">
+<!-- Left: Audio & Subtitle Language Badge Summary -->
+<div class="flex items-center space-x-4 text-xs">
+<!-- Audio indicator -->
+<div class="flex items-center space-x-2 text-slate-300">
+<svg class="w-4 h-4 text-brand-primary" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium">Audio:</span>
+<span class="text-slate-200 bg-brand-card border border-brand-border px-2 py-0.5 rounded text-[11px]">English Atmos 5.1</span>
+<span class="text-slate-400 text-[11px]">/ Nigerian Pidgin VIP</span>
+</div>
+<div class="h-3.5 w-[1px] bg-brand-border"></div>
+<!-- Subtitle indicator -->
+<div class="flex items-center space-x-2 text-slate-300">
+<svg class="w-4 h-4 text-brand-primary" fill="none" stroke="currentColor" viewbox="0 0 24 24">
+<path d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"></path>
+</svg>
+<span class="font-medium">Subtitles:</span>
+<span class="text-slate-200 bg-brand-card border border-brand-border px-2 py-0.5 rounded text-[11px]">English [CC] (Medium · Yellow Glow)</span>
+</div>
+</div>
+<!-- Right: Primary Resume Button -->
+<div class="flex items-center space-x-3">
+<button class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-300 hover:text-white bg-brand-card border border-brand-border hover:bg-brand-cardHover transition">
+            Start from Beginning
+          </button>
+<button class="flex items-center space-x-2 px-6 py-2.5 rounded-xl text-xs font-bold text-brand-dark bg-brand-primary hover:bg-[#86f57f] shadow-lg shadow-brand-primary/25 transition active:scale-95">
+<svg class="w-4 h-4 fill-current" viewbox="0 0 24 24">
+<path d="M8 5v14l11-7z"></path>
+</svg>
+<span>Resume S1:E3 at 24:18</span>
+</button>
+</div>
+</footer>
+<!-- END: DrawerFooter -->
+</section>
+<!-- END: BottomSheetDrawer -->
+</div>
+<!-- END: MainContainer -->
+</body></html>

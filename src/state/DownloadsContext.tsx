@@ -39,7 +39,9 @@ const service = new OfflineDownloadService(
     if (!supabaseMovieRepository || !item.mediaPath) {
       throw new Error('Connect to the internet to prepare this download.');
     }
-    return supabaseMovieRepository.getPlaybackUrl(item);
+    return item.id.startsWith('geniuz:episode:')
+      ? supabaseMovieRepository.getEpisodePlaybackUrl(item)
+      : supabaseMovieRepository.getPlaybackUrl(item);
   },
 );
 
@@ -48,6 +50,7 @@ type DownloadsContextValue = {
   isLoading: boolean;
   error?: string;
   download: (item: ContentItem) => Promise<void>;
+  downloadSequentially: (items: readonly ContentItem[]) => Promise<void>;
   cancel: (itemId: string) => Promise<void>;
   remove: (itemId: string) => Promise<void>;
   dismissError: () => void;
@@ -104,6 +107,21 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
     }
   }, []);
 
+  const downloadSequentially = useCallback(async (items: readonly ContentItem[]) => {
+    setError(undefined);
+    try {
+      await service.downloadSequentially(items);
+    } catch (queueError) {
+      console.error('[Downloads] Could not complete the queued downloads.');
+      setError(
+        queueError instanceof Error
+          ? queueError.message
+          : 'One or more queued downloads failed. Please retry.',
+      );
+      throw queueError;
+    }
+  }, []);
+
   const remove = useCallback(async (itemId: string) => {
     setError(undefined);
     try {
@@ -119,7 +137,7 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
 
   return (
     <DownloadsContext.Provider
-      value={{ records, isLoading, error, download, cancel, remove, dismissError }}
+      value={{ records, isLoading, error, download, downloadSequentially, cancel, remove, dismissError }}
     >
       {children}
     </DownloadsContext.Provider>

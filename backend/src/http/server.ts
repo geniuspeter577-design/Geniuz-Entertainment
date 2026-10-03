@@ -8,7 +8,7 @@ import {
   validateUploadInput,
 } from '../storage/uploadValidation';
 import { ContentNotFoundError, ContentService } from '../services/ContentService';
-import { authenticateAdmin } from './auth';
+import { authenticateAdmin, authenticatePlayback, requirePublishedOrAdmin } from './auth';
 import { HttpError, mapProviderError } from './errors';
 
 const MAX_PAGE = 500;
@@ -159,7 +159,11 @@ async function handleRequest(
         throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
       }
       const input = validateUploadInput(await readJson(request));
-      writeJson(response, 201, await storage.startMultipartUpload(input.fileName, input.contentType));
+      writeJson(
+        response,
+        201,
+        await storage.startMultipartUpload(input.fileName, input.contentType, input.objectType),
+      );
       return;
     }
 
@@ -210,7 +214,7 @@ async function handleRequest(
     if (request.method !== 'GET') {
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
     }
-    const { client } = await authenticateAdmin(config, request.headers.authorization);
+    const { client, isAdmin } = await authenticatePlayback(config, request.headers.authorization);
     let movieId: string;
     try {
       movieId = decodeURIComponent(playUrlMatch[1]);
@@ -223,17 +227,62 @@ async function handleRequest(
 
     const { data, error } = await client
       .from('movies')
-      .select('storage_provider,storage_key')
+      .select('storage_provider,storage_key,published')
       .eq('id', movieId)
       .maybeSingle();
     if (error) {
       throw new HttpError(502, 'MOVIE_LOOKUP_FAILED', 'Could not load this movie.');
     }
     if (!data) {
-      throw new HttpError(404, 'MOVIE_NOT_FOUND', 'The requested movie was not found.');
+      throw new HttpError(
+        isAdmin ? 404 : 403,
+        isAdmin ? 'MOVIE_NOT_FOUND' : 'ADMIN_REQUIRED',
+        isAdmin ? 'The requested movie was not found.' : 'Admin access is required.',
+      );
     }
+    requirePublishedOrAdmin(data.published === true, isAdmin);
     if (data.storage_provider !== 'b2' || typeof data.storage_key !== 'string') {
       throw new HttpError(409, 'NOT_B2_STORAGE', 'This movie is not stored in Backblaze.');
+    }
+    const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
+    writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
+    return;
+  }
+
+  const episodePlayUrlMatch = /^\/episodes\/([^/]+)\/play-url$/.exec(pathname);
+  if (episodePlayUrlMatch) {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, isAdmin } = await authenticatePlayback(config, request.headers.authorization);
+    let episodeId: string;
+    try {
+      episodeId = decodeURIComponent(episodePlayUrlMatch[1]);
+    } catch {
+      throw new HttpError(400, 'INVALID_EPISODE_ID', 'The episode ID is invalid.');
+    }
+    if (!isMovieId(episodeId)) {
+      throw new HttpError(400, 'INVALID_EPISODE_ID', 'The episode ID is invalid.');
+    }
+
+    const { data, error } = await client
+      .from('episodes')
+      .select('storage_provider,storage_key,published')
+      .eq('id', episodeId)
+      .maybeSingle();
+    if (error) {
+      throw new HttpError(502, 'EPISODE_LOOKUP_FAILED', 'Could not load this episode.');
+    }
+    if (!data) {
+      throw new HttpError(
+        isAdmin ? 404 : 403,
+        isAdmin ? 'EPISODE_NOT_FOUND' : 'ADMIN_REQUIRED',
+        isAdmin ? 'The requested episode was not found.' : 'Admin access is required.',
+      );
+    }
+    requirePublishedOrAdmin(data.published === true, isAdmin);
+    if (data.storage_provider !== 'b2' || typeof data.storage_key !== 'string') {
+      throw new HttpError(409, 'NOT_B2_STORAGE', 'This episode is not stored in Backblaze.');
     }
     const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });

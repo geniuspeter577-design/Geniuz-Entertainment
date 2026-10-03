@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+
+<html class="dark" lang="en"><head><meta charset="utf-8"/><meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/><meta content="mobile_tab" name="shell-type"/><link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet"/><link href="https://fonts.googleapis.com" rel="preconnect"/><link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/><link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;600;700&amp;family=Sora:wght@600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/><script src="https://cdn.tailwindcss.com"></script><script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { colors: { "surface-tint": "#62e05c", "tertiary-fixed-dim": "#eebca0", "inverse-primary": "#006e11", "outline": "#879582", "on-primary-fixed-variant": "#00530a", "surface-variant": "#333539", "surface-bright": "#37393e", "tertiary-container": "#ffcbaf", "surface-container": "#1e2024", "secondary-fixed-dim": "#e9c349", "surface-container-low": "#1a1c20", "on-error-container": "#ffdad6", "on-surface-variant": "#bdcbb6", "on-tertiary-container": "#7a543e", "on-secondary-fixed": "#241a00", "surface-container-high": "#282a2e", "primary-container": "#72f06a", "secondary-fixed": "#ffe088", "tertiary-fixed": "#ffdbc9", "on-secondary": "#3c2f00", "error-container": "#93000a", "on-error": "#690005", "primary-fixed-dim": "#62e05c", "on-secondary-fixed-variant": "#574500", "primary": "#cfffc3", "secondary-container": "#af8d11", "surface-container-highest": "#333539", "on-tertiary-fixed": "#2f1404", "error": "#ffb4ab", "secondary": "#e9c349", "tertiary": "#ffefe8", "on-primary-container": "#006c11", "on-primary": "#003a05", "on-primary-fixed": "#002202", "on-background": "#e2e2e8", "surface-dim": "#111317", "on-surface": "#e2e2e8", "outline-variant": "#3e4a3a", "inverse-on-surface": "#2f3035", "primary-fixed": "#7ffd75", "inverse-surface": "#e2e2e8", "surface": "#111317", "on-secondary-container": "#342800", "background": "#111317", "on-tertiary": "#482916", "surface-container-lowest": "#0c0e12", "on-tertiary-fixed-variant": "#623e2a" }, borderRadius: { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, spacing: { "space-sm": "0.5rem", "space-xs": "0.25rem", "space-xl": "2.25rem", "gutter": "0.75rem", "margin": "1rem", "space-lg": "1.5rem", "space-md": "1rem" }, fontFamily: { "body-md": ["Hanken Grotesk"], "label-lg": ["Hanken Grotesk"], "display-hero": ["Sora"], "headline-sm": ["Sora"], "display-hero-mobile": ["Sora"], "headline-md": ["Sora"], "body-sm": ["Hanken Grotesk"], "headline-lg": ["Sora"], "label-md": ["Hanken Grotesk"], "body-lg": ["Hanken Grotesk"], "headline-lg-mobile": ["Sora"], "label-sm": ["Hanken Grotesk"] }, fontSize: { "body-md": ["14px", { "lineHeight": "20px", "fontWeight": "400" }], "label-lg": ["14px", { "lineHeight": "18px", "fontWeight": "700" }], "display-hero": ["40px", { "lineHeight": "46px", "fontWeight": "800" }], "headline-sm": ["16px", { "lineHeight": "22px", "fontWeight": "600" }], "display-hero-mobile": ["28px", { "lineHeight": "34px", "fontWeight": "800" }], "headline-md": ["18px", { "lineHeight": "24px", "fontWeight": "600" }], "body-sm": ["12px", { "lineHeight": "16px", "fontWeight": "400" }], "headline-lg": ["32px", { "lineHeight": "38px", "fontWeight": "700" }], "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }], "body-lg": ["16px", { "lineHeight": "24px", "fontWeight": "400" }], "headline-lg-mobile": ["22px", { "lineHeight": "28px", "fontWeight": "700" }], "label-sm": ["10px", { "lineHeight": "12px", "fontWeight": "600" }] } } } }</script><style>@layer base{html,body{width:100%;margin:0;padding:0;background-color:#111317;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style></head><body class="bg-surface text-on-surface font-body-md text-body-md min-h-screen flex flex-col selection:bg-primary-container selection:text-on-primary-container"><header class="fixed top-0 inset-x-0 z-50 bg-surface/80 backdrop-blur-xl pt-safe"><div class="h-16 px-margin flex items-center justify-between"><div class="flex items-center gap-space-sm"><img alt="Geniuz+ Wordmark Logo" class="h-8 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1W-d1joWbY64ItwbAXEa5XJCagp0-hfGHseaPuglPPJvK4RCtLLHen86ZwpuDj3H3mndNp6cjRa5inHw0ce_O8yzQwbqIsvkWx_JyrL2Aj3nLiNHbMDRLbp7kkEbpI2ZEt_5tmABF5Tku9PizU8SSw0siTqcsznmYPiFnAaCbN_0uTjckXDkCC4cWCjgMcK1hMHmTg7YylOTPnFFIvK_fsWkUgjdiPB7rrIw3ZMKRfrzo7lRajIfXQsrlp9"/><span class="font-headline-sm text-headline-sm text-on-surface">Home</span></div><div class="flex items-center gap-space-sm"><button aria-label="Search" class="w-11 h-11 flex items-center justify-center text-on-surface hover:text-primary-container transition-colors"><span class="material-symbols-outlined">search</span></button><button aria-label="Cast" class="w-11 h-11 flex items-center justify-center text-on-surface hover:text-primary-container transition-colors"><span class="material-symbols-outlined">cast</span></button><a class="w-11 h-11 flex items-center justify-center relative" data-path="me" href="#"><img alt="Profile" class="w-8 h-8 rounded-full object-cover" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA3Etg3sK7vSe0JCQiGTW_pwhUDgy_1bUa4XHV0jRBkIsmWAM6viTpfmYyUp9PU5gIUPZdm0Fahl9IFLtZqX3Ytqux9K4PFqSCmJ2xCbz12HuuHAdylG6PvPvkAoXpgIBTaEnpwyLvjmW3FO-TlgPlDFbVizsqWJx5NKQyET_RktqNh2y_68WPEmZPwMkSd6yo5oocHE8JmfltZ5PYkFsXIo2FM8cQhabDFirA41XJxIXgdrGSBNGowIQ"/><span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-error ring-2 ring-surface"></span></a></div></div></header><main class="flex-1 flex flex-col relative w-full pt-16 pb-24 bg-surface"><div class="flex flex-col w-full pb-28">
+<!-- 1. TOP APP BAR -->
+<header class="sticky top-0 z-40 bg-surface-dim/90 backdrop-blur-md px-margin py-2.5 flex items-center gap-space-sm">
+<div class="flex items-center shrink-0">
+<img alt="Geniuz+ Wordmark Logo" class="h-6 w-auto object-contain" src="https://lh3.googleusercontent.com/aida/AEtjO1W-d1joWbY64ItwbAXEa5XJCagp0-hfGHseaPuglPPJvK4RCtLLHen86ZwpuDj3H3mndNp6cjRa5inHw0ce_O8yzQwbqIsvkWx_JyrL2Aj3nLiNHbMDRLbp7kkEbpI2ZEt_5tmABF5Tku9PizU8SSw0siTqcsznmYPiFnAaCbN_0uTjckXDkCC4cWCjgMcK1hMHmTg7YylOTPnFFIvK_fsWkUgjdiPB7rrIw3ZMKRfrzo7lRajIfXQsrlp9"/>
+</div>
+<div class="flex-1 flex items-center bg-surface-container rounded-full px-3 py-1.5 min-w-0">
+<span class="material-symbols-outlined text-[18px] text-on-surface-variant mr-2 shrink-0">search</span>
+<input class="bg-transparent border-0 outline-none w-full text-body-sm font-body-sm text-on-surface placeholder:text-on-surface-variant truncate cursor-pointer pointer-events-none" placeholder='Search "The Last Horizon"' readonly="" type="text" value="The Last Horizon"/>
+</div>
+<button class="shrink-0 bg-primary-container text-on-primary-container font-label-md text-label-md px-3.5 py-1.5 rounded-full transition-transform active:scale-95 shadow-[0_2px_10px_rgba(114,240,106,0.25)]" type="button">
+      Search
+    </button>
+</header>
+<!-- 2. CATEGORY NAVIGATION -->
+<nav class="w-full overflow-x-auto no-scrollbar pt-1 pb-2 px-margin flex items-center gap-space-lg shrink-0">
+<button class="relative pb-1.5 flex flex-col items-center shrink-0 text-on-surface font-label-lg text-label-lg whitespace-nowrap">
+<span>Trending</span>
+<span class="absolute bottom-0 w-5 h-0.5 bg-primary-container rounded-full"></span>
+</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Nollywood</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Movie</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">TV</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Anime</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Kids</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Education</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Music</button>
+<button class="pb-1.5 shrink-0 text-on-surface-variant font-body-md text-body-md whitespace-nowrap">Football</button>
+</nav>
+<!-- 3. HERO CAROUSEL -->
+<section class="relative w-full h-[52vh] min-h-[380px] max-h-[460px] overflow-hidden">
+<!-- Hero Image Placeholder -->
+<div class="w-full h-full bg-cover bg-center" data-alt="Cinematic wide shot of an epic sci-fi action film titled The Last Horizon, featuring a lone futuristic explorer in high-tech armored vest looking at a sprawling neon cybernetic metropolis under dramatic starry skies, illuminated by neon green and cyan reflections with deep dramatic shadows." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCu-e029PvCKs3rk2bZSNaShptbW43VIXdG9oitV2y53RXadVYLSk_P6-zIZtNARp-m58r6I6HcY3g6SM03Gj_liRUnFVr0XQZLW7y0kdkHPTHQeiKQKphR5UzIfPNvF3lc2p8pRIwDt66fmQSdY6FsGk9reMkmLkxlI5toPPyRISIrbhzbAWyaDuFJ4N9r3JGJfCDizHfKJ1C7GGn5WpD-r8oSgGv2dgPWGsN8QbbY5E9Rj3E7YNIS8g')">
+</div>
+<!-- Gradient Scrim Vignette -->
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-surface/40 to-transparent pointer-events-none"></div>
+<div class="absolute inset-0 bg-gradient-to-r from-surface/60 via-transparent to-transparent pointer-events-none"></div>
+<!-- Hero Content Overlay -->
+<div class="absolute inset-x-0 bottom-0 px-margin pb-4 flex flex-col justify-end">
+<!-- Badge -->
+<div class="flex items-center gap-space-xs mb-1.5">
+<span class="bg-primary-container/20 text-primary-container px-2 py-0.5 rounded-full font-label-sm text-label-sm tracking-widest uppercase">FEATURED</span>
+<span class="bg-surface-variant/80 backdrop-blur-sm text-on-surface-variant px-2 py-0.5 rounded-full font-label-sm text-label-sm">TOP #1 TODAY</span>
+</div>
+<!-- Hero Title -->
+<h1 class="font-display-hero-mobile text-display-hero-mobile text-on-surface leading-tight drop-shadow-md">
+        THE LAST HORIZON
+      </h1>
+<!-- Meta Info -->
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-1 mb-3.5">
+        2026 · Action · Movie · 4K Ultra HD
+      </p>
+<!-- Action Buttons & Dots -->
+<div class="flex items-center justify-between">
+<div class="flex items-center gap-space-sm">
+<button class="flex items-center gap-1.5 bg-primary-container text-on-primary-container font-label-lg text-label-lg px-5 py-2.5 rounded-full shadow-[0_4px_16px_rgba(114,240,106,0.3)] active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[20px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span>Watch Now</span>
+</button>
+<button class="w-10 h-10 rounded-full bg-surface-container/80 backdrop-blur-md text-on-surface flex items-center justify-center active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[22px]">add</span>
+</button>
+</div>
+<!-- Pagination Dots -->
+<div class="flex items-center gap-1.5">
+<span class="w-4 h-1.5 rounded-full bg-primary-container"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-surface-variant"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-surface-variant"></span>
+<span class="w-1.5 h-1.5 rounded-full bg-surface-variant"></span>
+</div>
+</div>
+</div>
+</section>
+<!-- 4. HERO INFORMATION STRIP (Quick access mini cards) -->
+<section class="w-full overflow-x-auto no-scrollbar pl-margin py-space-sm flex gap-gutter items-center">
+<!-- Card 1 -->
+<div class="flex items-center gap-space-sm bg-surface-container-low p-2 rounded-xl shrink-0 w-[200px]">
+<img class="w-12 h-16 rounded-lg object-cover shrink-0" data-alt="Movie poster for Lagos Syndicate showing intense crime drama detectives on night streets of Lagos lit by street lamps and car headlights in moody noir cinematic lighting style." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAOkjgDv22Z_5dsX0uLGXE3QGvJN70gCsUF__IRttisO8G0BIv6fU5kKq1nqiPsPmqpQnMY-Wn0TmIg9I9kJxW-EmIlDY8AHHfRpt_xPlqHuy6vuQChPAeBMNARE8TPCoIAlRExDyZO_0coPjInvXgZ0T5Uordbmf2LwhtGkcsgXakaRGRxH47t6Jnp-XCP0yj-cq6UodQH3oKKwO8jWDS9s_rTnO_Rai2SUhuGEPkfXK0TL3Z6PLUdjw"/>
+<div class="min-w-0 flex-1">
+<h4 class="font-headline-sm text-headline-sm text-on-surface truncate">Lagos Syndicate</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">2025 · Crime</p>
+</div>
+<button aria-label="Download Lagos Syndicate" class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+</button>
+</div>
+<!-- Card 2 -->
+<div class="flex items-center gap-space-sm bg-surface-container-low p-2 rounded-xl shrink-0 w-[200px]">
+<img class="w-12 h-16 rounded-lg object-cover shrink-0" data-alt="Concert stage film poster for Burna: Live with high voltage energetic stadium concert stage lights, atmospheric golden and smoke stage production effects." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDxprUodS0AuUS53fkdVPgqJ5A6P6z9IyKEqnjnKKzR7_vIH32NbsJ3lztQgiLGEm57HGYvjrzQYWC5F-ccwkc3Z8-7h05UzV5QacZzXegrAVTB-THIUjm3IfLFFD_CMAcIr5CEgU8uFNhnrU6YGqqi9Kkd8IDilb81tmZxaXWLG52ukduJB0GmLpCLqgDQAPEezzVCSZBOSzrKoQ4hyfuTiHfK2PUFFfANtyc_baJZ-TxW4W1vsFt4fw"/>
+<div class="min-w-0 flex-1">
+<h4 class="font-headline-sm text-headline-sm text-on-surface truncate">Burna: Live</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">2025 · Music</p>
+</div>
+<button aria-label="Download Burna Live" class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+</button>
+</div>
+<!-- Card 3 -->
+<div class="flex items-center gap-space-sm bg-surface-container-low p-2 rounded-xl shrink-0 w-[200px]">
+<img class="w-12 h-16 rounded-lg object-cover shrink-0" data-alt="Action thriller poster for Shadow Hunter featuring a masked vigilante warrior perched over a rainy misty cityscape at twilight with vivid glowing neon reflections." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDAz21g0xMJWX4h8I-eGUaA7ICWxjzMecp4RXPnHvWUqKdqYLuOvYlby5QymlPZDLytEo5ZIfobQwO_7AY3kFKgSbO0KBIXW6e6KRC-5dMW31iu63ZIacxG67yCKKJxYXZAX9qO0dQ_3vziu9dSLhH_aTMxANaMr8072uYnSz5slmZWtHt1zCvJGxAQsTbrn85yGBqKdym5lTKztycdeT63st_S7eykzRgSfUB57_GHh0OTS6A_YSS9UA"/>
+<div class="min-w-0 flex-1">
+<h4 class="font-headline-sm text-headline-sm text-on-surface truncate">Shadow Hunter</h4>
+<p class="font-body-sm text-body-sm text-on-surface-variant truncate">2026 · Sci-Fi</p>
+</div>
+<button aria-label="Download Shadow Hunter" class="w-8 h-8 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shrink-0 active:scale-90 transition-transform">
+<span class="material-symbols-outlined text-[18px]">arrow_downward</span>
+</button>
+</div>
+</section>
+<!-- 5. PREMIUM BANNER -->
+<section class="px-margin my-3">
+<div class="relative overflow-hidden rounded-2xl bg-gradient-to-r from-[#2C220E] via-[#3a2d12] to-[#423414] p-4 shadow-lg shadow-black/40">
+<div class="flex items-center justify-between gap-3 relative z-10">
+<div class="flex items-start gap-3 min-w-0">
+<div class="w-10 h-10 rounded-full bg-gradient-to-br from-secondary-fixed via-secondary to-secondary-container flex items-center justify-center shrink-0 shadow-[0_2px_12px_rgba(212,175,55,0.4)]">
+<span class="material-symbols-outlined text-on-secondary-container text-[22px]" style="font-variation-settings: 'FILL' 1;">workspace_premium</span>
+</div>
+<div class="min-w-0">
+<div class="flex items-center gap-1.5">
+<span class="font-headline-sm text-headline-sm text-secondary-fixed">Unlock Premium</span>
+<span class="px-1.5 py-0.2 bg-secondary-fixed/20 text-secondary-fixed text-[10px] font-bold rounded uppercase">VIP</span>
+</div>
+<p class="font-body-sm text-body-sm text-secondary-fixed-dim/90 truncate mt-0.5">
+              No ads · 4K UHD · VIP Nollywood &amp; Global Exclusives
+            </p>
+</div>
+</div>
+<button class="shrink-0 bg-gradient-to-r from-secondary-fixed via-secondary to-secondary-fixed-dim text-on-secondary-fixed font-label-lg text-label-lg px-4 py-2 rounded-full shadow-md active:scale-95 transition-transform">
+          Unlock
+        </button>
+</div>
+</div>
+</section>
+<!-- 6. FOOTBALL LIVE -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-space-sm">
+<div class="flex items-center gap-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">Football Live</h2>
+<span class="relative flex h-2 w-2">
+<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-error opacity-75"></span>
+<span class="relative inline-flex rounded-full h-2 w-2 bg-error"></span>
+</span>
+</div>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-gutter">
+<!-- Match Card 1 -->
+<div class="bg-surface-container rounded-xl p-3 w-[260px] shrink-0 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Premier League ⚽</span>
+<span class="bg-surface-container-high text-primary-container px-2 py-0.5 rounded text-[11px] font-semibold">Today 19:45</span>
+</div>
+<div class="flex items-center justify-around py-2">
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">ARS</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Arsenal</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface-variant">VS</span>
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">CHE</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Chelsea</span>
+</div>
+</div>
+</div>
+<button class="mt-3 w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-2 rounded-full flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]">notifications</span>
+<span>Notify</span>
+</button>
+</div>
+<!-- Match Card 2 -->
+<div class="bg-surface-container rounded-xl p-3 w-[260px] shrink-0 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">La Liga ⚽</span>
+<span class="bg-error/20 text-error px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1">
+<span class="w-1.5 h-1.5 rounded-full bg-error animate-pulse"></span> LIVE 64'
+            </span>
+</div>
+<div class="flex items-center justify-around py-2">
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">RMA</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Real Madrid</span>
+</div>
+<span class="font-headline-md text-headline-md text-primary-container font-bold">2 - 1</span>
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">BAR</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Barcelona</span>
+</div>
+</div>
+</div>
+<button class="mt-3 w-full bg-primary-container text-on-primary-container font-label-md text-label-md py-2 rounded-full flex items-center justify-center gap-1.5 shadow-sm active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+<span>Watch Live</span>
+</button>
+</div>
+<!-- Match Card 3 -->
+<div class="bg-surface-container rounded-xl p-3 w-[260px] shrink-0 flex flex-col justify-between">
+<div>
+<div class="flex items-center justify-between mb-2">
+<span class="font-label-sm text-label-sm text-on-surface-variant uppercase tracking-wider">Champions League ⚽</span>
+<span class="bg-surface-container-high text-on-surface-variant px-2 py-0.5 rounded text-[11px] font-semibold">Tomorrow 21:00</span>
+</div>
+<div class="flex items-center justify-around py-2">
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">MCI</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Man City</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface-variant">VS</span>
+<div class="flex flex-col items-center gap-1 w-20">
+<div class="w-9 h-9 rounded-full bg-surface-container-high flex items-center justify-center font-bold text-on-surface text-xs">BAY</div>
+<span class="font-label-md text-label-md text-on-surface truncate text-center">Bayern</span>
+</div>
+</div>
+</div>
+<button class="mt-3 w-full bg-surface-container-high text-on-surface font-label-md text-label-md py-2 rounded-full flex items-center justify-center gap-1.5 active:scale-95 transition-transform">
+<span class="material-symbols-outlined text-[18px]">notifications_none</span>
+<span>Remind Me</span>
+</button>
+</div>
+</div>
+</section>
+<!-- 7. SERIES RANKINGS -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">Series Rankings</h2>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<!-- Filter chips -->
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-2 pb-3">
+<button class="px-3.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm shrink-0">Popular</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">TOP100</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Anime</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">K-Drama</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Nollywood</button>
+</div>
+<!-- Ranked 2:3 Carousel -->
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-space-md">
+<!-- Rank 1 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Dark fantasy drama series poster showing an African queen warrior with ornate gold braided crown standing tall amidst mystical misty green embers." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCcFQTzn5qkAVyEzBceOKrPBd-SUYKKu9OC9DS5P_fLI1wkW62N4JP621-1d0nTYlNOeVfO6QQS-_M_AnaLUrHm1UjIM1RmdLm2QXE2kOSR3XbFhMoEQS1tbVScxPRKeJzFwrgHs8ona1PaeMWywXg2Vd-IJytYl6y_p6aYk4kHDS2VWZHQpdRQ6HacR0GpDav_nlB_llSVL1pDUwwMXmYP7xGnl0agUBzJF7bd-etgYYc38wvToUfKVg"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">1</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Queen of Zazzau</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Drama · S2</span>
+</div>
+<!-- Rank 2 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High tech cyberpunk investigative espionage thriller poster with two agents walking in heavy rain reflection under towering glowing holographic skyscrapers." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDTJsZ-KZV-1AzbEg8WO2GdLpcZh4C_ke_zCSP-0od8_0Y4ZoHSJ7r5NNJpGJIIJNN1keo8AAogwBQLrE_p7VLbT4ONr5907abw6ZoolEm6yodKsyXexdGSnO-uMcev4KICLZprzdK3b6GIhDLMLhWtHoLO681NCGYH4CDP3zE1X5mPscAo35-7Qw9zrPNL4c_cCeXVrIaZvuMuphVuQ7hARf097hel3UIH6jggRfl7HH_WfNVt6x3rdg"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">2</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Neon Protocol</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Sci-Fi · S1</span>
+</div>
+<!-- Rank 3 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Grit crime cartel series poster showing luxury vintage convertibles parked outside modern waterfront glass mansions in coastal Africa during orange dusk." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2jl1DbVCq3ExvgIMpvvgSxd0gZyuZeN70iPSTnJBgUc8VZ9p-Yvtx4WJG9CKWcg-7r6qZE5w8fvJom_tcPx0L_mFBfNZd2-C6kwEU7SfvA2qH4mtsN6c2lU9YfZhPxBEs2_liT1AVPLx5G0XH1vkWdl_hfCOhfVdVyG2pZCA8xvaU_ywWx1S4OZ5u0Pcuyh0sfGs1NbOI8HAQgr12xTm5uv0Z4aUnO3V3lzREdbNJVR4X1h6GEugflA"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">3</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Atlantic Harbor</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Crime · S3</span>
+</div>
+<!-- Rank 4 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Romantic Korean drama series poster showing lovers under cherry blossom petals under evening street lamps in modern Seoul." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJf5PVk2qFnTZXkL-_c-FqotDLvLfoiGM8kJMl1E3g2Q1skhmnoLJAa6wdbQ_L0tTlwhhVuWkiSWcN5_SEi41iWUg5Tjir-6YwH3pKTSiSMzbFe2E6wgvqItZFswQwUlT57QqWB8itGSwyiCKJMZZu9CoQLaXPjVu-j3--JkIKEvZt2he41LBdU3CHNEdJCAamQps-arK-phKcFR0vqY3SiZY2KWhnm93yMsaWoI2CWt5NTQSOs5YvpQ"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">4</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Midnight Seoul</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Romance · S1</span>
+</div>
+<!-- Rank 5 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Supernatural anime series poster featuring a boy with white hair holding an azure spirit blade against an eclipse backdrop." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC8Rkbywi13qsbs1pnzRP2iEwX-xCbOJGSc4cXUmX449rPrN4HHwG7Epc41dD8jsEPTW14yLAiKuLbQTYPPIum6nC_TuwnyooQpW8pRr7UdKvh93x2_4o7OwnnTKCpzyijyyua6QY6aQlxA8qdhvzdfb9opQaMAKCT4Oh6KUI974S52ES_l_JDodIEixisyAKnPlfh3w1vxp31UcaVlEC81UlZFSwHPqZWlrUFUHstIvFUa7W05ybJCzw"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">5</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Spirit Rebirth</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Anime · S4</span>
+</div>
+</div>
+</section>
+<!-- 8. PROMOTIONAL UTILITY AREA -->
+<section class="px-margin mt-space-lg grid grid-cols-2 gap-gutter">
+<!-- Utility 1: Status Saver -->
+<div class="bg-surface-container rounded-xl p-3 flex flex-col justify-between">
+<div class="flex items-center justify-between mb-2">
+<div class="w-8 h-8 rounded-full bg-primary-container/20 text-primary-container flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">download</span>
+</div>
+<button class="bg-primary-container text-on-primary-container font-label-sm text-label-sm px-3 py-1 rounded-full active:scale-95 transition-transform">
+          GO
+        </button>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Status Saver</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5 leading-snug">Save your favorite moments directly</p>
+</div>
+</div>
+<!-- Utility 2: Watch on TV & Web -->
+<div class="bg-surface-container rounded-xl p-3 flex flex-col justify-between">
+<div class="flex items-center justify-between mb-2">
+<div class="w-8 h-8 rounded-full bg-secondary-fixed/20 text-secondary-fixed flex items-center justify-center">
+<span class="material-symbols-outlined text-[20px]">tv</span>
+</div>
+<button class="bg-surface-container-high text-on-surface font-label-sm text-label-sm px-2.5 py-1 rounded-full active:scale-95 transition-transform">
+          Connect
+        </button>
+</div>
+<div>
+<h3 class="font-headline-sm text-headline-sm text-on-surface">Watch on TV</h3>
+<p class="font-body-sm text-body-sm text-on-surface-variant mt-0.5 leading-snug">Continue on bigger screens seamlessly</p>
+</div>
+</div>
+</section>
+<!-- 9. QUICKBUZZ (Short Video Discovery) -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-space-sm">
+<div class="flex items-center gap-1.5">
+<span class="material-symbols-outlined text-primary-container text-[20px]">bolt</span>
+<h2 class="font-headline-md text-headline-md text-on-surface">QuickBuzz</h2>
+</div>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        Explore <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-gutter">
+<!-- Short 1 -->
+<div class="relative w-36 h-60 rounded-xl overflow-hidden shrink-0 bg-surface-container flex flex-col justify-between p-2.5">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Vertical 9:16 video still showing high action stunt choreography with motorcycle backflip jump over fiery obstacle in cinematic orange sunset." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDFhGNOdClpGHl-hNdCRSSF6R2HC4kwLLvFQiaziJ4kBWb_eSO7DqOezMohW6VCFCBS5rnpxhQxUb55ltUPrlpHuUXxPk1L9RNgKQ09OtlB0oxrrbjTP6RUr1tC8qei-RBaxIQJhnY21x17Rvi6IM-MY0GvdnQZT72S9qICo4uT03Udwn8-lGK6lKe7lcsDSj1W4KGBbDpL40aUlE2Jjqwr8UUolVhZfdgkzOENgnGmZLNVo9z6JBkMnQ"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-black/30 pointer-events-none"></div>
+<div class="relative z-10 flex justify-end">
+<span class="bg-black/60 backdrop-blur-sm text-on-surface text-[10px] px-1.5 py-0.5 rounded font-label-sm">0:45</span>
+</div>
+<div class="relative z-10 self-center">
+<div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-1.5 mb-1">
+<div class="w-5 h-5 rounded-full bg-primary-container flex items-center justify-center text-[10px] font-bold text-on-primary-container">N</div>
+<span class="font-label-sm text-label-sm text-on-surface/90 truncate">@NaijaFilmGeek</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface line-clamp-2 leading-tight">Best Nollywood stunt sequence of 2026 🔥</p>
+</div>
+</div>
+<!-- Short 2 -->
+<div class="relative w-36 h-60 rounded-xl overflow-hidden shrink-0 bg-surface-container flex flex-col justify-between p-2.5">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Vertical 9:16 video still of animated samurai cutting through cherry blossom storm with electric green glowing katana slice effect." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAylNA3wzdGbbo8hsHqMROvCl7NY7OtTom_zNoOi1JLUWs6gWPNZmw23xXazF-iVZ0w9TCGIy0VoAeAA-rVmdAmICnzVywVcI2gfQvbubkXK70vh1SM1ojXOnuaNURYQO18pAj_6UUOB7x36jQA3CbUomq6RxOtVx7gs4__tm1l7Kp3Ox3Os42K0-1dXi1qXX3rwNBmJHAYyrk_SU3LMZndkZ7RgeJWakiCXf6fF9asOK4zCKuf63k7eA"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-black/30 pointer-events-none"></div>
+<div class="relative z-10 flex justify-end">
+<span class="bg-black/60 backdrop-blur-sm text-on-surface text-[10px] px-1.5 py-0.5 rounded font-label-sm">0:32</span>
+</div>
+<div class="relative z-10 self-center">
+<div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-1.5 mb-1">
+<div class="w-5 h-5 rounded-full bg-secondary flex items-center justify-center text-[10px] font-bold text-on-secondary">K</div>
+<span class="font-label-sm text-label-sm text-on-surface/90 truncate">@K-CinemaClub</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface line-clamp-2 leading-tight">Top 5 hidden gem animes streaming now</p>
+</div>
+</div>
+<!-- Short 3 -->
+<div class="relative w-36 h-60 rounded-xl overflow-hidden shrink-0 bg-surface-container flex flex-col justify-between p-2.5">
+<img class="absolute inset-0 w-full h-full object-cover" data-alt="Vertical 9:16 video still showing behind-the-scenes movie director with large cinema camera smiling on vibrant African film set." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAS2CN7Ga04N--fsJUOacpDsWvlt2paxi1q8uqv3LmKMwbDLiL_uKrITnCCbRsdTha9Gw3euRQfw2ZbrJGNAlT7euQBex7sjEse8R5twpSVEk2Uqti_-Sw0CwrUmPBMATed4WX1dpQce9wNGQ6WNIxwQ_vSUhJpDQpHuype8E05Q82EHX4Zf87cLeiKHVlt5xNmRx40aokrd6PsFCYgzr_dqI_wpsKhu9KC5JNzBNHLZIJO71TLeTE10Q"/>
+<div class="absolute inset-0 bg-gradient-to-t from-surface via-transparent to-black/30 pointer-events-none"></div>
+<div class="relative z-10 flex justify-end">
+<span class="bg-black/60 backdrop-blur-sm text-on-surface text-[10px] px-1.5 py-0.5 rounded font-label-sm">1:15</span>
+</div>
+<div class="relative z-10 self-center">
+<div class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md flex items-center justify-center text-white">
+<span class="material-symbols-outlined text-[24px]" style="font-variation-settings: 'FILL' 1;">play_arrow</span>
+</div>
+</div>
+<div class="relative z-10">
+<div class="flex items-center gap-1.5 mb-1">
+<div class="w-5 h-5 rounded-full bg-surface-tint flex items-center justify-center text-[10px] font-bold text-on-primary">G</div>
+<span class="font-label-sm text-label-sm text-on-surface/90 truncate">@GeniuzOriginals</span>
+</div>
+<p class="font-body-sm text-body-sm text-on-surface line-clamp-2 leading-tight">Director Q&amp;A: Shooting in 8K in Abuja</p>
+</div>
+</div>
+</div>
+</section>
+<!-- 10. MOVIE RANKINGS -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-2">
+<h2 class="font-headline-md text-headline-md text-on-surface">Movie Rankings</h2>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<!-- Filter chips -->
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-2 pb-3">
+<button class="px-3.5 py-1 rounded-full bg-primary-container text-on-primary-container font-label-sm text-label-sm shrink-0">Popular</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Nollywood</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Action</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Horror</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Romance</button>
+<button class="px-3.5 py-1 rounded-full bg-surface-container text-on-surface-variant font-label-sm text-label-sm shrink-0">Comedy</button>
+</div>
+<!-- Ranked 2:3 Movie Carousel -->
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-space-md">
+<!-- Rank 1 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Blockbuster thriller movie poster with a fierce female agent standing in front of burning aircraft wreckage on a desert runway." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAfuthWUJZzzDdVfKdQKku0RFZasOOkwKAw46MICb2CYHkbHIImhjVXbgROSvEqPsQJ_vonPkebU1N5pJl36FYSjyP5-mJWn52tGZlVVg716MgVunlS-9LsU2s2scd9mgL5T6QNSC8A4NuW3toGdE7Vz0OtLBjj8WI9V0QhXnhehOZhYepyVxPjxgeGKtRcTkobyyDw2BAqstwgMuc8uvrPPGZNIfsZEpJBkjQv6yhk1yozW94Da65Bxg"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">1</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Extraction: Sahara</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Action · 2h 10m</span>
+</div>
+<!-- Rank 2 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Heist comedy film poster showing four smartly dressed conspirators holding duffel bags inside a golden marble bank vault." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCWoyBHitF3s50k21LbowjlBA1J1yq0YSt5oNeqc-RYm2RUCL4BShE_7tyIzlx7CQUq9ICS9dnNs4PY6KWcAoYLEgYLRSuxUo-0R-9K6Sca-BKYuNx8DBHFeVnRj2rJPBLYli_v9TG_QM4PgXivh-LrAh-pdbwRa1e8MFufKta2tkaUwyn9vmd4Pr6ebuc6NYZDFiPmmveUgpBC-JHSFOvkCLnllG9KB_nUpgDn4ncoPo7O_BzV7QWwTA"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">2</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">The Billion Bank</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Comedy · 1h 48m</span>
+</div>
+<!-- Rank 3 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Supernatural horror film poster with an ancient wooden mask floating above deep dark swamp waters illuminated by moonlight." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVOeQmwESzTuIfX-z-0cHEzL7zpr1BUcdpCoJIy-6noJj_wIc_cVOxm95i-vETMTZEOGEdm7Pmhz8qID7Wsjg_-lhkqXl8Me2meBjqk-AYoLjqCk_5Xy_eXucvX6u0YQOnFGdt_Fe84k4Yp3nIdDiiwdoGVXIPqQu20JhH2LiB8AmUJouZkMReI5EAbg4EIaUtpqLv43El_0OkPL5BlH0tX5udQ7Flahzlvv3umHWmUpzAkSbpEgKKXQ"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">3</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Cursed Forest</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Horror · 1h 35m</span>
+</div>
+<!-- Rank 4 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Romantic drama poster showing an artist painting a portrait of a smiling woman on a sunlit balcony overlooking Cape Town harbor." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCDjPYjVd_cAUoDF_ff_FHkPxCoLv4Y-a74kMPD4M8FYh0lm67aZH4ZV-ZeGj5UG0tYOLO5UxobHVdQoSfTJsdvcjZGZVBvCdYR-Cs7F0X0SbK7PwhJn7vbJLoHZLPlb8wdxtlaXL68JE-tL_xKOXEUBlsGgzlW0qM-IN0JkjvDVTalNTDp9RxJoX5lm_-i22YspIIjIG59-IO8b_2k4Cyg_6DNzQCMR3SAud7-qlNCPeVdkVWgzXGzeQ"/>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">4</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Canvas &amp; Sun</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Romance · 2h 02m</span>
+</div>
+</div>
+</section>
+<!-- 11. NOLLYWOOD MOVIES -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-space-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Nollywood Movies</h2>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-gutter">
+<!-- 16:9 Landscape Card 1 -->
+<div class="w-64 shrink-0 flex flex-col">
+<div class="relative w-64 h-36 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High-production 16:9 cinematic still of a royal African coronation with an elder king adorned in ornate coral beads and traditional regal woven fabric." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAWm6OtfhrxEb-OeclPQiTGm2HEqOBk6iI7PSN-usLXSuidjsytl7f-JvXT7U-33hxoBdkP4nRuECI4IwgusfTL_VV0IdcZddsnxoJ_ytxbxBLRY7pd0f3Xk4AtUOF1joJH28uEIi_9y4ubLFga8UrT8TuFHthC1svpLgBXQ8Ue2CBb0BedV30mLpzXH5UVXxi6axt5jqvY6Sc2zJPv-o09Be47n0VFA161a2SRfJPDTyt2YlNBgotUmQ"/>
+<div class="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-primary-container px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+            New Episode
+          </div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+</div>
+<div class="mt-2 flex items-start justify-between">
+<div class="min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">THE LAST KING</h3>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Historical Drama · 1 week ago</span>
+</div>
+<button class="text-on-surface-variant p-1">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- 16:9 Landscape Card 2 -->
+<div class="w-64 shrink-0 flex flex-col">
+<div class="relative w-64 h-36 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High-production 16:9 cinematic still of a lavish Nigerian wedding banquet with a bride in bespoke modern royal blue gele stepping out of a vintage white car." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCd1EV1Ztawcv_BjVaCDe7pEiCMXpvOSvRl140rIYOIwq6hlrccmElg1s7JUir90a2BFUNyhixoyBQyfWYwvGWyQ_x3UVtOuw5i9XzEl3E-qwWsR_YneN_hkJ-EKCiwKTxGxBtOgaGYRedXJD3BjEMt6iuvjZhFf9BAHa8fzjhr4FeH3sduGqOCUrjJJvuVcZHioJFkesapgv67YKsYBOh0kIsGTILBewwDqrFDK5naKxwP6HF0-BSx1w"/>
+<div class="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-primary-container px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+            Trending
+          </div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+</div>
+<div class="mt-2 flex items-start justify-between">
+<div class="min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">THE WEDDING REBEL</h3>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Romance Comedy · 3 days ago</span>
+</div>
+<button class="text-on-surface-variant p-1">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+<!-- 16:9 Landscape Card 3 -->
+<div class="w-64 shrink-0 flex flex-col">
+<div class="relative w-64 h-36 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High-production 16:9 cinematic still of two sharp-dressed detectives examining an evidence board in modern high-rise office in Victoria Island Lagos." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBt2856O7gsXfxyjXX3dkxZsxR8Ujsoo0PcOIuPm2ojnFmt3nx4UCA4ZX1IEPH8q5TiU4ev8qIZYxQEAV-vnlgYpEOHu-I0JJVGAU3mUa_hiYdl-uXLwCeZNmUyl5RbsLRroq5sPxstvTvohlR4HRPkiFdBkpS06Orw5xN3cb14NV3ebSKZhz7U1Al6_fvYoPOs9K_bHqdJ4CbkrwUNckF1VS-CNA_KVa1mdZxw9N2KgYW3LjbhlEALmA"/>
+<div class="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-on-surface-variant px-2 py-0.5 rounded text-[10px] font-bold uppercase">
+            Full Movie
+          </div>
+<div class="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent"></div>
+</div>
+<div class="mt-2 flex items-start justify-between">
+<div class="min-w-0">
+<h3 class="font-headline-sm text-headline-sm text-on-surface truncate">ISLAND RECKONING</h3>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Crime Mystery · 2 weeks ago</span>
+</div>
+<button class="text-on-surface-variant p-1">
+<span class="material-symbols-outlined text-[20px]">more_vert</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- 12. CATEGORIES -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-space-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Categories</h2>
+</div>
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-gutter">
+<!-- Category 1 -->
+<div class="relative w-28 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Abstract colorful neon cinema lights with soft lens flare and cinema film strip motifs." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAPfh4zweoEQmvv05EtaGc9GGlSPc8RrSlH8c1lh2penBNbRB79c6uF___SRYfidRhbYZ_xS4Tnql9-89CuEKcDWqpI8uh0HUViAMrqnwvUp18QYBbTeYVZA0Rs0LMEN0AIihy7UnAvZXY3JTFNEa4XOr7J80VYXbrlwSQORCZh5yF2fq30P_QpC-1b33E_jkNWMnKseYEsCUDrKyQebiyk7Lz2hAbuNDXpqQru8Uthd4j6vC132jwTBA"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold">All</span>
+</div>
+<!-- Category 2 -->
+<div class="relative w-28 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Hollywood city lights skyline and cinema production equipment silhouette under violet evening sky." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD01mwD6PN03YqcxW4Nf4W3JMwwplg0V52c47qH6kew6h0ZAhuRkZda0dtVa9MHn4RsFgeyRAbai1NA6S_-Llb7PVikRkV0zsEqOWCvHGC_-ErlcNppRKQYGFqQxvrbVPoG525FWwEHbbnh9RkxhQi5-ub0FDXnu7G9ZXBt35cWYRVX2eQ0ZIugCpQD2ql7CtlE12YfN86ASGByKR56HAxj_TTCA1ewd3DwJ_nVn52WOV9rEt_lPm8wYg"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold">Hollywood</span>
+</div>
+<!-- Category 3 -->
+<div class="relative w-28 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Vibrant colorful Indian traditional dance performance stage with shimmering golden dust and dramatic stage lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAk7jDxC7NO0MxiHZRZbnsvWA5FpcArkPWsOdVk_ZQv9qMNY4JqTH4AwO9QQyoA3RPPW_2h3lm3Xd3Vv63oXuLZI1xPL8pI1a9EovTXzRxsXHK4s_baY_-PkWmC8MvSBmIa9z7k-kjZ-A5vBWKK8jTlknOKh6IujLAW9r55kVnaSCuGx8-uERdsQXJTTqhTt5NZ3iPwmYUfnYwV7sJOw8UFwGNRxWL7Xu3EyJxD4zy0X__pF10UgTersg"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold">Bollywood</span>
+</div>
+<!-- Category 4 -->
+<div class="relative w-28 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Classic western landscape with warm sunset over towering sandstone mesas and desert brush." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAHRWxzDzcDyHqcFQLwIkuQNB6AfUbiIAKcvJeBNwM_v6Pd7rsD7gZlk1yhlboVqAY9ZVAXF2NkMnFXYgyEmcixGOBCXyq_zWy6tRoIkdRspAFsbfCjLs2YGmyveH7GRKgjsE3Gxk0bhCVnOUfq7RIetBAb_9QB6ciHijzpeK_m_R9FF8OTMRzJKPOnCL7ZtSAJohE2Y_7tClxhVH7j41NLuR8HeqpbM0kIlH-ybk03llwHY5mtWfZ-eQ"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold">Western</span>
+</div>
+<!-- Category 5 -->
+<div class="relative w-32 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Rich golden African savanna landscape with majestic acacia tree silhouette against fiery red and gold sundown." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAQruXLbvbPFR0E-Edy-fKF5BKPFvKgdOyo7t4Lep_b32O07WEKgLcGVA4zXr-cBw0CJwiGiRposIHJFjjO-VxPR0g47wGb5zmFgHlwiaJbaEfAxL2vWc3X1yUGpiC305biNqD6oOk9x2zgC3AkWJd6SYJzF3Yy4U8o-hZnChTIDK5vb8Rh3VdTbizymjszcT_AXoRl00CnWJarUfofC0UGbLaeISFQbBv8Jp9awAh0YyNG_VmpVJXXQw"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold text-center px-1">African Cinema</span>
+</div>
+<!-- Category 6 -->
+<div class="relative w-28 h-20 rounded-xl overflow-hidden shrink-0 bg-surface-container flex items-center justify-center">
+<img class="absolute inset-0 w-full h-full object-cover opacity-40" data-alt="Dramatic underwater documentary shot of a humpback whale emerging into sunlit crystal turquoise ocean waters." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCRA9FNpEW--ElJoy7e52VG76rslNlUYWF64DNS7ecvEgjw7gV4Y1ohxOz3DQ6alqRcB4paCCORig_sJnTp-MFwpzPGvmA7jhkZ4m7Eg8DpjrUNNhPKPx0UxLDAlz5ihA73xZwQ1i9PCFF_d8XSnFI7-GSysjNw_NVieNPdDTX8X2A--dIuyA2HN4bTK1kI3CuOPXB3ztCJEGC6CAi8MrHx6I-mtvFZ2832F98J1ZLo59A_Hc3cdoFveg"/>
+<span class="relative z-10 font-headline-sm text-headline-sm text-on-surface font-bold">Docuseries</span>
+</div>
+</div>
+</section>
+<!-- 13. ANIME RANKINGS -->
+<section class="mt-space-lg">
+<div class="px-margin flex items-center justify-between mb-space-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Anime Rankings</h2>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<div class="w-full overflow-x-auto no-scrollbar pl-margin flex gap-space-md">
+<!-- Anime 1 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Anime hero with spiky dark hair and electric green glowing aura unleashing supernatural energy power in dark stylized manga art." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCHY8fWN6z3q1bgDegw5VX4mPSWijlkHKomljaf_O8-uDQLENJrEV6RNO446ODZTBCHvOmnxBH1NypiANBPEuKUgDVZJsO9LIhpT9K3dBnhrpkq2GyRpO_0KoJCN6GCoiVwWpTa1K4EQFtXWPdJ5O4pj9cXqbMYzl4LIe5H5ElR1dwOxZtKEBTO9z6kf6cgxO8e3kfiUceBGAUSguHwn-6KAv4jxA6D1atjj3ftfBfQIuwAFL-4noBnCg"/>
+<div class="absolute top-1.5 right-1.5 bg-surface-dim/80 backdrop-blur-sm text-on-surface px-1.5 py-0.5 rounded text-[9px] font-label-sm">
+            English
+          </div>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">1</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Chrono Blade</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Action · 24 Eps</span>
+</div>
+<!-- Anime 2 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Mecha sci-fi anime artwork with giant silver robot standing amid futuristic city ruins under neon rain clouds." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBhmrQ0ujwYGx-HIUqZM7qv0Xi6h3nW5VMzRvYSaf2pW_UFdbfblociiiLuZauBH-b1K2GQN8GBivc-tZv11R4RgIK7HWCOKTUQuXdOC8jA5zYB26zDT91V7JjS6PQHOYua76Pfj_lRWi8BwJXjH0-CEvM6DJk_Q-UZKaBOwlZCfX6fs9phUYlKbA9AmbqwXiJ0VGfuOKz0hec0fTpOCm1-TMIMcTzAVx7QKbipfJgtwy5MsW905naB7A"/>
+<div class="absolute top-1.5 right-1.5 bg-surface-dim/80 backdrop-blur-sm text-on-surface px-1.5 py-0.5 rounded text-[9px] font-label-sm">
+            English
+          </div>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">2</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Aegis Core</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Mecha · 12 Eps</span>
+</div>
+<!-- Anime 3 -->
+<div class="w-28 shrink-0 flex flex-col">
+<div class="relative w-28 h-40 rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Dark fantasy sorcery anime poster of a mysterious female alchemist casting glowing gold runes in an ancient library." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNlnQH_RVZ4QZ2X2ioqw4iQ4hQhfbl_Zt8tKePxp44MfCRrJUyM1OdgP2gtzW2gq9WUnSPepnAIl36KcGsUb9HGDRxAQDjrJfsscqir3hRU3zYVzgtRN0m_g23TTHwCOfyRFROTvsocIL6Jehuologt4X8FAYevtM3sAmta6wQkRxPbItvB4CXOHDWUXZigMRAcKeSVxkcQTTqtAsycXGzoQ3vEFU4yitr9mPHNA8ijnmNmEWnq4km6g"/>
+<div class="absolute top-1.5 right-1.5 bg-surface-dim/80 backdrop-blur-sm text-on-surface px-1.5 py-0.5 rounded text-[9px] font-label-sm">
+            English
+          </div>
+<div class="absolute bottom-0 left-0 px-2 py-0 font-display-hero text-display-hero text-on-surface drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)] select-none italic font-black leading-none">3</div>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Rune Weaver</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Fantasy · 18 Eps</span>
+</div>
+</div>
+</section>
+<!-- 14. MOST TRENDING (3-column poster grid) -->
+<section class="mt-space-lg px-margin">
+<div class="flex items-center justify-between mb-space-sm">
+<h2 class="font-headline-md text-headline-md text-on-surface">Most Trending</h2>
+<a class="font-label-md text-label-md text-on-surface-variant flex items-center gap-0.5" href="#">
+        All <span class="material-symbols-outlined text-[16px]">chevron_right</span>
+</a>
+</div>
+<div class="grid grid-cols-3 gap-gutter">
+<!-- Grid Item 1 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Movie poster for a thrilling submarine espionage mission submerged in deep dark luminescent blue arctic depths." src="https://lh3.googleusercontent.com/aida-public/AB6AXuD7yMxVzddxkrdNrSq4vEOuNuAyNgYxRNL7NDJkKLSNpCVvpK5UOc_C-ETRvpA7_PISInWVNj4KGpFB8krrV0p65Mlj9B6fPlYVyc_cPjhV7swxOBT49__0JoOoUQ98Fu48gyKmuuklhKvF94eEKShkDqpIJLuveyRI08mcSB-_XvSYjoNxhDe-n78A--tWyh2jWkjeLnlcEyUV9AdYMD7SIok4VYhQxhb_n2D7Wubw3Fi0gIjK6J1aCw"/>
+<span class="absolute top-1.5 right-1.5 bg-primary-container text-on-primary-container px-1 py-0.2 rounded text-[8px] font-bold">4K</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Deep Abyss</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Thriller</span>
+</div>
+<!-- Grid Item 2 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Vibrant Afrobeats music documentary poster featuring a charismatic musician on stage with brass band and dancers." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDmOVv6ZUfiqTuGEnsAvX0U3zm1yfOOrT30D_0CZvR-MtUPWEUtoCStxwAutR7L1cIsq24-L4cCGHp2Yy-msy_ARG-HWCuleqWup4I_Vcekmp1EjzrKe2VbsqfWoqzmkmcGiDFXwvAZgj8nRGbUX-lVzH2Zotzc2WQIr-6T5gqryKi6BLppznZPFxhePMd7z2QxKIZYGx5aeMvrLS5TmZhAm0wo20K56Tufnbt31O7Csr7eXCEuNs7_XQ"/>
+<span class="absolute top-1.5 right-1.5 bg-secondary text-on-secondary px-1 py-0.2 rounded text-[8px] font-bold">HOT</span>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Afro Pulse</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Music Doc</span>
+</div>
+<!-- Grid Item 3 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="High stakes martial arts action poster of two combat fighters clashing mid-air in heavy tropical monsoon rain." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCd7xlZ6i2ZbEA204gwwyiHgUcxr3Z3okaP6uUO4a8O8MaKrPeuA-ud_Yx9Dg3xiUBaSL-fjbYqDBJ28hz4xsB2wbM1awmKRHHjl2fK1soT9xycCKu3CCp_SyLXrJw9J0Bfny8xCR-u3a2KxT0CrMPRs0JDG2FOYmIbo-a5L7_kSZvPix4KsedTpTSR7lR364olgdG2y39ZJipNAli1kEKMA_qOzEqtsoK25Km2XqOnixWKW7LmcvpMVg"/>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Storm Strike</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Martial Arts</span>
+</div>
+<!-- Grid Item 4 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Animated comedy adventure poster showing three quirky jungle animals riding a makeshift bamboo glider over waterfalls." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCfSGDf4ZC14w-adodQPiR6DGVTo77X4Sbp5h-WTeJn7LjldBEOW9AWk_tMLpajb6KWl-hf4197vs6GV50Pvoy8XS3VrUNnZXzceuDnPmShKvfPWcXbHk2RTlSLRZtswLQjuSAHVV6zOPrzhKgEOAfc9QqkIkL8UYhk6wXuDMcVf_8dtMO_IIVJPjlLUF2NSzRRuwMEq7WBjDWdbm3ODvdxjuA_IZOATUbI6dDQgDowwXc4cA9dP3XDHA"/>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Safari Squad</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Animation</span>
+</div>
+<!-- Grid Item 5 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Political suspense drama poster showing shadows of ministers behind frosted glass conference room door in parliament." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAlALrBc839me8fG5eTXcSJzQtgp5FFV6ysWsFNGN7lUGVuYizdoNMobs9H_ZI99oDwoyeexTx9HsreE7dVauLCSo4HFC_4ROLXGGt6ABMQVBn0vNMRr2JrVb-SyQLuW2O9EOhnG43_H6RoywSch7ymY9RmSw-p_ZZ2bw0pSl_0sTstnP-54A7CJh5vrCHysYU8vPhQ3SHvqj_U5TOW9wIJSbyOLyKHAOQtv5uT_ASAkl-P1bkqYkdAfg"/>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">Cabinet Secrets</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Drama</span>
+</div>
+<!-- Grid Item 6 -->
+<div class="flex flex-col min-w-0">
+<div class="relative aspect-[2/3] w-full rounded-xl overflow-hidden bg-surface-container">
+<img class="w-full h-full object-cover" data-alt="Supernatural mystery thriller poster of an enigmatic glowing stone relic in a dusty museum archive with mysterious footprints." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBCRKlZ3RfDdMUZMCvD-4cQwE65JReKF-973kwL-oWxPwcELFumSmbmfOlXYWiPpF7RmWIQwmoUEBMVl2kU4qmDLUlkU4eBILRQYyPmAZmRhf5_XrpOuJNWyUN_AOx6D7uDKz2cMBlkMZRpUtXdg6Pyqvo7Biu8s7C0qQRI6E41QFtv55h4WatnjykV5o4LpRf5JJTEEtHmPSbh9SiV8rPB9CQc7DyacTg1W-InIVgRubGoD-bNSWwQkA"/>
+</div>
+<span class="font-headline-sm text-headline-sm text-on-surface truncate mt-1.5">The Ancestor</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant truncate">Mystery</span>
+</div>
+</div>
+</section>
+</div>
+<script>
+  // Micro-interactions: Category Nav Underline Switcher
+  document.querySelectorAll('nav button').forEach(button => {
+    button.addEventListener('click', function() {
+      document.querySelectorAll('nav button').forEach(b => {
+        b.classList.remove('text-on-surface', 'font-label-lg');
+        b.classList.add('text-on-surface-variant', 'font-body-md');
+        const indicator = b.querySelector('span.bg-primary-container');
+        if (indicator) indicator.remove();
+      });
+      this.classList.remove('text-on-surface-variant', 'font-body-md');
+      this.classList.add('text-on-surface', 'font-label-lg');
+      const span = document.createElement('span');
+      span.className = 'absolute bottom-0 w-5 h-0.5 bg-primary-container rounded-full';
+      this.appendChild(span);
+    });
+  });
+</script></main><nav class="fixed bottom-0 inset-x-0 z-50 pb-safe bg-surface/90 backdrop-blur-xl" data-active-classes="text-primary-container"><div class="relative flex justify-around items-center h-16 px-space-xs"><a aria-current="page" class="flex flex-col items-center justify-center gap-space-xs w-14 h-14 transition-all duration-200 text-primary-container" data-path="home" href="#"><span class="material-symbols-outlined text-[24px]">home</span><span class="font-label-sm text-label-sm tracking-wide">Home</span></a><a class="flex flex-col items-center justify-center gap-space-xs w-14 h-14 relative text-on-surface-variant hover:text-on-surface transition-all duration-200" data-path="library" href="#"><div class="relative flex items-center justify-center"><span class="material-symbols-outlined text-[24px]">video_library</span><span class="absolute -top-1.5 -right-3.5 bg-error-container text-on-error-container font-label-sm text-[8px] leading-tight px-1 py-0.5 rounded-full font-bold uppercase tracking-wider">HOT</span></div><span class="font-label-sm text-label-sm tracking-wide">Library</span></a><div class="relative -top-5 flex flex-col items-center"><a aria-label="Center Action Play" class="w-14 h-14 rounded-full bg-primary-container text-on-primary-container flex items-center justify-center shadow-[0_4px_16px_rgba(114,240,106,0.38)] active:scale-95 transition-transform duration-150" data-path="watch-hub" href="#"><span class="material-symbols-outlined text-[30px] fill-current">play_arrow</span></a></div><a class="flex flex-col items-center justify-center gap-space-xs w-14 h-14 text-on-surface-variant hover:text-on-surface transition-all duration-200" data-path="downloads" href="#"><span class="material-symbols-outlined text-[24px]">download_for_offline</span><span class="font-label-sm text-label-sm tracking-wide">Downloads</span></a><a class="flex flex-col items-center justify-center gap-space-xs w-14 h-14 relative text-on-surface-variant hover:text-on-surface transition-all duration-200" data-path="me" href="#"><div class="relative flex items-center justify-center"><span class="material-symbols-outlined text-[24px]">account_circle</span><span class="absolute top-0 right-0 w-2 h-2 rounded-full bg-error"></span></div><span class="font-label-sm text-label-sm tracking-wide">Me</span></a></div></nav></body></html>

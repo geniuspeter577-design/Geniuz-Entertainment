@@ -2,12 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Upload } from 'tus-js-client';
 
-import type { ContentItem } from '../models/content';
+import type { ContentItem, EpisodeItem, SeasonItem } from '../models/content';
 import { supabase } from '../services/supabase';
 
 const MOVIE_BUCKET = 'movie-assets';
 const MOVIE_COLUMNS =
-  'id,title,description,release_year,genres,poster_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key';
+  'id,title,description,release_year,genres,poster_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type';
 const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
 type MovieRecord = {
@@ -27,6 +27,7 @@ type MovieRecord = {
   allow_download: boolean;
   storage_provider: 'supabase' | 'b2' | null;
   storage_key: string | null;
+  content_type: 'movie' | 'series' | null;
 };
 
 type StoredTusUpload = {
@@ -53,6 +54,16 @@ export type NewMovie = {
   mimeType: string;
   contentType: string;
   fileSizeBytes: number;
+};
+
+type NewSeries = {
+  title: string;
+  description: string;
+  releaseYear?: number;
+  genres: string[];
+  posterUrl?: string;
+  contentRating?: string;
+  published: boolean;
 };
 
 type PublishMovieOptions = {
@@ -83,12 +94,14 @@ const tusUrlStorage = {
 };
 
 function toContentItem(movie: MovieRecord): ContentItem {
+  const isSeries = movie.content_type === 'series';
+  const hasVideo = movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null;
   return {
-    id: `geniuz:movie:${movie.id}`,
+    id: `geniuz:${isSeries ? 'series' : 'movie'}:${movie.id}`,
     source: 'geniuz',
     sourceId: movie.id,
     title: movie.title,
-    type: 'movie',
+    type: isSeries ? 'series' : 'movie',
     ...(movie.release_year === null ? {} : { year: movie.release_year }),
     genres: movie.genres ?? [],
     ...(movie.poster_url ? { posterUrl: movie.poster_url, backdropUrl: movie.poster_url } : {}),
@@ -104,13 +117,9 @@ function toContentItem(movie: MovieRecord): ContentItem {
     ...(movie.mime_type ? { mimeType: movie.mime_type } : {}),
     ...(movie.file_size_bytes === null ? {} : { fileSizeBytes: Number(movie.file_size_bytes) }),
     availability: {
-      discoverable:
-        movie.published &&
-        (movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null),
-      stream:
-        movie.published &&
-        (movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null),
-      download: movie.allow_download,
+      discoverable: movie.published && (isSeries || hasVideo),
+      stream: movie.published && !isSeries && hasVideo,
+      download: movie.allow_download && !isSeries && hasVideo,
       premium: false,
     },
   };
@@ -134,7 +143,7 @@ export class SupabaseMovieRepository {
       .from('movies')
       .select(MOVIE_COLUMNS)
       .eq('published', true)
-      .or('video_path.not.is.null,storage_key.not.is.null')
+      .or('content_type.eq.series,video_path.not.is.null,storage_key.not.is.null')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -161,10 +170,11 @@ export class SupabaseMovieRepository {
   }
 
   async getById(id: string) {
-    const movieId = id.replace(/^geniuz:movie:/, '');
-    if (movieId === id) {
+    const match = /^geniuz:(?:movie|series):(.+)$/.exec(id);
+    if (!match) {
       return null;
     }
+    const movieId = match[1];
 
     const { data, error } = await this.client
       .from('movies')
@@ -384,6 +394,7 @@ export class SupabaseMovieRepository {
         mime_type: movie.mimeType,
         file_size_bytes: movie.fileSizeBytes,
         allow_download: movie.allowDownload,
+        content_type: 'movie',
         storage_provider: 'b2',
         storage_key: storageKey,
         video_path: null,
@@ -398,6 +409,235 @@ export class SupabaseMovieRepository {
       });
     }
   }
+
+    async createSeries(series: NewSeries) {
+      const { data, error } = await this.client
+        .from('movies')
+        .insert({
+          title: series.title.trim(),
+          description: series.description.trim() || null,
+          release_year: series.releaseYear ?? null,
+          genres: series.genres,
+          poster_url: series.posterUrl?.trim() || null,
+          content_rating: series.contentRating?.trim() || null,
+          runtime_minutes: null,
+          content_type: 'series',
+          storage_provider: 'supabase',
+          storage_key: null,
+          video_path: null,
+          allow_download: false,
+          published: series.published,
+        })
+        .select('id')
+        .single();
+      if (error || !data) {
+        throw new Error('Could not create the series record.', { cause: error });
+      }
+      return `geniuz:series:${data.id}`;
+    }
+
+    async createSeason(seriesId: string, seasonNumber: number, releaseYear?: number) {
+      const { data, error } = await this.client
+        .from('seasons')
+        .insert({
+          series_id: seriesId.replace(/^geniuz:series:/, ''),
+          season_number: seasonNumber,
+          release_year: releaseYear ?? null,
+          published: true,
+        })
+        .select('id')
+        .single();
+      if (error || !data) {
+        throw new Error('Could not create the season.', { cause: error });
+      }
+      return data.id as string;
+    }
+
+    async getAdminSeasons() {
+      const { data, error } = await this.client
+        .from('seasons')
+        .select('id,series_id,season_number,release_year,published')
+        .order('season_number', { ascending: true });
+      if (error) {
+        throw new Error('Could not load the season catalog.', { cause: error });
+      }
+      return (data ?? []) as {
+        id: string;
+        series_id: string;
+        season_number: number;
+        release_year: number | null;
+        published: boolean;
+      }[];
+    }
+
+    async createB2Episode(
+      episode: {
+        seasonId: string;
+        episodeNumber: number;
+        title: string;
+        durationSeconds: number;
+        fileExtension: string | null;
+        mimeType: string;
+        fileSizeBytes: number;
+        allowDownload: boolean;
+        published: boolean;
+      },
+      storageKey: string,
+    ) {
+      const { data, error } = await this.client
+        .from('episodes')
+        .insert({
+          season_id: episode.seasonId,
+          episode_number: episode.episodeNumber,
+          title: episode.title.trim(),
+          duration_seconds: episode.durationSeconds,
+          storage_provider: 'b2',
+          storage_key: storageKey,
+          file_extension: episode.fileExtension,
+          mime_type: episode.mimeType,
+          file_size_bytes: episode.fileSizeBytes,
+          allow_download: episode.allowDownload,
+          published: episode.published,
+        })
+        .select('id')
+        .single();
+      if (error || !data) {
+        throw new Error('The episode video uploaded, but its record could not be saved.', { cause: error });
+      }
+      return data.id as string;
+    }
+
+    async getSeasons(seriesId: string) {
+      const normalizedId = seriesId.replace(/^geniuz:series:/, '');
+      const { data, error } = await this.client
+        .from('seasons')
+        .select('id,series_id,season_number,release_year,published')
+        .eq('series_id', normalizedId)
+        .order('season_number', { ascending: true });
+      if (error) {
+        throw new Error('Could not load seasons for this series.', { cause: error });
+      }
+      const seasons = (data ?? []) as {
+        id: string;
+        series_id: string;
+        season_number: number;
+        release_year: number | null;
+        published: boolean;
+      }[];
+      return Promise.all(
+        seasons.map(async (season): Promise<SeasonItem> => ({
+          id: season.id,
+          seriesId: season.series_id,
+          seasonNumber: season.season_number,
+          ...(season.release_year === null ? {} : { year: season.release_year }),
+          published: season.published,
+          episodes: await this.getEpisodesForSeason(
+            season.id,
+            normalizedId,
+            season.season_number,
+          ),
+        })),
+      );
+    }
+
+    private async getEpisodesForSeason(
+      seasonId: string,
+      seriesId: string,
+      seasonNumber?: number,
+    ): Promise<EpisodeItem[]> {
+      const { data, error } = await this.client
+        .from('episodes')
+        .select('id,season_id,episode_number,title,duration_seconds,storage_provider,storage_key,file_extension,mime_type,file_size_bytes,allow_download,published')
+        .eq('season_id', seasonId)
+        .order('episode_number', { ascending: true });
+      if (error) {
+        throw new Error('Could not load episodes for this season.', { cause: error });
+      }
+      return ((data ?? []) as {
+        id: string;
+        season_id: string;
+        episode_number: number;
+        title: string;
+        duration_seconds: number;
+        storage_provider: 'supabase' | 'b2';
+        storage_key: string | null;
+        file_extension: string | null;
+        mime_type: string | null;
+        file_size_bytes: number | null;
+        allow_download: boolean;
+        published: boolean;
+      }[]).flatMap((episode) => {
+        if (!episode.storage_key) {
+          return [];
+        }
+        return [
+          {
+            id: `geniuz:episode:${episode.id}`,
+            source: 'geniuz',
+            title: episode.title,
+            type: 'series',
+            genres: [],
+            mediaPath: episode.storage_key,
+            storageKey: episode.storage_key,
+            storageProvider: episode.storage_provider,
+            ...(episode.file_extension ? { fileExtension: episode.file_extension } : {}),
+            ...(episode.mime_type ? { mimeType: episode.mime_type } : {}),
+            ...(episode.file_size_bytes === null ? {} : { fileSizeBytes: Number(episode.file_size_bytes) }),
+            durationSeconds: episode.duration_seconds,
+            runtimeMinutes: Math.max(1, Math.round(episode.duration_seconds / 60)),
+            seasonId: episode.season_id,
+            ...(seasonNumber === undefined ? {} : { seasonNumber }),
+            episodeNumber: episode.episode_number,
+            parentSeriesId: seriesId,
+            availability: {
+              discoverable: episode.published,
+              stream: episode.published,
+              download: episode.published && episode.allow_download,
+              premium: false,
+            },
+            published: episode.published,
+          },
+        ];
+      });
+    }
+
+    async getEpisodeById(id: string) {
+      const episodeId = id.replace(/^geniuz:episode:/, '');
+      if (episodeId === id) {
+        return null;
+      }
+      const { data, error } = await this.client
+        .from('episodes')
+        .select('id,season_id,episode_number,title,duration_seconds,storage_provider,storage_key,file_extension,mime_type,file_size_bytes,allow_download,published,seasons!inner(series_id)')
+        .eq('id', episodeId)
+        .maybeSingle();
+      if (error) {
+        throw new Error('Could not load this episode.', { cause: error });
+      }
+      if (!data || typeof data.storage_key !== 'string') {
+        return null;
+      }
+      const season = Array.isArray(data.seasons) ? data.seasons[0] : data.seasons;
+      const seriesId =
+        typeof season === 'object' && season !== null && 'series_id' in season
+          ? String(season.series_id)
+          : '';
+      const seasons = await this.getEpisodesForSeason(
+        String(data.season_id),
+        seriesId,
+      );
+      return seasons.find((episode) => episode.id === `geniuz:episode:${episodeId}`) ?? null;
+    }
+
+    async getEpisodePlaybackUrl(episode: Pick<ContentItem, 'id' | 'mediaPath' | 'storageProvider'>) {
+      if (!episode.mediaPath) {
+        throw new Error('This episode does not have an available video file.');
+      }
+      if (episode.storageProvider !== 'b2') {
+        return this.getSignedPlaybackUrl(episode.mediaPath);
+      }
+      return this.getApiPlaybackUrl('episodes', episode.id.replace(/^geniuz:episode:/, ''));
+    }
 
   async getSignedPlaybackUrl(path: string) {
     const { data, error } = await this.client.storage
@@ -418,26 +658,30 @@ export class SupabaseMovieRepository {
     if (movie.storageProvider !== 'b2') {
       return this.getSignedPlaybackUrl(movie.mediaPath);
     }
+    return this.getApiPlaybackUrl('movies', movie.id.replace(/^geniuz:(?:movie|series):/, ''));
+  }
 
+  private async getApiPlaybackUrl(resource: 'movies' | 'episodes', id: string) {
     const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
     if (!apiBaseUrl) {
       throw new Error('The Geniuz API is not configured. Restart the app after setting its URL.');
     }
     const { data, error: sessionError } = await this.client.auth.getSession();
     const accessToken = data.session?.access_token;
-    if (sessionError || !accessToken) {
-      throw new Error('Sign in with an authorized account to prepare this video.', {
+    if (sessionError) {
+      throw new Error('Could not verify your session before preparing playback.', {
         cause: sessionError,
       });
     }
 
+    const requestOptions: RequestInit = accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : {};
     let response: Response;
     try {
       response = await fetch(
-        `${apiBaseUrl.replace(/\/+$/, '')}/movies/${encodeURIComponent(
-          movie.id.replace(/^geniuz:movie:/, ''),
-        )}/play-url`,
-        { headers: { Authorization: `Bearer ${accessToken}` } },
+        `${apiBaseUrl.replace(/\/+$/, '')}/${resource}/${encodeURIComponent(id)}/play-url`,
+        requestOptions,
       );
     } catch (fetchError) {
       throw new Error('Could not reach the video service. Check your connection and retry.', {
@@ -474,8 +718,7 @@ export class SupabaseMovieRepository {
     const { error } = await this.client
       .from('movies')
       .update({ published })
-      .eq('id', movieId.replace(/^geniuz:movie:/, ''))
-      .or('video_path.not.is.null,storage_key.not.is.null');
+      .eq('id', movieId.replace(/^geniuz:(?:movie|series):/, ''));
 
     if (error) {
       throw new Error('Could not update movie publishing status.', { cause: error });

@@ -12,8 +12,11 @@ export const theme = {
   gold: '#D4AF37',
   border: '#2E343E',
   shadow: '#000000',
+  scrim: 'rgba(14, 16, 20, 0.82)',
+  imageScrim: 'rgba(14, 16, 20, 0.56)',
   success: '#58D68D',
   warning: '#F4C95D',
+  error: '#FF8D8D',
 };
 
 export const spacing = {

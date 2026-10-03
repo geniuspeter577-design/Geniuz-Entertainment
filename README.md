@@ -116,7 +116,8 @@ The Supabase publishable key is intentionally public and is protected by RLS. Ne
 | POST | `/uploads/part-urls` | Admin-only presigned B2 part URLs |
 | POST | `/uploads/complete` | Admin-only multipart completion |
 | POST | `/uploads/abort` | Admin-only multipart cancellation |
-| GET | `/movies/:id/play-url` | Admin-only, two-hour B2 playback URL |
+| GET | `/movies/:id/play-url` | Two-hour B2 playback URL for published movies; unpublished movies are admin-only |
+| GET | `/episodes/:id/play-url` | Two-hour B2 playback URL for published episodes; unpublished episodes are admin-only |
 
 List responses use `{ items, page, totalPages }`; detail responses use `{ item }`. Errors use `{ error: { code, message } }`. Query sizes/pages and content ID formats are validated. The API only maps predefined provider paths; it cannot fetch caller-supplied URLs.
 

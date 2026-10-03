@@ -78,9 +78,11 @@ export default function DownloadsScreen() {
                       ? formatBytes(record.size)
                       : isDownloading
                         ? `${formatBytes(record.size)} · Downloading ${record.progress}%`
-                        : record.status === 'canceled'
-                          ? 'Download canceled'
-                          : 'Download failed'}
+                        : record.status === 'queued'
+                          ? `${formatBytes(record.size)} · Queued`
+                          : record.status === 'canceled'
+                            ? 'Download canceled'
+                            : 'Download failed'}
                   </Text>
                   {isDownloading ? (
                     <View
@@ -99,6 +101,22 @@ export default function DownloadsScreen() {
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={`Cancel ${record.item.title} download`}
+                    onPress={() =>
+                      void cancel(record.item.id).catch((actionError: unknown) =>
+                        Alert.alert(
+                          'Download error',
+                          actionError instanceof Error ? actionError.message : 'Could not cancel this download.',
+                        ),
+                      )
+                    }
+                    style={styles.actionButton}
+                  >
+                    <Ionicons name="close" size={19} color={theme.text} />
+                  </Pressable>
+                ) : record.status === 'queued' ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Cancel queued ${record.item.title} download`}
                     onPress={() =>
                       void cancel(record.item.id).catch((actionError: unknown) =>
                         Alert.alert(

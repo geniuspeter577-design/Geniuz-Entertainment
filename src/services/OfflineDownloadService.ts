@@ -2,8 +2,9 @@ import type { DownloadProgress } from 'expo-file-system';
 
 import { MAX_VIDEO_FILE_SIZE_BYTES } from '../constants/video';
 import type { ContentItem } from '../models/content';
+import { downloadInOrder } from '../utils/downloadQueue';
 
-export type OfflineDownloadStatus = 'downloading' | 'downloaded' | 'failed' | 'canceled';
+export type OfflineDownloadStatus = 'queued' | 'downloading' | 'downloaded' | 'failed' | 'canceled';
 
 export type OfflineDownloadRecord = {
   item: ContentItem;
@@ -57,7 +58,8 @@ function isDownloadRecord(value: unknown): value is OfflineDownloadRecord {
     typeof value.size === 'number' &&
     Number.isFinite(value.size) &&
     value.size > 0 &&
-    (value.status === 'downloading' ||
+    (value.status === 'queued' ||
+      value.status === 'downloading' ||
       value.status === 'downloaded' ||
       value.status === 'failed' ||
       value.status === 'canceled') &&
@@ -121,6 +123,8 @@ export class OfflineDownloadService {
           this.fileSystem.deleteFile(record.filePath);
         }
         restored.push({ ...record, status: 'failed', progress: 0 });
+      } else if (record.status === 'queued') {
+        restored.push({ ...record, status: 'failed', progress: 0 });
       } else if (record.status === 'downloaded' && !this.fileSystem.fileExists(record.filePath)) {
         restored.push({ ...record, status: 'failed', progress: 0 });
       } else {
@@ -136,6 +140,63 @@ export class OfflineDownloadService {
   }
 
   async download(item: ContentItem) {
+    const size = this.validateDownload(item);
+    await this.startDownload(item, size, false);
+  }
+
+  async downloadSequentially(items: readonly ContentItem[]) {
+    const uniqueItems = items.filter(
+      (item, index) => items.findIndex((candidate) => candidate.id === item.id) === index,
+    );
+    const queue: { item: ContentItem; size: number }[] = [];
+    for (const item of uniqueItems) {
+      const existing = this.records.find((record) => record.item.id === item.id);
+      if (existing?.status === 'downloaded' && this.fileSystem.fileExists(existing.filePath)) {
+        continue;
+      }
+      if (existing?.status === 'downloading' || existing?.status === 'queued' || this.activeDownloads.has(item.id)) {
+        throw new Error(`${item.title} is already in the download queue.`);
+      }
+      queue.push({ item, size: this.validateDownload(item) });
+    }
+
+    if (queue.length === 0) {
+      return;
+    }
+    const date = new Date().toISOString();
+    const queuedRecords = queue.map(({ item, size }): OfflineDownloadRecord => ({
+      item,
+      filePath: this.fileSystem.getFilePath(item),
+      size,
+      status: 'queued',
+      progress: 0,
+      date,
+    }));
+    this.records = [
+      ...queuedRecords,
+      ...this.records.filter((record) => !queuedRecords.some((queued) => queued.item.id === record.item.id)),
+    ];
+    this.emit();
+    await this.persist();
+
+    let firstError: unknown;
+    await downloadInOrder(queue, async ({ item, size }) => {
+      const queued = this.records.find((record) => record.item.id === item.id);
+      if (queued?.status !== 'queued') {
+        return;
+      }
+      try {
+        await this.startDownload(item, size, true);
+      } catch (error) {
+        firstError ??= error;
+      }
+    });
+    if (firstError) {
+      throw firstError;
+    }
+  }
+
+  private validateDownload(item: ContentItem) {
     if (!item.availability.download) {
       throw new Error('Downloads are not enabled for this title.');
     }
@@ -149,13 +210,19 @@ export class OfflineDownloadService {
     if (size > this.maxFileSize) {
       throw new Error('This video exceeds the 1 GB download limit.');
     }
+    return size;
+  }
 
+  private async startDownload(item: ContentItem, size: number, fromQueue: boolean) {
     const existing = this.records.find((record) => record.item.id === item.id);
     if (existing?.status === 'downloaded' && this.fileSystem.fileExists(existing.filePath)) {
       return;
     }
     if (this.activeDownloads.has(item.id)) {
       throw new Error('This title is already downloading.');
+    }
+    if (existing?.status === 'queued' && !fromQueue) {
+      throw new Error('This title is already queued for download.');
     }
 
     const reservedSpace = [...this.activeDownloads.values()].reduce(
@@ -190,6 +257,10 @@ export class OfflineDownloadService {
   async cancel(itemId: string) {
     const active = this.activeDownloads.get(itemId);
     if (!active) {
+      const queued = this.records.find((record) => record.item.id === itemId && record.status === 'queued');
+      if (queued) {
+        await this.setRecord({ ...queued, status: 'canceled', progress: 0 });
+      }
       return;
     }
     active.controller.abort();
