@@ -1,0 +1,131 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { test } = require('node:test');
+
+const { createAccount, getAuthState, getFriendlyAuthError, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
+const { isValidProfileCreation } = require('../.test-build/src/utils/accountProfile.js');
+const { isAccountProfile } = require('../.test-build/src/models/profile.js');
+const { createChunkedSecureStorage, splitSecureValue } = require('../.test-build/src/utils/secureStorage.js');
+
+function createAuth(overrides = {}) {
+  return {
+    signUp: async () => ({ data: { session: { user: { id: 'user-id' } } }, error: null }),
+    signInWithPassword: async () => ({ data: { session: { user: { id: 'user-id' } } }, error: null }),
+    signOut: async () => ({ error: null }),
+    resetPasswordForEmail: async () => ({ error: null }),
+    ...overrides,
+  };
+}
+
+test('auth state reads signed-in and admin state only from the authenticated session', () => {
+  assert.deepEqual(getAuthState(null), { userId: null, isSignedIn: false, isAdmin: false });
+  assert.deepEqual(getAuthState({ user: { id: 'user-id', app_metadata: { role: 'user' } } }), {
+    userId: 'user-id', isSignedIn: true, isAdmin: false,
+  });
+  assert.deepEqual(getAuthState({ user: { id: 'admin-id', app_metadata: { role: 'admin' } } }), {
+    userId: 'admin-id', isSignedIn: true, isAdmin: true,
+  });
+});
+
+test('guest feature gating opens the reusable sign-in sheet while signed-in actions proceed', () => {
+  let opens = 0;
+  const openSheet = () => { opens += 1; };
+  assert.equal(runAccountFeatureGate(false, openSheet), false);
+  assert.equal(opens, 1);
+  assert.equal(runAccountFeatureGate(true, openSheet), true);
+  assert.equal(opens, 1);
+});
+
+test('account creation trims email and display name and reports email-confirmation state', async () => {
+  let request;
+  const auth = createAuth({
+    signUp: async (input) => {
+      request = input;
+      return { data: { session: null }, error: null };
+    },
+  });
+  assert.deepEqual(await createAccount(auth, ' person@example.test ', 'password-value', ' Name ', 'geniuz://auth/confirm'), {
+    hasSession: false,
+  });
+  assert.deepEqual(request, {
+    email: 'person@example.test',
+    password: 'password-value',
+    options: { data: { display_name: 'Name' }, emailRedirectTo: 'geniuz://auth/confirm' },
+  });
+});
+
+test('sign-in, sign-out, and password reset use Supabase Auth through mocked calls', async () => {
+  const calls = [];
+  const auth = createAuth({
+    signInWithPassword: async (input) => { calls.push(['sign-in', input.email]); return { data: { session: {} }, error: null }; },
+    signOut: async () => { calls.push(['sign-out']); return { error: null }; },
+    resetPasswordForEmail: async (email, options) => { calls.push(['reset', email, options]); return { error: null }; },
+  });
+  await signInToAccount(auth, ' user@example.test ', 'password');
+  await signOutOfAccount(auth);
+  await sendPasswordReset(auth, ' user@example.test ', 'geniuz://auth/recovery');
+  assert.deepEqual(calls, [
+    ['sign-in', 'user@example.test'],
+    ['sign-out'],
+    ['reset', 'user@example.test', { redirectTo: 'geniuz://auth/recovery' }],
+  ]);
+});
+
+test('account errors explain invalid credentials, unconfirmed email, network, and duplicate signup', () => {
+  assert.match(getFriendlyAuthError({ code: 'invalid_credentials' }), /email or password is incorrect/i);
+  assert.match(getFriendlyAuthError({ code: 'email_not_confirmed' }), /confirm your email/i);
+  assert.match(getFriendlyAuthError(new TypeError('Network request failed')), /internet connection/i);
+  assert.match(getFriendlyAuthError({ code: 'user_already_exists' }), /already exists/i);
+});
+
+test('profile creation and returned profile validation require the auth ID and short numeric public ID', () => {
+  const input = {
+    userId: '00000000-0000-4000-8000-000000000001',
+    displayName: 'Geniuz User',
+    publicId: '00123456',
+  };
+  assert.equal(isValidProfileCreation(input), true);
+  assert.equal(isValidProfileCreation({ ...input, publicId: 'public-id' }), false);
+  assert.equal(isValidProfileCreation({ ...input, displayName: '   ' }), false);
+  const profile = {
+    id: input.userId,
+    display_name: input.displayName,
+    avatar_color: '#72F06A',
+    public_id: input.publicId,
+    created_at: '2026-10-03T00:00:00Z',
+  };
+  assert.equal(isAccountProfile(profile, input.userId), true);
+  assert.equal(isAccountProfile({ ...profile, id: 'another-user' }, input.userId), false);
+});
+
+test('SecureStore adapter chunks large UTF-8 sessions, replaces old chunks, and removes the whole value', async () => {
+  const values = new Map();
+  const store = {
+    getItemAsync: async (key) => values.get(key) ?? null,
+    setItemAsync: async (key, value) => values.set(key, value),
+    deleteItemAsync: async (key) => values.delete(key),
+  };
+  const secureStorage = createChunkedSecureStorage(store, 48);
+  const session = `${'session-token-'.repeat(40)}${'🔐'.repeat(40)}`;
+  const chunks = splitSecureValue(session, 48);
+  assert.ok(chunks.length > 1);
+  assert.ok(chunks.every((chunk) => Buffer.byteLength(chunk, 'utf8') <= 48));
+  await secureStorage.setItem('auth-session', session);
+  assert.equal(await secureStorage.getItem('auth-session'), session);
+  await secureStorage.setItem('auth-session', 'short');
+  assert.equal(await secureStorage.getItem('auth-session'), 'short');
+  assert.equal([...values.keys()].some((key) => key.includes(':secure-chunk:')), false);
+  await secureStorage.removeItem('auth-session');
+  assert.equal(await secureStorage.getItem('auth-session'), null);
+});
+
+test('profile migration creates user-owned profiles on signup and grants no public insert policy', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261011000000_user_profiles.sql', 'utf8');
+  assert.match(migration, /references auth\.users\(id\) on delete cascade/i);
+  assert.match(migration, /public_id text not null unique check \(public_id ~ '\^\[0-9\]\{8\}\$'\)/i);
+  assert.match(migration, /after insert on auth\.users/i);
+  assert.match(migration, /using \(id = auth\.uid\(\)\)/i);
+  assert.match(migration, /with check \(id = auth\.uid\(\)\)/i);
+  assert.match(migration, /revoke all on table public\.profiles from anon, authenticated/i);
+  assert.doesNotMatch(migration, /grant insert[\s\S]{0,80}to anon/i);
+});

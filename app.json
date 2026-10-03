@@ -20,7 +20,8 @@
           "backgroundColor": "#0E1014",
           "imageWidth": 280
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "ios": {
       "supportsTablet": true,
