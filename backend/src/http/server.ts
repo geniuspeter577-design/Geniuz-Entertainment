@@ -2,12 +2,26 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 
 import type { Config } from '../config/config';
 import type { ContentPage } from '../models/content';
+import { B2StorageService } from '../storage/B2StorageService';
+import {
+  validateCompletedParts,
+  validateUploadInput,
+} from '../storage/uploadValidation';
 import { ContentNotFoundError, ContentService } from '../services/ContentService';
+import { authenticateAdmin } from './auth';
 import { HttpError, mapProviderError } from './errors';
 
 const MAX_PAGE = 500;
 const MAX_QUERY_LENGTH = 120;
 const MAX_GENRE_LENGTH = 80;
+const MAX_JSON_BODY_BYTES = 256 * 1024;
+
+let b2Storage: B2StorageService | undefined;
+
+function getB2Storage(config: Config) {
+  b2Storage ??= new B2StorageService(config);
+  return b2Storage;
+}
 
 function writeJson(response: ServerResponse, status: number, data: unknown) {
   const body = JSON.stringify(data);
@@ -64,9 +78,48 @@ function withCors(request: IncomingMessage, response: ServerResponse, config: Co
     response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Vary', 'Origin');
     response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    response.setHeader(
+      'Access-Control-Allow-Headers',
+      'Authorization, Content-Type, apikey, x-client-info',
+    );
     response.setHeader('Access-Control-Max-Age', '600');
   }
+}
+
+async function readJson(request: IncomingMessage): Promise<Record<string, unknown>> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > MAX_JSON_BODY_BYTES) {
+      throw new HttpError(413, 'REQUEST_TOO_LARGE', 'The request is too large.');
+    }
+    chunks.push(buffer);
+  }
+
+  let value: unknown;
+  try {
+    value = JSON.parse(Buffer.concat(chunks).toString('utf8'));
+  } catch {
+    throw new HttpError(400, 'INVALID_JSON', 'The request body must be valid JSON.');
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new HttpError(400, 'INVALID_JSON', 'The request body must be a JSON object.');
+  }
+  return value as Record<string, unknown>;
+}
+
+function requiredString(body: Record<string, unknown>, field: string, maximumLength = 2048) {
+  const value = body[field];
+  if (typeof value !== 'string' || !value.trim() || value.length > maximumLength) {
+    throw new HttpError(400, 'INVALID_REQUEST', `The "${field}" field is invalid.`);
+  }
+  return value.trim();
+}
+
+function isMovieId(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 async function handleRequest(
@@ -94,6 +147,96 @@ async function handleRequest(
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
     }
     writeJson(response, 200, { status: 'ok', service: 'geniuz-api' });
+    return;
+  }
+
+  if (pathname.startsWith('/uploads/')) {
+    await authenticateAdmin(config, request.headers.authorization);
+    const storage = getB2Storage(config);
+
+    if (pathname === '/uploads/init') {
+      if (request.method !== 'POST') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      const input = validateUploadInput(await readJson(request));
+      writeJson(response, 201, await storage.startMultipartUpload(input.fileName, input.contentType));
+      return;
+    }
+
+    if (pathname === '/uploads/part-urls') {
+      if (request.method !== 'POST') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      const body = await readJson(request);
+      const result = await storage.createPartUrls(
+        requiredString(body, 'key'),
+        requiredString(body, 'uploadId'),
+        body.partNumbers,
+      );
+      writeJson(response, 200, result);
+      return;
+    }
+
+    if (pathname === '/uploads/complete') {
+      if (request.method !== 'POST') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      const body = await readJson(request);
+      const key = requiredString(body, 'key');
+      const uploadId = requiredString(body, 'uploadId');
+      const parts = validateCompletedParts(body.parts, 64);
+      writeJson(response, 200, await storage.completeMultipartUpload(key, uploadId, parts));
+      return;
+    }
+
+    if (pathname === '/uploads/abort') {
+      if (request.method !== 'POST') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      const body = await readJson(request);
+      await storage.abortMultipartUpload(
+        requiredString(body, 'key'),
+        requiredString(body, 'uploadId'),
+      );
+      writeJson(response, 200, { aborted: true });
+      return;
+    }
+
+    throw new HttpError(404, 'NOT_FOUND', 'The requested endpoint was not found.');
+  }
+
+  const playUrlMatch = /^\/movies\/([^/]+)\/play-url$/.exec(pathname);
+  if (playUrlMatch) {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client } = await authenticateAdmin(config, request.headers.authorization);
+    let movieId: string;
+    try {
+      movieId = decodeURIComponent(playUrlMatch[1]);
+    } catch {
+      throw new HttpError(400, 'INVALID_MOVIE_ID', 'The movie ID is invalid.');
+    }
+    if (!isMovieId(movieId)) {
+      throw new HttpError(400, 'INVALID_MOVIE_ID', 'The movie ID is invalid.');
+    }
+
+    const { data, error } = await client
+      .from('movies')
+      .select('storage_provider,storage_key')
+      .eq('id', movieId)
+      .maybeSingle();
+    if (error) {
+      throw new HttpError(502, 'MOVIE_LOOKUP_FAILED', 'Could not load this movie.');
+    }
+    if (!data) {
+      throw new HttpError(404, 'MOVIE_NOT_FOUND', 'The requested movie was not found.');
+    }
+    if (data.storage_provider !== 'b2' || typeof data.storage_key !== 'string') {
+      throw new HttpError(409, 'NOT_B2_STORAGE', 'This movie is not stored in Backblaze.');
+    }
+    const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
+    writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
     return;
   }
 

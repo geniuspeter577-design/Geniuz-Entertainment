@@ -32,6 +32,11 @@ export interface ContentItem {
   posterUrl?: string;
   backdropUrl?: string;
   mediaPath?: string;
+  storageProvider?: 'supabase' | 'b2';
+  storageKey?: string;
+  fileExtension?: string;
+  mimeType?: string;
+  fileSizeBytes?: number;
   description?: string;
   rating?: number;
   contentRating?: string;

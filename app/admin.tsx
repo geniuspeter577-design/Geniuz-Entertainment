@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { File as ExpoFile } from 'expo-file-system';
+import { File as ExpoFile, FileMode } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -14,14 +14,17 @@ import {
 } from 'react-native';
 
 import { ContentNotice } from '../src/components/ContentNotice';
+import { MAX_VIDEO_FILE_SIZE_BYTES } from '../src/constants/video';
 import type { ContentItem } from '../src/models/content';
 import { supabaseMovieRepository } from '../src/repositories/SupabaseMovieRepository';
+import { uploadVideoToB2 } from '../src/services/B2UploadService';
 import {
   isSupabaseConfigured,
   supabase,
   supabaseConfigurationError,
 } from '../src/services/supabase';
 import { theme } from '../src/theme';
+import { detectVideoFileType, validateVideoFileSize } from '../src/utils/videoFile';
 
 type AdminMovie = ContentItem & {
   published: boolean;
@@ -32,7 +35,33 @@ type SelectedMovieFile = {
   file: File | ExpoFile;
   name: string;
   size: number;
+  fileExtension: string | null;
+  storageExtension: string;
+  mimeType: string;
+  contentType: string;
 };
+
+async function readVideoPart(
+  file: globalThis.File | ExpoFile,
+  start: number,
+  end: number,
+  contentType: string,
+) {
+  if (file instanceof ExpoFile) {
+    const handle = file.open(FileMode.ReadOnly);
+    try {
+      handle.offset = start;
+      const bytes = handle.readBytes(end - start);
+      if (bytes.byteLength !== end - start) {
+        throw new Error('The selected video file could not be read completely.');
+      }
+      return new Blob([bytes], { type: contentType });
+    } finally {
+      handle.close();
+    }
+  }
+  return file.slice(start, end, contentType);
+}
 
 const inputFields = [
   { key: 'title', label: 'Movie title', placeholder: 'Enter the movie title' },
@@ -45,6 +74,12 @@ const inputFields = [
 ] as const;
 
 function formatFileSize(bytes: number) {
+  if (bytes <= 0) {
+    return '0 B';
+  }
+  if (bytes >= 1024 ** 3) {
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  }
   if (bytes < 1024 * 1024) {
     return `${Math.max(1, Math.round(bytes / 1024))} KB`;
   }
@@ -68,6 +103,7 @@ export default function AdminScreen() {
   const [selectedFile, setSelectedFile] = useState<SelectedMovieFile | null>(null);
   const [confirmedRights, setConfirmedRights] = useState(false);
   const [publishImmediately, setPublishImmediately] = useState(true);
+  const [allowDownload, setAllowDownload] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [formMessage, setFormMessage] = useState<string>();
@@ -192,8 +228,8 @@ export default function AdminScreen() {
     setFormError(undefined);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: 'video/mp4',
-        copyToCacheDirectory: true,
+        type: '*/*',
+        copyToCacheDirectory: false,
         base64: false,
       });
       if (result.canceled) {
@@ -201,22 +237,29 @@ export default function AdminScreen() {
       }
 
       const asset = result.assets[0];
-      if (!asset.name.toLowerCase().endsWith('.mp4')) {
-        setFormError('Choose an MP4 video file. Other formats are not supported for playback.');
-        return;
-      }
-      if (asset.mimeType && !['video/mp4', 'application/octet-stream'].includes(asset.mimeType)) {
-        setFormError('The selected file is not an MP4 video.');
+      const detectedType = detectVideoFileType(asset.name, asset.mimeType);
+      if (!detectedType) {
+        setFormError('Choose a video file. Supported formats include MP4, MOV, MKV, AVI, WebM, M4V, 3GP, TS, FLV, and WMV.');
         return;
       }
 
       const file = asset.file ?? new ExpoFile(asset.uri);
-      if (!file.size) {
-        setFormError('The selected video is empty or its size could not be read.');
+      const fileSize = typeof file.size === 'number' ? file.size : Number.NaN;
+      const sizeValidation = validateVideoFileSize(fileSize, MAX_VIDEO_FILE_SIZE_BYTES);
+      if (!sizeValidation.valid) {
+        setFormError(sizeValidation.message);
         return;
       }
 
-      setSelectedFile({ file, name: asset.name, size: file.size });
+      setSelectedFile({
+        file,
+        name: asset.name,
+        size: fileSize,
+        fileExtension: detectedType.originalExtension,
+        storageExtension: detectedType.extension,
+        mimeType: asset.mimeType?.trim() || detectedType.mimeType,
+        contentType: detectedType.mimeType,
+      });
     } catch (error) {
       console.error('[AdminScreen] Video picker failed.', error);
       setFormError('Could not open the video picker. Please try again.');
@@ -224,8 +267,13 @@ export default function AdminScreen() {
   }, []);
 
   const handleUpload = useCallback(async () => {
-    if (!supabaseMovieRepository || !selectedFile) {
-      setFormError('Connect Supabase and choose an MP4 video before uploading.');
+    if (!supabaseMovieRepository || !supabase || !selectedFile) {
+      setFormError('Connect Supabase and choose a video before uploading.');
+      return;
+    }
+    const sizeValidation = validateVideoFileSize(selectedFile.size, MAX_VIDEO_FILE_SIZE_BYTES);
+    if (!sizeValidation.valid) {
+      setFormError(sizeValidation.message);
       return;
     }
     if (!title.trim()) {
@@ -266,7 +314,30 @@ export default function AdminScreen() {
     const abortController = new AbortController();
     uploadAbortController.current = abortController;
     try {
-      await supabaseMovieRepository.publishMovie(
+      const { data: sessionResult, error: sessionError } = await supabase.auth.getSession();
+      const accessToken = sessionResult.session?.access_token;
+      if (sessionError || !accessToken) {
+        throw new Error('Your admin session expired. Sign in again before uploading.', {
+          cause: sessionError,
+        });
+      }
+      const storageKey = await uploadVideoToB2({
+        apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+        accessToken,
+        file: {
+          size: selectedFile.size,
+          readPart: (start, end, contentType) =>
+            readVideoPart(selectedFile.file, start, end, contentType),
+        },
+        fileName: selectedFile.name,
+        contentType: selectedFile.contentType,
+        signal: abortController.signal,
+        onProgress: setProgress,
+      });
+      if (abortController.signal.aborted) {
+        throw new Error('Upload canceled.');
+      }
+      await supabaseMovieRepository.createB2Movie(
         {
           title,
           description,
@@ -279,10 +350,14 @@ export default function AdminScreen() {
           ...(parsedRuntime === undefined ? {} : { runtimeMinutes: parsedRuntime }),
           ...(contentRating.trim() ? { contentRating: contentRating.trim() } : {}),
           published: publishImmediately,
+          allowDownload,
+          fileExtension: selectedFile.fileExtension,
+          storageExtension: selectedFile.storageExtension,
+          mimeType: selectedFile.mimeType,
+          contentType: selectedFile.contentType,
+          fileSizeBytes: selectedFile.size,
         },
-        selectedFile.file,
-        setProgress,
-        abortController.signal,
+        storageKey,
       );
 
       setFormMessage(
@@ -299,10 +374,11 @@ export default function AdminScreen() {
       setContentRating('');
       setPosterUrl('');
       setConfirmedRights(false);
+      setAllowDownload(false);
       setProgress(100);
       await loadMovies();
     } catch (error) {
-      console.error('[AdminScreen] Movie upload failed.', error);
+      console.error('[AdminScreen] Movie upload failed.');
       setFormError(
         error instanceof Error
           ? error.message
@@ -319,6 +395,7 @@ export default function AdminScreen() {
     contentRating,
     description,
     genres,
+    allowDownload,
     loadMovies,
     posterUrl,
     publishImmediately,
@@ -424,7 +501,9 @@ export default function AdminScreen() {
               <View style={styles.sectionHeader}>
                 <View style={styles.grow}>
                   <Text style={styles.sectionTitle}>Upload a movie</Text>
-                  <Text style={styles.helper}>MP4 videos upload directly to private storage in resumable chunks.</Text>
+                  <Text style={styles.helper}>
+                    Videos upload directly to private Backblaze storage in 16 MiB parts.
+                  </Text>
                 </View>
                 <Pressable
                   accessibilityRole="button"
@@ -491,7 +570,7 @@ export default function AdminScreen() {
                 style={styles.filePicker}
               >
                 <Text style={styles.filePickerTitle}>
-                  {selectedFile ? selectedFile.name : 'Choose an MP4 video'}
+                  {selectedFile ? selectedFile.name : 'Choose a video'}
                 </Text>
                 <Text style={styles.helper}>
                   {selectedFile
@@ -499,6 +578,9 @@ export default function AdminScreen() {
                     : 'Select a video file from your phone or computer.'}
                 </Text>
               </Pressable>
+              <Text style={styles.helper}>
+                Any video format up to 1 GB. MP4 plays on every device; MKV and other formats may not play on iPhones.
+              </Text>
 
               <Pressable
                 accessibilityRole="checkbox"
@@ -528,6 +610,19 @@ export default function AdminScreen() {
                 <Text style={styles.checkLabel}>Publish when the upload completes.</Text>
               </Pressable>
 
+              <Pressable
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: allowDownload }}
+                disabled={isUploading}
+                onPress={() => setAllowDownload((current) => !current)}
+                style={styles.checkRow}
+              >
+                <View style={[styles.checkbox, allowDownload && styles.checkedBox]}>
+                  {allowDownload ? <Text style={styles.checkMark}>✓</Text> : null}
+                </View>
+                <Text style={styles.checkLabel}>Allow users to download this title.</Text>
+              </Pressable>
+
               {formError ? <Text style={styles.errorText}>{formError}</Text> : null}
               {formMessage ? <Text style={styles.successText}>{formMessage}</Text> : null}
               {isUploading ? (
@@ -540,7 +635,10 @@ export default function AdminScreen() {
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${progress}%` }]} />
                     </View>
-                    <Text style={styles.helper}>Uploading {progress}%</Text>
+                    <Text style={styles.helper}>
+                      Uploading {progress}% · {formatFileSize((selectedFile?.size ?? 0) * progress / 100)} of{' '}
+                      {formatFileSize(selectedFile?.size ?? 0)}
+                    </Text>
                   </View>
                   <Pressable
                     accessibilityRole="button"

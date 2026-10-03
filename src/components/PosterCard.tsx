@@ -1,7 +1,9 @@
+import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ContentItem } from '../models/content';
+import { useDownloads } from '../state/DownloadsContext';
 import { theme } from '../theme';
 import { formatRuntime } from '../utils/contentPresentation';
 
@@ -13,40 +15,83 @@ type PosterCardProps = {
 };
 
 export function PosterCard({ item, onPress, compact = false, progress }: PosterCardProps) {
+  const { records, download, cancel } = useDownloads();
+  const downloadRecord = records.find((record) => record.item.id === item.id);
+  const isDownloading = downloadRecord?.status === 'downloading';
+  const isDownloaded = downloadRecord?.status === 'downloaded';
+
   return (
-    <Pressable
-      onPress={onPress}
-      style={[styles.card, compact && styles.compactCard]}
-      accessibilityRole="button"
-      accessibilityLabel={`View ${item.title}`}
-    >
-      <Image
-        source={
-          item.posterUrl
-            ? { uri: item.posterUrl }
-            : require('../../assets/icon.png')
-        }
-        style={[styles.image, compact && styles.compactImage]}
-        resizeMode="cover"
-      />
-      <View style={styles.badgeRow}>
-        {item.availability.premium ? <Text style={styles.badge}>Premium</Text> : null}
-        {item.isNewRelease ? <Text style={[styles.badge, styles.newBadge]}>New</Text> : null}
-      </View>
-      <View style={styles.metaWrap}>
-        <Text style={styles.title} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={styles.meta}>
-          {item.year ?? '—'} • {formatRuntime(item)}
-        </Text>
-      </View>
-      {typeof progress === 'number' ? (
-        <View style={styles.progressTrack}>
-          <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(progress, 100))}%` }]} />
+    <View style={[styles.card, compact && styles.compactCard]}>
+      <Pressable
+        onPress={onPress}
+        style={styles.cardPressable}
+        accessibilityRole="button"
+        accessibilityLabel={`View ${item.title}`}
+      >
+        <Image
+          source={
+            item.posterUrl
+              ? { uri: item.posterUrl }
+              : require('../../assets/icon.png')
+          }
+          style={[styles.image, compact && styles.compactImage]}
+          resizeMode="cover"
+        />
+        <View style={styles.badgeRow}>
+          {item.availability.premium ? <Text style={styles.badge}>Premium</Text> : null}
+          {item.isNewRelease ? <Text style={[styles.badge, styles.newBadge]}>New</Text> : null}
         </View>
+        <View style={styles.metaWrap}>
+          <Text style={styles.title} numberOfLines={1}>
+            {item.title}
+          </Text>
+          <Text style={styles.meta}>
+            {item.year ?? '—'} • {formatRuntime(item)}
+          </Text>
+        </View>
+        {typeof progress === 'number' ? (
+          <View style={styles.progressTrack}>
+            <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(progress, 100))}%` }]} />
+          </View>
+        ) : null}
+      </Pressable>
+      {item.availability.download ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={
+            isDownloading
+              ? `Cancel download of ${item.title}`
+              : isDownloaded
+                ? `${item.title} downloaded`
+                : `Download ${item.title}`
+          }
+          accessibilityState={{ disabled: Boolean(isDownloaded) }}
+          disabled={Boolean(isDownloaded)}
+          onPress={() => {
+            if (isDownloading) {
+              void cancel(item.id).catch((error: unknown) =>
+                Alert.alert('Download error', error instanceof Error ? error.message : 'Could not cancel this download.'),
+              );
+            } else {
+              void download(item).catch((error: unknown) =>
+                Alert.alert('Download error', error instanceof Error ? error.message : 'The download failed. Please retry.'),
+              );
+            }
+          }}
+          style={styles.downloadButton}
+        >
+          {isDownloading ? (
+            <Text style={styles.downloadProgress}>{downloadRecord.progress}%</Text>
+          ) : (
+            <Ionicons
+              name={isDownloaded ? 'checkmark' : 'download-outline'}
+              size={19}
+              color={theme.text}
+            />
+          )}
+        </Pressable>
       ) : null}
-    </Pressable>
+    </View>
   );
 }
 
@@ -63,6 +108,9 @@ const styles = StyleSheet.create({
   compactCard: {
     width: 152,
   },
+  cardPressable: {
+    flex: 1,
+  },
   image: {
     width: '100%',
     height: 240,
@@ -77,6 +125,24 @@ const styles = StyleSheet.create({
     right: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  downloadButton: {
+    position: 'absolute',
+    right: 10,
+    top: 10,
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(15, 17, 22, 0.84)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+  },
+  downloadProgress: {
+    color: theme.text,
+    fontSize: 10,
+    fontWeight: '800',
   },
   badge: {
     backgroundColor: 'rgba(15, 17, 22, 0.78)',

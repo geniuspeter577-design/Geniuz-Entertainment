@@ -5,6 +5,13 @@ export type Config = {
   anilistApiUrl: string;
   corsOrigins: string[];
   cacheTtlSeconds: number;
+  supabaseUrl?: string;
+  supabasePublishableKey?: string;
+  s3Endpoint?: string;
+  s3Region?: string;
+  s3AccessKeyId?: string;
+  s3SecretAccessKey?: string;
+  s3Bucket?: string;
 };
 
 function positiveInteger(value: string | undefined, fallback: number) {
@@ -48,5 +55,15 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
       .map((origin) => origin.trim())
       .filter(Boolean),
     cacheTtlSeconds,
+    supabaseUrl: environment.SUPABASE_URL?.trim() || environment.EXPO_PUBLIC_SUPABASE_URL?.trim() || undefined,
+    supabasePublishableKey:
+      environment.SUPABASE_PUBLISHABLE_KEY?.trim() ||
+      environment.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim() ||
+      undefined,
+    s3Endpoint: environment.S3_ENDPOINT?.trim() || undefined,
+    s3Region: environment.S3_REGION?.trim() || undefined,
+    s3AccessKeyId: environment.S3_ACCESS_KEY_ID?.trim() || undefined,
+    s3SecretAccessKey: environment.S3_SECRET_ACCESS_KEY?.trim() || undefined,
+    s3Bucket: environment.S3_BUCKET?.trim() || undefined,
   };
 }

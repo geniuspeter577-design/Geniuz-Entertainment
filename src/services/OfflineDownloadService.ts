@@ -1,0 +1,313 @@
+import type { DownloadProgress } from 'expo-file-system';
+
+import { MAX_VIDEO_FILE_SIZE_BYTES } from '../constants/video';
+import type { ContentItem } from '../models/content';
+
+export type OfflineDownloadStatus = 'downloading' | 'downloaded' | 'failed' | 'canceled';
+
+export type OfflineDownloadRecord = {
+  item: ContentItem;
+  filePath: string;
+  size: number;
+  status: OfflineDownloadStatus;
+  progress: number;
+  date: string;
+};
+
+export type DownloadStorage = {
+  getItem(key: string): Promise<string | null>;
+  setItem(key: string, value: string): Promise<void>;
+};
+
+export type DownloadTask = {
+  downloadAsync(): Promise<{ uri: string } | null>;
+};
+
+export type DownloadFileSystem = {
+  availableDiskSpace(): number;
+  getFilePath(item: ContentItem): string;
+  createDownloadTask(
+    url: string,
+    filePath: string,
+    options: {
+      onProgress: (progress: DownloadProgress) => void;
+      signal: AbortSignal;
+    },
+  ): DownloadTask;
+  fileExists(filePath: string): boolean;
+  getFileSize(filePath: string): number | null;
+  deleteFile(filePath: string): void;
+};
+
+const STORAGE_KEY = '@geniuz/downloads/v1';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function isDownloadRecord(value: unknown): value is OfflineDownloadRecord {
+  if (!isRecord(value) || !isRecord(value.item) || !isRecord(value.item.availability)) {
+    return false;
+  }
+
+  return (
+    typeof value.item.id === 'string' &&
+    typeof value.item.title === 'string' &&
+    typeof value.filePath === 'string' &&
+    typeof value.size === 'number' &&
+    Number.isFinite(value.size) &&
+    value.size > 0 &&
+    (value.status === 'downloading' ||
+      value.status === 'downloaded' ||
+      value.status === 'failed' ||
+      value.status === 'canceled') &&
+    typeof value.progress === 'number' &&
+    Number.isFinite(value.progress) &&
+    value.progress >= 0 &&
+    value.progress <= 100 &&
+    typeof value.date === 'string'
+  );
+}
+
+export class OfflineDownloadService {
+  private records: OfflineDownloadRecord[] = [];
+  private readonly listeners = new Set<(records: OfflineDownloadRecord[]) => void>();
+  private readonly activeDownloads = new Map<
+    string,
+    { controller: AbortController; operation?: Promise<void>; size: number }
+  >();
+  private writeQueue: Promise<void> = Promise.resolve();
+
+  constructor(
+    private readonly storage: DownloadStorage,
+    private readonly fileSystem: DownloadFileSystem,
+    private readonly getSignedUrl: (item: ContentItem) => Promise<string>,
+    private readonly maxFileSize = MAX_VIDEO_FILE_SIZE_BYTES,
+  ) {}
+
+  getRecords() {
+    return this.records;
+  }
+
+  subscribe(listener: (records: OfflineDownloadRecord[]) => void) {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  async load() {
+    const raw = await this.storage.getItem(STORAGE_KEY);
+    if (raw === null) {
+      this.records = [];
+      this.emit();
+      return;
+    }
+
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed) || parsed.version !== 1 || !Array.isArray(parsed.downloads)) {
+      throw new Error('Saved downloads have an unsupported format.');
+    }
+    const rawDownloads = parsed.downloads as unknown[];
+    const savedDownloads = rawDownloads.map((record) => {
+      if (!isDownloadRecord(record)) {
+        throw new Error('Saved download records are invalid.');
+      }
+      return record;
+    });
+
+    const restored: OfflineDownloadRecord[] = [];
+    for (const record of savedDownloads) {
+      if (record.status === 'downloading') {
+        if (this.fileSystem.fileExists(record.filePath)) {
+          this.fileSystem.deleteFile(record.filePath);
+        }
+        restored.push({ ...record, status: 'failed', progress: 0 });
+      } else if (record.status === 'downloaded' && !this.fileSystem.fileExists(record.filePath)) {
+        restored.push({ ...record, status: 'failed', progress: 0 });
+      } else {
+        restored.push(record);
+      }
+    }
+
+    this.records = restored;
+    this.emit();
+    if (restored.some((record, index) => record !== savedDownloads[index])) {
+      await this.persist();
+    }
+  }
+
+  async download(item: ContentItem) {
+    if (!item.availability.download) {
+      throw new Error('Downloads are not enabled for this title.');
+    }
+    if (!item.mediaPath) {
+      throw new Error('This title does not have a downloadable video file.');
+    }
+    const size = item.fileSizeBytes;
+    if (typeof size !== 'number' || !Number.isFinite(size) || size <= 0) {
+      throw new Error('This title’s file size is unavailable. Please try again later.');
+    }
+    if (size > this.maxFileSize) {
+      throw new Error('This video exceeds the 1 GB download limit.');
+    }
+
+    const existing = this.records.find((record) => record.item.id === item.id);
+    if (existing?.status === 'downloaded' && this.fileSystem.fileExists(existing.filePath)) {
+      return;
+    }
+    if (this.activeDownloads.has(item.id)) {
+      throw new Error('This title is already downloading.');
+    }
+
+    const reservedSpace = [...this.activeDownloads.values()].reduce(
+      (total, download) => total + download.size,
+      0,
+    );
+    const availableSpace = this.fileSystem.availableDiskSpace();
+    if (!Number.isFinite(availableSpace) || availableSpace < size + reservedSpace) {
+      throw new Error(
+        `There is not enough free storage for this ${formatBytes(size)} video. Free up space and try again.`,
+      );
+    }
+
+    const active: {
+      controller: AbortController;
+      operation?: Promise<void>;
+      size: number;
+    } = {
+      controller: new AbortController(),
+      size,
+    };
+    this.activeDownloads.set(item.id, active);
+    const operation = this.performDownload(item, size, active.controller.signal);
+    active.operation = operation;
+    try {
+      await operation;
+    } finally {
+      this.activeDownloads.delete(item.id);
+    }
+  }
+
+  async cancel(itemId: string) {
+    const active = this.activeDownloads.get(itemId);
+    if (!active) {
+      return;
+    }
+    active.controller.abort();
+    await active.operation;
+  }
+
+  async delete(itemId: string) {
+    await this.cancel(itemId);
+    const record = this.records.find((candidate) => candidate.item.id === itemId);
+    if (record && this.fileSystem.fileExists(record.filePath)) {
+      this.fileSystem.deleteFile(record.filePath);
+    }
+    this.records = this.records.filter((candidate) => candidate.item.id !== itemId);
+    this.emit();
+    await this.persist();
+  }
+
+  private async performDownload(item: ContentItem, size: number, signal: AbortSignal) {
+    const filePath = this.fileSystem.getFilePath(item);
+    const record: OfflineDownloadRecord = {
+      item,
+      filePath,
+      size,
+      status: 'downloading',
+      progress: 0,
+      date: new Date().toISOString(),
+    };
+
+    try {
+      await this.setRecord(record);
+      const signedUrl = await this.getSignedUrl(item);
+      if (signal.aborted) {
+        throw new Error('Download canceled.');
+      }
+      if (this.fileSystem.fileExists(filePath)) {
+        this.fileSystem.deleteFile(filePath);
+      }
+
+      const task = this.fileSystem.createDownloadTask(signedUrl, filePath, {
+        signal,
+        onProgress: ({ bytesWritten, totalBytes }) => {
+          const progress =
+            totalBytes > 0 ? Math.min(99, Math.floor((bytesWritten / totalBytes) * 100)) : 0;
+          this.updateProgress(item.id, progress);
+        },
+      });
+      let result: { uri: string } | null;
+      try {
+        result = await task.downloadAsync();
+      } catch {
+        throw new Error('The download failed. Check your connection and retry.');
+      }
+      if (!result || signal.aborted) {
+        throw new Error('Download canceled.');
+      }
+
+      const actualSize = this.fileSystem.getFileSize(filePath);
+      if (actualSize === null || !Number.isFinite(actualSize) || actualSize <= 0) {
+        throw new Error('The downloaded file could not be verified. Delete it and try again.');
+      }
+      if (actualSize !== size) {
+        throw new Error('The downloaded file size did not match. Delete it and try again.');
+      }
+      await this.setRecord({ ...record, status: 'downloaded', progress: 100, size: actualSize });
+    } catch (error) {
+      if (this.fileSystem.fileExists(filePath)) {
+        this.fileSystem.deleteFile(filePath);
+      }
+      const canceled = signal.aborted;
+      await this.setRecord({
+        ...record,
+        status: canceled ? 'canceled' : 'failed',
+        progress: 0,
+      });
+      if (!canceled) {
+        throw error;
+      }
+    }
+  }
+
+  private updateProgress(itemId: string, progress: number) {
+    this.records = this.records.map((record) =>
+      record.item.id === itemId && record.status === 'downloading'
+        ? { ...record, progress }
+        : record,
+    );
+    this.emit();
+  }
+
+  private async setRecord(record: OfflineDownloadRecord) {
+    this.records = [record, ...this.records.filter((candidate) => candidate.item.id !== record.item.id)];
+    this.emit();
+    await this.persist();
+  }
+
+  private async persist() {
+    const value = JSON.stringify({ version: 1, downloads: this.records });
+    const write = this.writeQueue.then(() => this.storage.setItem(STORAGE_KEY, value));
+    this.writeQueue = write.catch(() => undefined);
+    await write;
+  }
+
+  private emit() {
+    for (const listener of this.listeners) {
+      listener(this.records);
+    }
+  }
+}
+
+export function formatBytes(bytes: number) {
+  if (bytes <= 0) {
+    return '0 B';
+  }
+  if (bytes >= 1024 ** 3) {
+    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+  }
+  if (bytes >= 1024 ** 2) {
+    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  }
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}

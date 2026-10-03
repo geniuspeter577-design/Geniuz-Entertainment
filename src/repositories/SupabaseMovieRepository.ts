@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { Upload } from 'tus-js-client';
 
@@ -6,7 +7,8 @@ import { supabase } from '../services/supabase';
 
 const MOVIE_BUCKET = 'movie-assets';
 const MOVIE_COLUMNS =
-  'id,title,description,release_year,genres,poster_url,runtime_minutes,content_rating,video_path,published';
+  'id,title,description,release_year,genres,poster_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key';
+const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
 type MovieRecord = {
   id: string;
@@ -19,6 +21,21 @@ type MovieRecord = {
   content_rating: string | null;
   video_path: string | null;
   published: boolean;
+  file_extension: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  allow_download: boolean;
+  storage_provider: 'supabase' | 'b2' | null;
+  storage_key: string | null;
+};
+
+type StoredTusUpload = {
+  size: number | null;
+  metadata: Record<string, string>;
+  creationTime: string;
+  urlStorageKey: string;
+  uploadUrl: string | null;
+  parallelUploadUrls: string[] | null;
 };
 
 export type NewMovie = {
@@ -30,6 +47,39 @@ export type NewMovie = {
   runtimeMinutes?: number;
   contentRating?: string;
   published: boolean;
+  allowDownload: boolean;
+  fileExtension: string | null;
+  storageExtension: string;
+  mimeType: string;
+  contentType: string;
+  fileSizeBytes: number;
+};
+
+type PublishMovieOptions = {
+  draftId?: string;
+  onDraftCreated?: (draftId: string | undefined) => void;
+};
+
+const tusUrlStorage = {
+  async findAllUploads() {
+    const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(TUS_STORAGE_PREFIX));
+    const values = await AsyncStorage.multiGet(keys);
+    return values.flatMap(([, value]) =>
+      value === null ? [] : (JSON.parse(value) as StoredTusUpload[]),
+    );
+  },
+  async findUploadsByFingerprint(fingerprint: string) {
+    const value = await AsyncStorage.getItem(`${TUS_STORAGE_PREFIX}${encodeURIComponent(fingerprint)}`);
+    return value === null ? [] : (JSON.parse(value) as StoredTusUpload[]);
+  },
+  async removeUpload(urlStorageKey: string) {
+    await AsyncStorage.removeItem(urlStorageKey);
+  },
+  async addUpload(fingerprint: string, upload: StoredTusUpload) {
+    const key = `${TUS_STORAGE_PREFIX}${encodeURIComponent(fingerprint)}`;
+    await AsyncStorage.setItem(key, JSON.stringify([{ ...upload, urlStorageKey: key }]));
+    return key;
+  },
 };
 
 function toContentItem(movie: MovieRecord): ContentItem {
@@ -45,11 +95,22 @@ function toContentItem(movie: MovieRecord): ContentItem {
     ...(movie.description ? { description: movie.description } : {}),
     ...(movie.runtime_minutes === null ? {} : { runtimeMinutes: movie.runtime_minutes }),
     ...(movie.content_rating ? { contentRating: movie.content_rating } : {}),
-    ...(movie.video_path ? { mediaPath: movie.video_path } : {}),
+    ...((movie.storage_provider === 'b2' ? movie.storage_key : movie.video_path)
+      ? { mediaPath: movie.storage_provider === 'b2' ? movie.storage_key! : movie.video_path! }
+      : {}),
+    ...(movie.storage_provider ? { storageProvider: movie.storage_provider } : {}),
+    ...(movie.storage_key ? { storageKey: movie.storage_key } : {}),
+    ...(movie.file_extension ? { fileExtension: movie.file_extension } : {}),
+    ...(movie.mime_type ? { mimeType: movie.mime_type } : {}),
+    ...(movie.file_size_bytes === null ? {} : { fileSizeBytes: Number(movie.file_size_bytes) }),
     availability: {
-      discoverable: movie.published && movie.video_path !== null,
-      stream: movie.published && movie.video_path !== null,
-      download: false,
+      discoverable:
+        movie.published &&
+        (movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null),
+      stream:
+        movie.published &&
+        (movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null),
+      download: movie.allow_download,
       premium: false,
     },
   };
@@ -73,7 +134,7 @@ export class SupabaseMovieRepository {
       .from('movies')
       .select(MOVIE_COLUMNS)
       .eq('published', true)
-      .not('video_path', 'is', null)
+      .or('video_path.not.is.null,storage_key.not.is.null')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -145,27 +206,50 @@ export class SupabaseMovieRepository {
     file: Blob,
     onProgress: (progress: number) => void,
     signal?: AbortSignal,
+    options: PublishMovieOptions = {},
   ) {
-    const { data: draft, error: draftError } = await this.client
-      .from('movies')
-      .insert({
-        title: movie.title.trim(),
-        description: movie.description.trim() || null,
-        release_year: movie.releaseYear ?? null,
-        genres: movie.genres,
-        poster_url: movie.posterUrl?.trim() || null,
-        runtime_minutes: movie.runtimeMinutes ?? null,
-        content_rating: movie.contentRating?.trim() || null,
-        published: false,
-      })
-      .select('id')
-      .single();
-
-    if (draftError) {
-      throw new Error('Could not create the movie record.', { cause: draftError });
+    const movieFields = {
+      title: movie.title.trim(),
+      description: movie.description.trim() || null,
+      release_year: movie.releaseYear ?? null,
+      genres: movie.genres,
+      poster_url: movie.posterUrl?.trim() || null,
+      runtime_minutes: movie.runtimeMinutes ?? null,
+      content_rating: movie.contentRating?.trim() || null,
+      file_extension: movie.fileExtension,
+      mime_type: movie.mimeType,
+      file_size_bytes: movie.fileSizeBytes,
+      allow_download: movie.allowDownload,
+      published: false,
+    };
+    let draftId = options.draftId;
+    if (draftId) {
+      const { data, error } = await this.client
+        .from('movies')
+        .update(movieFields)
+        .eq('id', draftId)
+        .is('video_path', null)
+        .select('id')
+        .maybeSingle();
+      if (error || !data) {
+        throw new Error('Could not resume the movie upload. Start a new upload and try again.', {
+          cause: error,
+        });
+      }
+    } else {
+      const { data: draft, error: draftError } = await this.client
+        .from('movies')
+        .insert(movieFields)
+        .select('id')
+        .single();
+      if (draftError) {
+        throw new Error('Could not create the movie record.', { cause: draftError });
+      }
+      draftId = draft.id;
+      options.onDraftCreated?.(draftId);
     }
 
-    const path = `movies/${draft.id}.mp4`;
+    const path = `movies/${draftId}${movie.storageExtension ? `.${movie.storageExtension}` : ''}`;
     let uploaded = false;
 
     try {
@@ -192,13 +276,14 @@ export class SupabaseMovieRepository {
           metadata: {
             bucketName: MOVIE_BUCKET,
             objectName: path,
-            contentType: 'video/mp4',
+            contentType: movie.contentType,
             cacheControl: '3600',
           },
           chunkSize: 6 * 1024 * 1024,
-          retryDelays: [0, 3000, 5000, 10000, 20000],
+          retryDelays: [0, 3000, 5000, 10000, 20000, 30000, 60000, 120000, 300000, 600000],
           uploadDataDuringCreation: true,
           removeFingerprintOnSuccess: true,
+          urlStorage: tusUrlStorage,
           onProgress: (bytesUploaded, bytesTotal) => {
             onProgress(Math.round((bytesUploaded / bytesTotal) * 100));
           },
@@ -224,20 +309,35 @@ export class SupabaseMovieRepository {
         }
         signal?.addEventListener('abort', abortUpload, { once: true });
 
-        upload.start();
+        void upload
+          .findPreviousUploads()
+          .then((previousUploads) => {
+            if (signal?.aborted) {
+              return;
+            }
+            if (previousUploads.length) {
+              upload.resumeFromPreviousUpload(previousUploads[0]);
+            }
+            upload.start();
+          })
+          .catch((error: unknown) => {
+            signal?.removeEventListener('abort', abortUpload);
+            reject(error);
+          });
       });
 
       uploaded = true;
       const { error: updateError } = await this.client
         .from('movies')
         .update({ video_path: path, published: movie.published })
-        .eq('id', draft.id);
+        .eq('id', draftId);
 
       if (updateError) {
         throw new Error('The video uploaded, but its movie record could not be published.', {
           cause: updateError,
         });
       }
+      options.onDraftCreated?.(undefined);
     } catch (error) {
       const cleanupErrors: unknown[] = [];
       if (uploaded) {
@@ -247,9 +347,14 @@ export class SupabaseMovieRepository {
         }
       }
 
-      const { error: deleteError } = await this.client.from('movies').delete().eq('id', draft.id);
-      if (deleteError) {
-        cleanupErrors.push(deleteError);
+      const canceled = signal?.aborted || (error instanceof Error && error.message === 'Movie upload canceled.');
+      if (uploaded || canceled) {
+        const { error: deleteError } = await this.client.from('movies').delete().eq('id', draftId);
+        if (deleteError) {
+          cleanupErrors.push(deleteError);
+        } else {
+          options.onDraftCreated?.(undefined);
+        }
       }
 
       if (cleanupErrors.length) {
@@ -261,6 +366,36 @@ export class SupabaseMovieRepository {
       }
 
       throw error;
+    }
+  }
+
+  async createB2Movie(movie: NewMovie, storageKey: string) {
+    const { data, error } = await this.client
+      .from('movies')
+      .insert({
+        title: movie.title.trim(),
+        description: movie.description.trim() || null,
+        release_year: movie.releaseYear ?? null,
+        genres: movie.genres,
+        poster_url: movie.posterUrl?.trim() || null,
+        runtime_minutes: movie.runtimeMinutes ?? null,
+        content_rating: movie.contentRating?.trim() || null,
+        file_extension: movie.fileExtension,
+        mime_type: movie.mimeType,
+        file_size_bytes: movie.fileSizeBytes,
+        allow_download: movie.allowDownload,
+        storage_provider: 'b2',
+        storage_key: storageKey,
+        video_path: null,
+        published: movie.published,
+      })
+      .select('id')
+      .single();
+
+    if (error || !data) {
+      throw new Error('The video uploaded, but its movie record could not be saved.', {
+        cause: error,
+      });
     }
   }
 
@@ -276,12 +411,71 @@ export class SupabaseMovieRepository {
     return data.signedUrl;
   }
 
+  async getPlaybackUrl(movie: Pick<ContentItem, 'id' | 'mediaPath' | 'storageProvider'>) {
+    if (!movie.mediaPath) {
+      throw new Error('This movie does not have an available video file.');
+    }
+    if (movie.storageProvider !== 'b2') {
+      return this.getSignedPlaybackUrl(movie.mediaPath);
+    }
+
+    const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
+    if (!apiBaseUrl) {
+      throw new Error('The Geniuz API is not configured. Restart the app after setting its URL.');
+    }
+    const { data, error: sessionError } = await this.client.auth.getSession();
+    const accessToken = data.session?.access_token;
+    if (sessionError || !accessToken) {
+      throw new Error('Sign in with an authorized account to prepare this video.', {
+        cause: sessionError,
+      });
+    }
+
+    let response: Response;
+    try {
+      response = await fetch(
+        `${apiBaseUrl.replace(/\/+$/, '')}/movies/${encodeURIComponent(
+          movie.id.replace(/^geniuz:movie:/, ''),
+        )}/play-url`,
+        { headers: { Authorization: `Bearer ${accessToken}` } },
+      );
+    } catch (fetchError) {
+      throw new Error('Could not reach the video service. Check your connection and retry.', {
+        cause: fetchError,
+      });
+    }
+
+    let result: unknown;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      throw new Error('The video service returned an invalid response.', { cause: parseError });
+    }
+    if (!response.ok || typeof result !== 'object' || result === null || !('url' in result)) {
+      const message =
+        typeof result === 'object' &&
+        result !== null &&
+        'error' in result &&
+        typeof result.error === 'object' &&
+        result.error !== null &&
+        'message' in result.error &&
+        typeof result.error.message === 'string'
+          ? result.error.message
+          : 'Could not prepare this movie for playback.';
+      throw new Error(message);
+    }
+    if (typeof result.url !== 'string') {
+      throw new Error('The video service returned an invalid playback URL.');
+    }
+    return result.url;
+  }
+
   async setPublished(movieId: string, published: boolean) {
     const { error } = await this.client
       .from('movies')
       .update({ published })
       .eq('id', movieId.replace(/^geniuz:movie:/, ''))
-      .not('video_path', 'is', null);
+      .or('video_path.not.is.null,storage_key.not.is.null');
 
     if (error) {
       throw new Error('Could not update movie publishing status.', { cause: error });

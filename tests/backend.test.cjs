@@ -2,12 +2,12 @@ const assert = require('node:assert/strict');
 const { once } = require('node:events');
 const { test } = require('node:test');
 
-const { loadConfig } = require('../.test-build/backend/config/config.js');
-const { createApiServer } = require('../.test-build/backend/http/server.js');
-const { TMDBContentRepository } = require('../.test-build/backend/repositories/TMDBContentRepository.js');
-const { MemoryCache } = require('../.test-build/backend/repositories/MemoryCache.js');
-const { HttpTMDBProvider } = require('../.test-build/backend/providers/TMDBProvider.js');
-const { ContentService } = require('../.test-build/backend/services/ContentService.js');
+const { loadConfig } = require('../.test-build/backend/backend/src/config/config.js');
+const { createApiServer } = require('../.test-build/backend/backend/src/http/server.js');
+const { TMDBContentRepository } = require('../.test-build/backend/backend/src/repositories/TMDBContentRepository.js');
+const { MemoryCache } = require('../.test-build/backend/backend/src/repositories/MemoryCache.js');
+const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
+const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 
 const tmdbRecord = {
   id: 101,

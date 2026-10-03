@@ -13,6 +13,9 @@ const sources = [
   'src/repositories/GeniuzContentRepository.ts',
   'src/api/ApiClient.ts',
   'src/services/ContentService.ts',
+  'src/constants/video.ts',
+  'src/utils/videoFile.ts',
+  'src/services/OfflineDownloadService.ts',
 ];
 
 function run(command, args) {
@@ -52,7 +55,7 @@ try {
       '--outDir',
       path.join(outputDirectory, 'backend'),
       '--rootDir',
-      path.join(projectRoot, 'backend/src'),
+      projectRoot,
     ]);
   }
 
@@ -62,6 +65,8 @@ try {
       'tests/content.test.cjs',
       'tests/backend.test.cjs',
       'tests/mobile-api.test.cjs',
+      'tests/offline-download.test.cjs',
+      'tests/backend-storage.test.cjs',
     ]);
   }
 } finally {

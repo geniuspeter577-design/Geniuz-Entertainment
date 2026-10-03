@@ -10,6 +10,7 @@ import { useContentQuery } from '../../src/hooks/useContentQuery';
 import type { ContentItem } from '../../src/models/content';
 import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
+import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { theme } from '../../src/theme';
 import { formatGenres, formatRating, formatRuntime } from '../../src/utils/contentPresentation';
@@ -30,6 +31,7 @@ export default function HomeScreen() {
     [],
   );
   const uploadedMoviesQuery = useContentQuery('uploaded-movies', loadUploadedMovies);
+  const downloads = useDownloads();
   const retryUploadedMovies = uploadedMoviesQuery.retry;
   useFocusEffect(
     useCallback(() => {
@@ -105,6 +107,7 @@ export default function HomeScreen() {
             onAction={warning.onAction}
           />
         ))}
+        {downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
         {!trendingQuery.isLoading && trendingQuery.source === 'mock' && !trendingQuery.warning ? (
           <ContentNotice message="Preview catalog — titles shown here are sample content, not playable streams." />
         ) : null}

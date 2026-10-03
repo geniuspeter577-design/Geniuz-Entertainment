@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useCallback } from 'react';
 import {
+  Alert,
   Image,
   Pressable,
   SafeAreaView,
@@ -15,6 +16,7 @@ import { ContentNotice } from '../../src/components/ContentNotice';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
 import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
+import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { theme } from '../../src/theme';
 import { formatGenres, formatRating, formatRuntime } from '../../src/utils/contentPresentation';
@@ -23,6 +25,7 @@ export default function ContentDetailsScreen() {
   const { id: routeId } = useLocalSearchParams<{ id: string }>();
   const id = typeof routeId === 'string' ? routeId : '';
   const library = useLibrary();
+  const downloads = useDownloads();
   const fallbackItem =
     library.watchlist.find((item) => item.id === id) ??
     library.continueWatching.find((entry) => entry.item.id === id)?.item;
@@ -68,6 +71,9 @@ export default function ContentDetailsScreen() {
   }
 
   const saved = isInWatchlist(media.id);
+  const downloadRecord = downloads.records.find((record) => record.item.id === media.id);
+  const isDownloading = downloadRecord?.status === 'downloading';
+  const isDownloaded = downloadRecord?.status === 'downloaded';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -98,6 +104,7 @@ export default function ContentDetailsScreen() {
             />
           ) : null}
           {libraryError ? <ContentNotice message={libraryError} tone="error" /> : null}
+          {downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
           <Text style={styles.tag}>{formatGenres(media)}</Text>
           <Text style={styles.title}>{media.title}</Text>
           <Text style={styles.meta}>
@@ -126,6 +133,34 @@ export default function ContentDetailsScreen() {
             >
               <Text style={styles.secondaryButtonText}>{saved ? '✓ In My List' : '+ My List'}</Text>
             </Pressable>
+            {media.availability.download ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={Boolean(isDownloaded)}
+                style={[styles.secondaryButton, isDownloaded && styles.disabledButton]}
+                onPress={() => {
+                  if (isDownloading) {
+                    void downloads.cancel(media.id).catch((error: unknown) =>
+                      Alert.alert('Download error', error instanceof Error ? error.message : 'Could not cancel this download.'),
+                    );
+                  } else {
+                    void downloads.download(media).catch((error: unknown) =>
+                      Alert.alert('Download error', error instanceof Error ? error.message : 'The download failed. Please retry.'),
+                    );
+                  }
+                }}
+              >
+                <Text style={styles.secondaryButtonText}>
+                  {isDownloaded
+                    ? 'Downloaded'
+                    : isDownloading
+                      ? `Cancel ${downloadRecord.progress}%`
+                      : downloadRecord?.status === 'failed' || downloadRecord?.status === 'canceled'
+                        ? 'Retry download'
+                        : 'Download'}
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <Text style={styles.description}>
@@ -144,7 +179,9 @@ export default function ContentDetailsScreen() {
             <Text style={styles.infoLabel}>Availability</Text>
             <Text style={styles.infoValue}>
               {media.availability.stream
-                ? 'Streaming is available. Offline downloads are not enabled.'
+                ? media.availability.download
+                  ? 'Streaming and offline downloads are available.'
+                  : 'Streaming is available. Offline downloads are not enabled for this title.'
                 : 'Discovery listing only. Streaming and downloads are not enabled.'}
             </Text>
           </View>

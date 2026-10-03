@@ -9,10 +9,12 @@ Use Node.js 22.9 or newer and npm.
 ```sh
 npm install
 cp .env.example .env
+mkdir -p backend
+cp .env.example backend/.env
 npm run backend:start
 ```
 
-The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in the backend-only `.env`.
+The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in the backend-only `backend/.env`.
 
 In a second terminal, run the mobile app:
 
@@ -20,7 +22,7 @@ In a second terminal, run the mobile app:
 EXPO_PUBLIC_GENIUZ_API_URL=http://localhost:4000 npm run web
 ```
 
-For Expo web in Codespaces, use a forwarded/reachable URL for port 4000 instead of `localhost` if the browser is not running in the same container. Native Android/iOS emulators likewise need an address reachable from the device (for Android emulator, commonly `10.0.2.2:4000`). The server binds to `0.0.0.0`; its CORS origin allowlist is controlled by `CORS_ORIGIN`.
+For Expo web and phones in Codespaces, set `EXPO_PUBLIC_GENIUZ_API_URL` to the forwarded HTTPS URL for backend port 4000. Make port 4000 public with `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`. The server binds to `0.0.0.0`; its CORS origin allowlist is controlled by `CORS_ORIGIN`.
 
 Run the mobile app alone with `npm start`; without `EXPO_PUBLIC_GENIUZ_API_URL`, it uses the local sample catalog.
 
@@ -53,19 +55,41 @@ The backend uses Node's HTTP server and built-in `fetch`; there is no general we
 - `EXPO_PUBLIC_GENIUZ_API_URL` — public API base URL for the Expo client; this is not a secret
 - `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` — public Supabase project settings; these do not grant access without the database and storage policies
 
-Keep `.env` out of source control. Never add the TMDB credential to an `EXPO_PUBLIC_` variable or a mobile build. The backend has no actual credential or provider access until an authorized TMDB API key is configured.
+Keep `.env` and `backend/.env` out of source control. Put `S3_SECRET_ACCESS_KEY` and `S3_ACCESS_KEY_ID` only in `backend/.env` or the backend host's environment; do not use `EXPO_PUBLIC_` names for them. Set `SUPABASE_URL` in the backend environment. The backend uses the existing Supabase publishable key for Supabase Auth and RLS requests; it is public and does not grant admin privileges. Never add the TMDB credential to an `EXPO_PUBLIC_` variable or a mobile build.
 
 ## Upload and stream licensed movies
 
-The app includes a Supabase-backed admin page, private MP4 storage, a published movie catalog, and short-lived signed playback URLs. To enable it:
+The app uses Supabase for authentication and movie records, Backblaze B2 for newly uploaded private video files, and optional local offline downloads. To enable it:
 
 1. Create a Supabase project.
-2. Run [`supabase/migrations/20261002000000_movies.sql`](./supabase/migrations/20261002000000_movies.sql) in the Supabase SQL Editor. It creates the movie table, private `movie-assets` bucket, and row/storage security policies.
+2. Apply all three migrations in timestamp order. With the Supabase CLI, run `npx supabase init` once if this project has no `supabase/config.toml`, then `npx supabase login`, `npx supabase link --project-ref YOUR_PROJECT_REF`, and `npx supabase db push`. Alternatively, apply the SQL files in `supabase/migrations/` in timestamp order in the Supabase SQL Editor. Existing Supabase Storage movies remain on the `supabase` provider and continue to play.
 3. Create an account in Supabase Authentication, then set that user's **app metadata** to `{"role":"admin"}` in the Supabase dashboard. Do not use user-editable metadata for the admin role. Sign out and back in after changing the role.
-4. Copy `.env.example` to `.env`, set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` from the Supabase project settings, and restart Expo.
-5. Start the app with `npm start -- --tunnel`, scan the Expo QR code with Expo Go on your phone, and open **Profile → Admin console**. Choose an MP4, enter its listing details, confirm distribution rights, and upload. Published movies appear under **On Geniuz+** and can be played from their details page. On a computer and phone sharing a local network, `npm start` can be used without the tunnel.
+4. Create a private Backblaze B2 bucket and a bucket-scoped application key with `readFiles` and `writeFiles` capabilities; `deleteFiles` is also needed for the one-off storage diagnostic cleanup. Copy `.env.example` to `.env` for the app and `backend/.env` for the server. Configure `S3_ENDPOINT`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_BUCKET`, and `SUPABASE_URL` only in the backend environment. In the app `.env`, set `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`.
+5. Start the API with `npm run backend:start`. In Codespaces, run `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`, and set the app URL to `https://$CODESPACE_NAME-4000.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` (no trailing slash). Include both `http://localhost:8081` and `https://$CODESPACE_NAME-8081.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` in backend `CORS_ORIGIN`.
+6. Restart Expo with `npm start -- --tunnel`, scan its QR code with Expo Go, and open **Profile → Admin console**. Choose a supported video up to 1 GiB, enter its listing details, confirm distribution rights, and upload. New files upload directly to B2 in 16 MiB parts, with at most three concurrent part uploads. A movie row is created only after storage confirms completion. Check **Allow users to download this title** to enable local downloads.
 
-Large MP4 files use resumable 6 MiB TUS chunks. The migration sets the bucket's per-file limit to 5 GiB; the Supabase project plan's storage and upload limits still apply. Only MP4 is accepted for cross-platform playback. The playback URLs expire after one hour. Published video is available to anyone with a valid signed URL; this MVP does not implement DRM, transcoding to HLS, subscriptions, or offline downloads. Upload and stream only content you are legally authorized to distribute.
+Configure this CORS rule for the B2 bucket (replace the forwarded origin with your Codespace's actual port-8081 origin):
+
+```json
+[
+  {
+    "CORSRules": [
+      {
+        "AllowedOrigins": [
+          "http://localhost:8081",
+          "https://YOUR-CODESPACE-8081.app.github.dev"
+        ],
+        "AllowedMethods": ["GET", "PUT", "HEAD"],
+        "AllowedHeaders": ["*"],
+        "ExposeHeaders": ["ETag"],
+        "MaxAgeSeconds": 3600
+      }
+    ]
+  }
+]
+```
+
+Backblaze's S3-compatible API supports `PutBucketCors` and `GetBucketCors`; configure the rule in the bucket CORS settings or through the S3-compatible API. The B2 application key and secret stay server-side; the app receives only short-lived presigned URLs. B2 playback URLs expire after two hours and support HTTP Range requests for seeking. Playback support depends on the device; MP4 is the most compatible format, and MKV and other formats may not play on iPhones. Offline files are stored in the app's document directory and appear in **Downloads** only for titles whose admin setting permits downloads. The app does not implement DRM, transcoding to HLS, or payments. Upload and stream only content you are legally authorized to distribute.
 
 The Supabase publishable key is intentionally public and is protected by RLS. Never put a Supabase `service_role` key in `.env` variables prefixed with `EXPO_PUBLIC_`, the app, or a mobile build.
 
@@ -87,7 +111,12 @@ The Supabase publishable key is intentionally public and is protected by RLS. Ne
 | GET | `/api/content/:id/similar?page=1` | Similar metadata |
 | GET | `/api/genres` | Movie and TV genres |
 | POST | `/api/playback/session` | Explicitly unavailable (501) until licensed playback exists |
-| POST | `/api/downloads/authorize` | Explicitly unavailable (501) until download entitlements exist |
+| POST | `/api/downloads/authorize` | Explicitly unavailable (501); offline downloads use the same movie playback URL as streaming |
+| POST | `/uploads/init` | Admin-only multipart upload initialization |
+| POST | `/uploads/part-urls` | Admin-only presigned B2 part URLs |
+| POST | `/uploads/complete` | Admin-only multipart completion |
+| POST | `/uploads/abort` | Admin-only multipart cancellation |
+| GET | `/movies/:id/play-url` | Admin-only, two-hour B2 playback URL |
 
 List responses use `{ items, page, totalPages }`; detail responses use `{ item }`. Errors use `{ error: { code, message } }`. Query sizes/pages and content ID formats are validated. The API only maps predefined provider paths; it cannot fetch caller-supplied URLs.
 
