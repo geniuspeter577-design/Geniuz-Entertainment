@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { buildAllowedOrigins } = require('../scripts/b2-cors.cjs');
 
 const {
   requirePublishedOrAdmin,
@@ -118,5 +119,20 @@ test('multipart parts must be unique, in range, contiguous, and carry ETags', ()
     () =>
       validateCompletedParts([{ partNumber: 2, etag: '"0123456789abcdef0123456789abcdef"' }], 64),
     { status: 400 },
+  );
+});
+
+test('B2 CORS origin builder combines configured, Codespaces, and localhost origins once', () => {
+  assert.deepEqual(
+    buildAllowedOrigins({
+      codespaceName: 'fictional-space-waffle-vprqq96jxjgq24vv',
+      corsOrigin: ' https://admin.example.test/ , http://localhost:8081, https://admin.example.test ',
+    }),
+    [
+      'https://admin.example.test',
+      'http://localhost:8081',
+      'https://fictional-space-waffle-vprqq96jxjgq24vv-8081.app.github.dev',
+      'http://localhost:19006',
+    ],
   );
 });
