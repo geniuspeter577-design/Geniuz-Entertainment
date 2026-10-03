@@ -99,7 +99,7 @@ async function startApi(options = {}) {
       : 'server-only-test-token',
     tmdbBaseUrl: 'https://tmdb.example.test/3',
     anilistApiUrl: 'https://anilist.example.test/graphql',
-    corsOrigins: ['http://localhost:8081'],
+    corsOrigins: options.corsOrigins ?? ['http://localhost:8081'],
     cacheTtlSeconds: 30,
   };
   const fakeFetch = makeFetch(options);
@@ -120,6 +120,41 @@ async function startApi(options = {}) {
     }),
   };
 }
+
+test('upload preflight allows the configured app origin and auth headers', async (context) => {
+  const origin = 'http://localhost:8081';
+  const api = await startApi({ corsOrigins: [origin] });
+  context.after(api.close);
+
+  const response = await fetch(`${api.baseUrl}/uploads/init`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: origin,
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(response.status, 204);
+  assert.equal(response.headers.get('access-control-allow-origin'), origin);
+  assert.deepEqual(
+    response.headers.get('access-control-allow-methods')?.split(', '),
+    ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  );
+  const allowedHeaders = response.headers.get('access-control-allow-headers')?.toLowerCase();
+  assert.match(allowedHeaders, /authorization/);
+  assert.match(allowedHeaders, /content-type/);
+
+  const denied = await fetch(`${api.baseUrl}/uploads/init`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: 'https://unlisted.example.test',
+      'Access-Control-Request-Method': 'POST',
+      'Access-Control-Request-Headers': 'authorization,content-type',
+    },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal((await denied.json()).error.code, 'CORS_ORIGIN_DENIED');
+});
 
 test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => {
   const config = loadConfig({

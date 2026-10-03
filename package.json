@@ -49,7 +49,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node scripts/run-tests.cjs",
     "backend:build": "tsc -p backend/tsconfig.json",
-    "backend:start": "npm run backend:build && node --env-file-if-exists=.env --env-file-if-exists=backend/.env backend/dist/backend/src/server.js"
+    "backend:start": "npm run backend:build && node --env-file-if-exists=.env --env-file-if-exists=backend/.env backend/dist/backend/src/server.js",
+    "backend:restart": "node scripts/free-port.cjs 4000 && npm run backend:start"
   },
   "private": true
 }

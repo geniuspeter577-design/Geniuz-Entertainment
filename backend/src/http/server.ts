@@ -15,6 +15,8 @@ const MAX_PAGE = 500;
 const MAX_QUERY_LENGTH = 120;
 const MAX_GENRE_LENGTH = 80;
 const MAX_JSON_BODY_BYTES = 256 * 1024;
+const CORS_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
+const CORS_HEADERS = ['authorization', 'content-type', 'apikey', 'x-client-info'];
 
 let b2Storage: B2StorageService | undefined;
 
@@ -74,15 +76,36 @@ function pageResponse(result: ContentPage) {
 
 function withCors(request: IncomingMessage, response: ServerResponse, config: Config) {
   const origin = request.headers.origin;
-  if (origin && config.corsOrigins.includes(origin)) {
+  const allowedOrigin = Boolean(origin && config.corsOrigins.includes(origin));
+  if (allowedOrigin && origin) {
     response.setHeader('Access-Control-Allow-Origin', origin);
     response.setHeader('Vary', 'Origin');
-    response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    response.setHeader(
-      'Access-Control-Allow-Headers',
-      'Authorization, Content-Type, apikey, x-client-info',
-    );
+    response.setHeader('Access-Control-Allow-Methods', CORS_METHODS);
+    response.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, apikey, x-client-info');
     response.setHeader('Access-Control-Max-Age', '600');
+  }
+  return allowedOrigin;
+}
+
+function validatePreflight(request: IncomingMessage, originAllowed: boolean) {
+  if (!request.headers.origin) {
+    return;
+  }
+  if (!originAllowed) {
+    throw new HttpError(403, 'CORS_ORIGIN_DENIED', 'This app origin is not allowed to access the API.');
+  }
+
+  const requestedMethod = request.headers['access-control-request-method']?.toUpperCase();
+  if (requestedMethod && !CORS_METHODS.split(', ').includes(requestedMethod)) {
+    throw new HttpError(405, 'CORS_METHOD_DENIED', 'This request method is not allowed.');
+  }
+
+  const requestedHeaders = request.headers['access-control-request-headers']
+    ?.split(',')
+    .map((header) => header.trim().toLowerCase())
+    .filter(Boolean);
+  if (requestedHeaders?.some((header) => !CORS_HEADERS.includes(header))) {
+    throw new HttpError(403, 'CORS_HEADERS_DENIED', 'This request includes headers that are not allowed.');
   }
 }
 
@@ -128,9 +151,10 @@ async function handleRequest(
   config: Config,
   content: ContentService,
 ) {
-  withCors(request, response, config);
+  const originAllowed = withCors(request, response, config);
 
   if (request.method === 'OPTIONS') {
+    validatePreflight(request, originAllowed);
     response.writeHead(204);
     response.end();
     return;

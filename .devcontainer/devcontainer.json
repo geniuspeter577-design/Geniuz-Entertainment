@@ -1,0 +1,14 @@
+{
+  "name": "Geniuz Entertainment",
+  "forwardPorts": [4000, 8081],
+  "portsAttributes": {
+    "4000": {
+      "label": "Geniuz API",
+      "onAutoForward": "notify"
+    },
+    "8081": {
+      "label": "Expo",
+      "onAutoForward": "notify"
+    }
+  }
+}

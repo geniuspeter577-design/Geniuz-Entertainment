@@ -39,7 +39,21 @@ function makeApiUrl(baseUrl: string, path: string) {
   return `${normalized}${path}`;
 }
 
+function safeApiBaseUrl(baseUrl: string) {
+  try {
+    const url = new URL(baseUrl);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return '[invalid API URL]';
+  }
+}
+
 async function requestJson<T>(
+  apiBaseUrl: string,
   url: string,
   accessToken: string,
   body: Record<string, unknown>,
@@ -60,15 +74,32 @@ async function requestJson<T>(
     if (signal?.aborted) {
       throw new Error('Upload canceled.');
     }
-    throw new Error('Could not reach the upload service. Check your connection and retry.', {
-      cause: error,
-    });
+    console.error(
+      `[B2UploadService] Network/CORS request failed for ${safeApiBaseUrl(apiBaseUrl)}.`,
+      error instanceof Error ? error.name : 'Unknown network error',
+    );
+    throw new Error(
+      'Could not connect to the upload service. This may be a network or CORS issue. Check that the API port is Public and CORS allows this app, then retry.',
+      {
+        cause: error,
+      },
+    );
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('Your admin session is invalid or expired. Sign in as an admin again, then retry.');
+  }
+  if (response.status >= 500) {
+    throw new Error('The upload service encountered a server error. Please try again later.');
   }
 
   let result: unknown;
   try {
     result = await response.json();
   } catch {
+    if (!response.ok) {
+      throw new Error('The upload service could not complete the request.');
+    }
     throw new Error('The upload service returned an invalid response.');
   }
   if (!response.ok) {
@@ -162,12 +193,17 @@ export async function uploadVideoToB2({
   const initUrl = makeApiUrl(apiBaseUrl, '/uploads/init');
 
   try {
-    multipart = await requestJson<MultipartUpload>(initUrl, accessToken, {
-      fileName,
-      fileSize: file.size,
-      contentType,
-      objectType,
-    });
+    multipart = await requestJson<MultipartUpload>(
+      apiBaseUrl,
+      initUrl,
+      accessToken,
+      {
+        fileName,
+        fileSize: file.size,
+        contentType,
+        objectType,
+      },
+    );
     if (signal.aborted) {
       throw new Error('Upload canceled.');
     }
@@ -187,6 +223,7 @@ export async function uploadVideoToB2({
         (_, index) => firstPart + index,
       );
       const { parts: signedParts } = await requestJson<{ parts: PartUrl[] }>(
+        apiBaseUrl,
         makeApiUrl(apiBaseUrl, '/uploads/part-urls'),
         accessToken,
         { key: multipart.key, uploadId: multipart.uploadId, partNumbers },
@@ -213,6 +250,7 @@ export async function uploadVideoToB2({
       throw new Error('Upload canceled.');
     }
     await requestJson(
+      apiBaseUrl,
       makeApiUrl(apiBaseUrl, '/uploads/complete'),
       accessToken,
       { key: multipart.key, uploadId: multipart.uploadId, parts },
@@ -225,6 +263,7 @@ export async function uploadVideoToB2({
     if (multipart && !completed) {
       try {
         await requestJson(
+          apiBaseUrl,
           makeApiUrl(apiBaseUrl, '/uploads/abort'),
           accessToken,
           { key: multipart.key, uploadId: multipart.uploadId },
