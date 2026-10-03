@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import type { ContentQueryResult } from '../models/content';
+import { getFriendlyCatalogErrorMessage } from '../utils/contentError';
 
 export type ContentQueryState<T> = {
   data: T | null;
@@ -68,13 +69,12 @@ export function useContentQuery<T>(
       })
       .catch((error: unknown) => {
         if (active) {
-          console.error(`[useContentQuery] Loading "${queryKey}" failed.`, error);
           setState((current) => ({
             queryKey,
             attempt,
             data: current.queryKey === queryKey ? current.data : null,
             source: current.queryKey === queryKey ? current.source : null,
-            error: 'We could not load this content. Check your connection and try again.',
+            error: getFriendlyCatalogErrorMessage(error),
             isFetching: false,
           }));
         }

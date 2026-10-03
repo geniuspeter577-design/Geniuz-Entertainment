@@ -5,17 +5,22 @@ import type {
 } from '../models/content';
 import type { ContentRepository, ContentSearchOptions } from '../repositories/ContentRepository';
 import { MockContentRepository } from '../repositories/MockContentRepository';
+import { getFriendlyCatalogErrorMessage } from '../utils/contentError';
 
-const FALLBACK_WARNING = 'The live catalog is unavailable. Showing the local development catalog.';
+const FALLBACK_WARNING = 'The live catalog is unavailable. Showing the Demo catalog.';
+const LIVE_FAILURE_WARNING = 'The catalog is temporarily unavailable. Please retry.';
+const MISSING_CONFIGURATION_WARNING = 'The catalog service is not configured. Please try again later.';
 
 export class ContentService {
   private readonly knownItems = new Map<string, ContentItem>();
+  private readonly loggedFailures = new Set<string>();
 
   constructor(
     private readonly repository: ContentRepository,
     private readonly mockRepository = new MockContentRepository(),
     private readonly remoteEnabled = false,
     private readonly configurationWarning?: string,
+    private readonly allowDemoFallback = process.env.NODE_ENV === 'development',
   ) {}
 
   getTrending = () => this.list('trending', () => this.repository.getTrending(), () => this.mockRepository.getTrending());
@@ -56,11 +61,22 @@ export class ContentService {
     fallbackItem?: ContentItem,
   ): Promise<ContentQueryResult<ContentItem | null>> {
     if (!this.remoteEnabled || id.startsWith('mock:')) {
+      if (!this.allowDemoFallback) {
+        return {
+          data: id.startsWith('mock:') ? null : fallbackItem ?? null,
+          source: fallbackItem ? 'local' : 'tmdb',
+          warning:
+            this.configurationWarning ??
+            (this.remoteEnabled ? LIVE_FAILURE_WARNING : MISSING_CONFIGURATION_WARNING),
+        };
+      }
       const localItem = await this.mockRepository.getById(id);
       return {
         data: localItem ?? fallbackItem ?? null,
         source: 'mock',
-        ...(this.configurationWarning ? { warning: this.configurationWarning } : {}),
+        ...(this.configurationWarning
+          ? { warning: `${this.configurationWarning} Showing the Demo catalog.` }
+          : {}),
       };
     }
 
@@ -72,19 +88,32 @@ export class ContentService {
       }
 
       const resolvedItem =
-        item ?? this.knownItems.get(id) ?? fallbackItem ?? (await this.mockRepository.getById(id));
+        item ??
+        this.knownItems.get(id) ??
+        fallbackItem ??
+        (this.allowDemoFallback ? await this.mockRepository.getById(id) : null);
       return {
         data: resolvedItem,
         source: this.resolveResultSource(resolvedItem),
       };
     } catch (error) {
-      console.error(`[ContentService] Catalog detail request failed for "${id}".`, error);
+      this.logFailure(`detail:${id}`, error);
       const resolvedItem =
-        this.knownItems.get(id) ?? fallbackItem ?? (await this.mockRepository.getById(id));
+        this.knownItems.get(id) ??
+        fallbackItem ??
+        (this.allowDemoFallback ? await this.mockRepository.getById(id) : null);
+      if (!this.allowDemoFallback && !this.knownItems.has(id) && !fallbackItem) {
+        return {
+          data: null,
+          source: 'tmdb',
+          warning: LIVE_FAILURE_WARNING,
+        };
+      }
       return {
         data: resolvedItem,
         source: this.resolveResultSource(resolvedItem),
-        warning: FALLBACK_WARNING,
+        warning:
+          resolvedItem?.source === 'mock' ? FALLBACK_WARNING : LIVE_FAILURE_WARNING,
       };
     }
   }
@@ -95,10 +124,19 @@ export class ContentService {
     fallback: () => Promise<ContentItem[]>,
   ): Promise<ContentQueryResult<ContentItem[]>> {
     if (!this.remoteEnabled) {
+      if (!this.allowDemoFallback) {
+        return {
+          data: [],
+          source: 'tmdb',
+          warning: this.configurationWarning ?? MISSING_CONFIGURATION_WARNING,
+        };
+      }
       return {
         data: await fallback(),
         source: 'mock',
-        ...(this.configurationWarning ? { warning: this.configurationWarning } : {}),
+        ...(this.configurationWarning
+          ? { warning: `${this.configurationWarning} Showing the Demo catalog.` }
+          : {}),
       };
     }
 
@@ -107,7 +145,14 @@ export class ContentService {
       this.remember(data);
       return { data, source: 'tmdb' };
     } catch (error) {
-      console.error(`[ContentService] Catalog request "${key}" failed; using mock content.`, error);
+      this.logFailure(key, error);
+      if (!this.allowDemoFallback) {
+        return {
+          data: [],
+          source: 'tmdb',
+          warning: LIVE_FAILURE_WARNING,
+        };
+      }
       const data = await fallback();
       this.remember(data);
       return {
@@ -120,6 +165,14 @@ export class ContentService {
 
   private resolveResultSource(item?: ContentItem | null): 'mock' | 'tmdb' {
     return item?.source === 'mock' ? 'mock' : 'tmdb';
+  }
+
+  private logFailure(key: string, error: unknown) {
+    if (process.env.NODE_ENV !== 'development' || this.loggedFailures.has(key)) {
+      return;
+    }
+    this.loggedFailures.add(key);
+    console.warn(`[ContentService] Catalog request "${key}" failed.`, getFriendlyCatalogErrorMessage(error));
   }
 
   private remember(items: ContentItem[]) {

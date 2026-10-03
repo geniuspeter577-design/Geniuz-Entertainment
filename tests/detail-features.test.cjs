@@ -246,6 +246,17 @@ test('published movie query columns are declared by project migrations', () => {
   }
 });
 
+test('published series are selectable by anon while series still require no video file', () => {
+  const migration = fs.readFileSync(
+    path.join(process.cwd(), 'supabase/migrations/20261008000000_published_series_read_access.sql'),
+    'utf8',
+  );
+  assert.match(migration, /on public\.movies for select\s+to anon, authenticated/);
+  assert.match(migration, /published\s+and\s+\(\s*content_type = 'series'/);
+  assert.match(migration, /storage_provider = 'supabase' and video_path is not null/);
+  assert.match(migration, /storage_provider = 'b2' and storage_key is not null/);
+});
+
 test('database and storage write policies require the trusted admin role', () => {
   const migrationDirectory = path.join(process.cwd(), 'supabase/migrations');
   const migrations = fs

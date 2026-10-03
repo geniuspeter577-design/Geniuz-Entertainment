@@ -32,7 +32,13 @@ export function ContentRail({
       <SectionHeader title={title} />
       {isLoading ? <ContentNotice message={`Loading ${title.toLowerCase()}…`} /> : null}
       {error ? (
-        <ContentNotice message={error} tone="error" actionLabel="Retry" onAction={retry} />
+        <ContentNotice
+          message={error}
+          tone="error"
+          actionLabel="Retry"
+          onAction={retry}
+          autoHideMs={5000}
+        />
       ) : null}
       {!isLoading && !error && items.length === 0 ? (
         <Text style={styles.emptyText}>{emptyMessage}</Text>

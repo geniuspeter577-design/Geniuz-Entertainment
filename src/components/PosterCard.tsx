@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
@@ -40,14 +41,27 @@ export function PosterCard({ item, onPress, compact = false, grid = false, progr
           {item.availability.premium ? <Text style={styles.badge}>Premium</Text> : null}
           {item.isNewRelease ? <Text style={[styles.badge, styles.newBadge]}>New</Text> : null}
         </View>
-        <View style={styles.metaWrap}>
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            'rgba(14,16,20,0)',
+            'rgba(14,16,20,0.02)',
+            'rgba(14,16,20,0.12)',
+            'rgba(14,16,20,0.4)',
+            'rgba(14,16,20,0.85)',
+          ]}
+          locations={[0, 0.18, 0.42, 0.72, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.metaWrap}
+        >
           <Text style={styles.title} numberOfLines={1}>
             {item.title}
           </Text>
           <Text style={styles.meta}>
             {item.year ?? '—'} • {formatRuntime(item)}
           </Text>
-        </View>
+        </LinearGradient>
         {typeof progress === 'number' ? (
           <View style={styles.progressTrack}>
             <View style={[styles.progressFill, { width: `${Math.max(0, Math.min(progress, 100))}%` }]} />
@@ -190,10 +204,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    height: '38%',
     paddingHorizontal: 12,
-    paddingTop: 28,
+    justifyContent: 'flex-end',
     paddingBottom: 12,
-    backgroundColor: 'rgba(8,10,12,0.6)',
   },
   progressTrack: {
     position: 'absolute',

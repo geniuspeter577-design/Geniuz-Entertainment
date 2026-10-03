@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -83,21 +84,20 @@ export function HomeHeroCarousel({
       >
         <TitleImage uri={item.coverUrl ?? item.posterUrl} style={styles.image} iconSize={48} />
       </Pressable>
-      <View pointerEvents="none" style={StyleSheet.absoluteFill}>
-        {Array.from({ length: 14 }, (_, band) => (
-          <View
-            key={band}
-            style={[
-              styles.gradientBand,
-              {
-                bottom: band * (height * 0.48 / 14),
-                height: height * 0.48 / 14 + 1,
-                backgroundColor: `rgba(14,16,20,${0.04 + (band / 13) * 0.8})`,
-              },
-            ]}
-          />
-        ))}
-      </View>
+      <LinearGradient
+        pointerEvents="none"
+        colors={[
+          'rgba(14,16,20,0)',
+          'rgba(14,16,20,0.02)',
+          'rgba(14,16,20,0.12)',
+          'rgba(14,16,20,0.4)',
+          'rgba(14,16,20,0.85)',
+        ]}
+        locations={[0, 0.18, 0.42, 0.72, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={styles.bottomGradient}
+      />
       <View style={styles.meta}>
         <Text
           accessibilityLabel={`Slide ${index + 1} of ${items.length}`}
@@ -183,7 +183,7 @@ export function HomeHeroCarousel({
 
 const styles = StyleSheet.create({
   outer: { marginHorizontal: -18, marginBottom: 10 },
-  slide: { overflow: 'hidden', backgroundColor: theme.surface },
+  slide: { aspectRatio: 16 / 9, overflow: 'hidden', backgroundColor: theme.surface },
   skeleton: {
     backgroundColor: theme.surface,
     alignItems: 'center',
@@ -192,7 +192,13 @@ const styles = StyleSheet.create({
   },
   skeletonText: { color: theme.secondaryText, fontSize: 13, fontWeight: '600' },
   image: { width: '100%', height: '100%' },
-  gradientBand: { position: 'absolute', left: 0, right: 0 },
+  bottomGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '38%',
+  },
   meta: { position: 'absolute', left: 20, right: 20, bottom: 20 },
   newBadge: {
     alignSelf: 'flex-start',

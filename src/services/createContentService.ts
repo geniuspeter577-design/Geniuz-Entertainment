@@ -20,7 +20,7 @@ function createContentService() {
       mockRepository,
       mockRepository,
       false,
-      'The catalog API URL is invalid. Showing the local development catalog.',
+      'The catalog API URL is invalid.',
     );
   }
 }

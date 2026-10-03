@@ -4,6 +4,7 @@ const { test } = require('node:test');
 const { ApiClient, ApiError } = require('../.test-build/src/api/ApiClient.js');
 const { MockContentRepository } = require('../.test-build/src/repositories/MockContentRepository.js');
 const { ContentService } = require('../.test-build/src/services/ContentService.js');
+const { getFriendlyCatalogErrorMessage } = require('../.test-build/src/utils/contentError.js');
 
 test('mock repository supports search, genre filtering, and explicit missing details', async () => {
   const repository = new MockContentRepository();
@@ -69,6 +70,7 @@ test('API client reports HTTP failures and request timeouts', async () => {
 
 test('content service falls back to mocks and reports the fallback', async (context) => {
   context.mock.method(console, 'error', () => {});
+  context.mock.method(console, 'warn', () => {});
   const repository = new MockContentRepository();
   const unavailableRepository = new Proxy(repository, {
     get(target, property, receiver) {
@@ -80,7 +82,7 @@ test('content service falls back to mocks and reports the fallback', async (cont
       return Reflect.get(target, property, receiver);
     },
   });
-  const service = new ContentService(unavailableRepository, repository, true);
+  const service = new ContentService(unavailableRepository, repository, true, undefined, true);
   const result = await service.getTrending();
 
   assert.equal(result.source, 'mock');
@@ -105,7 +107,7 @@ test('content service resolves mock IDs locally even when the live catalog is co
       return null;
     },
   };
-  const service = new ContentService(remoteRepository, mockRepository, true);
+  const service = new ContentService(remoteRepository, mockRepository, true, undefined, true);
   const result = await service.getById('mock:the-last-horizon');
 
   assert.equal(remoteRequestMade, false);
@@ -115,6 +117,7 @@ test('content service resolves mock IDs locally even when the live catalog is co
 
 test('content service keeps known normalized results available after the API goes down', async (context) => {
   context.mock.method(console, 'error', () => {});
+  context.mock.method(console, 'warn', () => {});
   const item = {
     id: 'tmdb:movie:55',
     source: 'tmdb',
@@ -137,7 +140,7 @@ test('content service keeps known normalized results available after the API goe
 
   assert.equal(result.data?.title, 'Cached title');
   assert.equal(result.source, 'tmdb');
-  assert.match(result.warning, /live catalog is unavailable/i);
+  assert.match(result.warning, /temporarily unavailable/i);
 });
 
 test('content service treats non-mock live catalog items as live results', async () => {
@@ -157,4 +160,82 @@ test('content service treats non-mock live catalog items as live results', async
 
   assert.equal(result.data?.title, 'Remote title');
   assert.equal(result.source, 'tmdb');
+});
+
+test('development fallback is demo-only while production failures return no sample data', async () => {
+  const mockRepository = new MockContentRepository();
+  const unavailableRepository = {
+    getTrending: async () => {
+      throw new ApiError('Provider credentials are missing', 503);
+    },
+  };
+  const developmentService = new ContentService(
+    unavailableRepository,
+    mockRepository,
+    true,
+    undefined,
+    true,
+  );
+  const productionService = new ContentService(
+    unavailableRepository,
+    mockRepository,
+    true,
+    undefined,
+    false,
+  );
+
+  const developmentResult = await developmentService.getTrending();
+  const productionResult = await productionService.getTrending();
+
+  assert.equal(developmentResult.source, 'mock');
+  assert.ok(developmentResult.data.length > 0);
+  assert.match(developmentResult.warning, /Demo catalog/);
+  assert.equal(productionResult.source, 'tmdb');
+  assert.deepEqual(productionResult.data, []);
+  assert.match(productionResult.warning, /temporarily unavailable/i);
+
+  const productionDetailsService = new ContentService(
+    { getById: async () => { throw new ApiError('Provider credentials are missing', 503); } },
+    mockRepository,
+    true,
+    undefined,
+    false,
+  );
+  const productionDetails = await productionDetailsService.getById('geniuz:movie:unknown');
+  assert.equal(productionDetails.data, null);
+});
+
+test('a failed catalog request does not hide results from another request', async () => {
+  const liveItem = {
+    id: 'geniuz:movie:71',
+    source: 'geniuz',
+    title: 'Live result',
+    type: 'movie',
+    genres: [],
+    availability: { discoverable: true, stream: true, download: false, premium: false },
+  };
+  const repository = {
+    getTrending: async () => {
+      throw new ApiError('Trending unavailable', 503);
+    },
+    getPopular: async () => [liveItem],
+  };
+  const service = new ContentService(repository, new MockContentRepository(), true, undefined, false);
+
+  const [trending, popular] = await Promise.all([service.getTrending(), service.getPopular()]);
+
+  assert.deepEqual(trending.data, []);
+  assert.match(trending.warning, /temporarily unavailable/i);
+  assert.deepEqual(popular.data, [liveItem]);
+});
+
+test('catalog errors map to short friendly messages without exposing provider details', () => {
+  assert.equal(
+    getFriendlyCatalogErrorMessage(new Error('fetch failed: private provider detail')),
+    'Could not reach the catalog. Check your connection and retry.',
+  );
+  assert.equal(
+    getFriendlyCatalogErrorMessage({ code: 'PGRST204', message: 'private column diagnostics' }),
+    'Some titles could not be loaded. Please retry.',
+  );
 });

@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useIsFocused } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
@@ -333,6 +334,19 @@ export function TitleTrailerHero({
       ) : null}
       <Animated.View pointerEvents="none" style={[styles.coverFade, { opacity: coverOpacity }]}>
         <TitleImage uri={coverUri} style={styles.cover} iconSize={48} />
+        <LinearGradient
+          colors={[
+            'rgba(14,16,20,0)',
+            'rgba(14,16,20,0.02)',
+            'rgba(14,16,20,0.12)',
+            'rgba(14,16,20,0.4)',
+            'rgba(14,16,20,0.85)',
+          ]}
+          locations={[0, 0.18, 0.42, 0.72, 1]}
+          start={{ x: 0.5, y: 0 }}
+          end={{ x: 0.5, y: 1 }}
+          style={styles.bottomGradient}
+        />
       </Animated.View>
       {hasTrailer && isVideoMounted ? (
         <Pressable
@@ -342,11 +356,6 @@ export function TitleTrailerHero({
           style={styles.videoTapLayer}
         />
       ) : null}
-      <View pointerEvents="none" style={styles.topScrim} />
-      <View pointerEvents="none" style={styles.bottomFadeTop} />
-      <View pointerEvents="none" style={styles.bottomFadeMiddle} />
-      <View pointerEvents="none" style={styles.bottomFade} />
-
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
@@ -475,36 +484,15 @@ const styles = StyleSheet.create({
   },
   coverFade: { ...StyleSheet.absoluteFill },
   cover: { width: '100%', height: '100%' },
+  bottomGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '38%',
+  },
   video: { ...StyleSheet.absoluteFill },
   videoTapLayer: { ...StyleSheet.absoluteFill, zIndex: 1 },
-  topScrim: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: 'rgba(14,16,20,0.12)',
-  },
-  bottomFadeTop: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '62%',
-    backgroundColor: 'rgba(14,16,20,0.22)',
-  },
-  bottomFadeMiddle: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '43%',
-    backgroundColor: 'rgba(14,16,20,0.35)',
-  },
-  bottomFade: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: '27%',
-    backgroundColor: 'rgba(14,16,20,0.58)',
-  },
   backButton: {
     position: 'absolute',
     top: 14,

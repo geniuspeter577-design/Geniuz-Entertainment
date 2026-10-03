@@ -232,7 +232,10 @@ export class SupabaseMovieRepository {
       .order('created_at', { ascending: false });
 
     if (error) {
-      logSupabaseError('[SupabaseMovieRepository] Could not load published movies.', error);
+      logSupabaseError('[SupabaseMovieRepository] Could not load published movies.', error, {
+        table: 'movies',
+        columns: `${MOVIE_COLUMNS},created_at`,
+      });
       throw new Error('Could not load published movies.', { cause: error });
     }
 
@@ -269,7 +272,10 @@ export class SupabaseMovieRepository {
       .maybeSingle();
 
     if (error) {
-      logSupabaseError('[SupabaseMovieRepository] Could not load this movie.', error);
+      logSupabaseError('[SupabaseMovieRepository] Could not load this movie.', error, {
+        table: 'movies',
+        columns: MOVIE_COLUMNS,
+      });
       throw new Error('Could not load this movie.', { cause: error });
     }
 
@@ -729,6 +735,10 @@ export class SupabaseMovieRepository {
         .eq('series_id', normalizedId)
         .order('season_number', { ascending: true });
       if (error) {
+        logSupabaseError('[SupabaseMovieRepository] Could not load seasons for this series.', error, {
+          table: 'seasons',
+          columns: 'id,series_id,season_number,release_year,published',
+        });
         throw new Error('Could not load seasons for this series.', { cause: error });
       }
       const seasons = (data ?? []) as {
@@ -765,6 +775,11 @@ export class SupabaseMovieRepository {
         .eq('season_id', seasonId)
         .order('episode_number', { ascending: true });
       if (error) {
+        logSupabaseError('[SupabaseMovieRepository] Could not load episodes for this season.', error, {
+          table: 'episodes',
+          columns:
+            'id,season_id,episode_number,title,duration_seconds,storage_provider,storage_key,file_extension,mime_type,file_size_bytes,allow_download,published',
+        });
         throw new Error('Could not load episodes for this season.', { cause: error });
       }
       return ((data ?? []) as {

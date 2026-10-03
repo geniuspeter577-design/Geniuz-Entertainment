@@ -122,13 +122,14 @@ export default function SearchScreen() {
             tone="warning"
             actionLabel="Retry"
             onAction={search.retry}
+            autoHideMs={5000}
           />
         ) : null}
         {!search.isLoading &&
         search.source === 'mock' &&
         !search.warning &&
         uploadedSearch.data?.length === 0 ? (
-          <ContentNotice message="Preview catalog — search results are sample content." />
+          <ContentNotice message="Demo catalog — search results are sample content." />
         ) : null}
         <SectionHeader title={debouncedQuery ? 'Results' : 'Popular now'} />
 
@@ -141,6 +142,7 @@ export default function SearchScreen() {
             tone="error"
             actionLabel="Retry"
             onAction={search.retry}
+            autoHideMs={5000}
           />
         ) : null}
         {!search.isLoading &&
@@ -157,6 +159,7 @@ export default function SearchScreen() {
             tone="error"
             actionLabel="Retry"
             onAction={uploadedSearch.retry}
+            autoHideMs={5000}
           />
         ) : null}
 

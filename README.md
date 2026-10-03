@@ -14,7 +14,7 @@ cp .env.example backend/.env
 npm run backend:start
 ```
 
-The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in the backend-only `backend/.env`.
+The API listens on `http://localhost:4000` by default. `GET /health` works without a TMDB credential; catalog routes return a safe configuration error until `TMDB_API_KEY` is set in the backend-only `backend/.env`. Restart the API after changing that setting.
 
 In a second terminal, run the mobile app:
 
@@ -24,7 +24,7 @@ EXPO_PUBLIC_GENIUZ_API_URL=http://localhost:4000 npm run web
 
 For Expo web and phones in Codespaces, set `EXPO_PUBLIC_GENIUZ_API_URL` to the forwarded HTTPS URL for backend port 4000. Make port 4000 public with `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`. The server binds to `0.0.0.0`; its CORS origin allowlist is controlled by `CORS_ORIGIN`.
 
-Run the mobile app alone with `npm start`; without `EXPO_PUBLIC_GENIUZ_API_URL`, it uses the local sample catalog.
+Run the mobile app alone with `npm start`; development builds show the clearly labeled Demo catalog when the API URL is missing or the live catalog is unavailable. Production builds never substitute demo titles and instead show a retryable catalog error.
 
 ## Architecture
 

@@ -5,6 +5,11 @@ export type SupabaseErrorDetails = {
   hint?: string;
 };
 
+export type SupabaseQueryContext = {
+  table: string;
+  columns: string;
+};
+
 export function getSupabaseErrorDetails(error: unknown): SupabaseErrorDetails {
   if (typeof error !== 'object' || error === null) {
     return {};
@@ -20,8 +25,15 @@ export function getSupabaseErrorDetails(error: unknown): SupabaseErrorDetails {
   return result;
 }
 
-export function logSupabaseError(context: string, error: unknown) {
+export function logSupabaseError(
+  context: string,
+  error: unknown,
+  query?: SupabaseQueryContext,
+) {
   if (process.env.NODE_ENV === 'development') {
-    console.error(context, getSupabaseErrorDetails(error));
+    console.error(context, {
+      ...(query ? { table: query.table, columns: query.columns } : {}),
+      ...getSupabaseErrorDetails(error),
+    });
   }
 }
