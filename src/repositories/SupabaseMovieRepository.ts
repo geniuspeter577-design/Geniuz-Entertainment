@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Upload } from 'tus-js-client';
 import type { ContentItem, EpisodeItem, SeasonItem } from '../models/content';
 import { supabase } from '../services/supabase';
+import { logSupabaseError } from '../utils/supabaseError';
 
 const MOVIE_BUCKET = 'movie-assets';
 const MOVIE_COLUMNS =
@@ -12,6 +13,7 @@ const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
 type MovieRecord = {
   id: string;
+  created_at?: string;
   title: string;
   description: string | null;
   release_year: number | null;
@@ -130,6 +132,7 @@ function toContentItem(movie: MovieRecord): ContentItem {
     source: 'geniuz',
     sourceId: movie.id,
     title: movie.title,
+    ...(movie.created_at ? { createdAt: movie.created_at } : {}),
     type: isSeries ? 'series' : 'movie',
     ...(movie.release_year === null ? {} : { year: movie.release_year }),
     genres: movie.genres ?? [],
@@ -223,12 +226,13 @@ export class SupabaseMovieRepository {
   async getPublished() {
     const { data, error } = await this.client
       .from('movies')
-      .select(MOVIE_COLUMNS)
+      .select(`${MOVIE_COLUMNS},created_at`)
       .eq('published', true)
       .or('content_type.eq.series,video_path.not.is.null,storage_key.not.is.null')
       .order('created_at', { ascending: false });
 
     if (error) {
+      logSupabaseError('[SupabaseMovieRepository] Could not load published movies.', error);
       throw new Error('Could not load published movies.', { cause: error });
     }
 
@@ -265,6 +269,7 @@ export class SupabaseMovieRepository {
       .maybeSingle();
 
     if (error) {
+      logSupabaseError('[SupabaseMovieRepository] Could not load this movie.', error);
       throw new Error('Could not load this movie.', { cause: error });
     }
 
@@ -336,8 +341,12 @@ export class SupabaseMovieRepository {
       throw new Error('Could not load this title’s stored files.', { cause: error });
     }
     const b2Keys: string[] = [];
+    const supabaseVideoPaths: string[] = [];
     if (data.storage_provider === 'b2' && typeof data.storage_key === 'string') {
       b2Keys.push(data.storage_key);
+    }
+    if (data.storage_provider === 'supabase' && typeof data.video_path === 'string') {
+      supabaseVideoPaths.push(data.video_path);
     }
     if (typeof data.trailer_storage_key === 'string') {
       b2Keys.push(data.trailer_storage_key);
@@ -350,30 +359,37 @@ export class SupabaseMovieRepository {
       if (episodeError) {
         throw new Error('Could not load this series’s stored episodes.', { cause: episodeError });
       }
-      b2Keys.push(
-        ...(episodes ?? [])
-          .filter((episode) => episode.storage_provider === 'b2' && typeof episode.storage_key === 'string')
-          .map((episode) => episode.storage_key as string),
-      );
+      for (const episode of episodes ?? []) {
+        if (typeof episode.storage_key !== 'string') {
+          continue;
+        }
+        if (episode.storage_provider === 'b2') {
+          b2Keys.push(episode.storage_key);
+        } else {
+          supabaseVideoPaths.push(episode.storage_key);
+        }
+      }
     }
     return {
       b2Keys,
-      supabaseVideoPath: data.storage_provider === 'supabase' && typeof data.video_path === 'string'
-        ? data.video_path
-        : undefined,
+      supabaseVideoPaths,
       images: [data.poster_url, data.cover_url].filter((url): url is string => typeof url === 'string'),
     };
   }
 
   async deleteAdminTitleRecord(id: string) {
-    const { error } = await this.client
+    const { data, error } = await this.client
       .from('movies')
       .delete()
-      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''))
+      .select('id')
+      .maybeSingle();
     if (error) {
-      throw new Error('Stored files were removed, but the title record could not be deleted.', {
-        cause: error,
-      });
+      logSupabaseError('[SupabaseMovieRepository] Title record deletion failed.', error);
+      throw new Error('The title record could not be deleted.', { cause: error });
+    }
+    if (!data) {
+      throw new Error('The title record was not deleted. Confirm your admin role and try again.');
     }
   }
 

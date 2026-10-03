@@ -101,6 +101,10 @@ async function startApi(options = {}) {
     anilistApiUrl: 'https://anilist.example.test/graphql',
     corsOrigins: options.corsOrigins ?? ['http://localhost:8081'],
     cacheTtlSeconds: 30,
+    ...(options.supabaseUrl ? { supabaseUrl: options.supabaseUrl } : {}),
+    ...(options.supabasePublishableKey
+      ? { supabasePublishableKey: options.supabasePublishableKey }
+      : {}),
   };
   const fakeFetch = makeFetch(options);
   const provider = new HttpTMDBProvider(
@@ -155,6 +159,46 @@ test('upload preflight allows the configured app origin and auth headers', async
   });
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).error.code, 'CORS_ORIGIN_DENIED');
+});
+
+test('unauthenticated and non-admin callers are denied every upload, delete, cleanup, and edit API path', async (context) => {
+  const originalFetch = global.fetch;
+  global.fetch = async (input) => {
+    if (new URL(String(input)).pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000009',
+        app_metadata: { role: 'user' },
+      });
+    }
+    return makeResponse({ error: 'unexpected request' }, 404);
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+  });
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+  });
+  context.after(api.close);
+  const paths = [
+    '/uploads/init',
+    '/uploads/part-urls',
+    '/uploads/complete',
+    '/uploads/abort',
+    '/uploads/delete',
+    '/uploads/cleanup',
+    '/uploads/trailer',
+    '/uploads/edit',
+  ];
+  for (const path of paths) {
+    const unauthenticated = await originalFetch(`${api.baseUrl}${path}`, { method: 'POST' });
+    assert.equal(unauthenticated.status, 401, `${path} should require authentication`);
+    const nonAdmin = await originalFetch(`${api.baseUrl}${path}`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer normal-user-test-token' },
+    });
+    assert.equal(nonAdmin.status, 403, `${path} should require an admin`);
+  }
 });
 
 test('trailer play URLs are public for published titles and admin-only for drafts', async (context) => {

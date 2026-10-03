@@ -1,6 +1,10 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer } from 'expo-video';
-import React, { useEffect, useState } from 'react';
+import * as Brightness from 'expo-brightness';
+import * as ScreenOrientation from 'expo-screen-orientation';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
@@ -12,7 +16,19 @@ import { useDownloads } from '../../src/state/DownloadsContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
+import {
+  getDragTarget,
+  getSeekTarget,
+  setPlayerVolume,
+  togglePlayerOrientation,
+} from '../../src/utils/playerControls';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
+
+const PLAYER_GESTURE_HINT_KEY = 'geniuz:player-gesture-hint-dismissed';
+
+type PlayerGestureFeedback =
+  | { kind: 'seek'; label: string }
+  | { kind: 'level'; side: 'left' | 'right'; value: number };
 
 export default function WatchScreen() {
   const { id: routeId, trailer: routeTrailer } = useLocalSearchParams<{ id: string; trailer?: string }>();
@@ -31,6 +47,13 @@ export default function WatchScreen() {
   const [error, setError] = useState<string>();
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [playbackEnded, setPlaybackEnded] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const [gestureFeedback, setGestureFeedback] = useState<PlayerGestureFeedback>();
+  const [showGestureHint, setShowGestureHint] = useState(false);
+  const originalOrientationLock = useRef<ScreenOrientation.OrientationLock | undefined>(undefined);
+  const originalBrightness = useRef<number | undefined>(undefined);
+  const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const brightnessRef = useRef(0.5);
   const [nextEpisodeState, setNextEpisodeState] = useState<{
     currentId: string;
     episode?: ContentItem;
@@ -57,6 +80,155 @@ export default function WatchScreen() {
       : nextEpisodeState?.currentId === movie?.id
       ? nextEpisodeState?.episode
         : undefined;
+
+  useEffect(() => {
+    if (Platform.OS === 'web') {
+      return;
+    }
+    let active = true;
+    void ScreenOrientation.getOrientationLockAsync()
+      .then((lock) => {
+        if (active) {
+          originalOrientationLock.current = lock;
+        }
+      })
+      .catch((orientationError: unknown) => {
+        console.error('[WatchScreen] Could not read the original screen orientation.', orientationError);
+      });
+    return () => {
+      active = false;
+      const previousLock = originalOrientationLock.current;
+      if (previousLock !== undefined) {
+        void ScreenOrientation.lockAsync(previousLock).catch((orientationError: unknown) => {
+          console.error('[WatchScreen] Could not restore the original screen orientation.', orientationError);
+        });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+      return;
+    }
+    let active = true;
+    void Brightness.getBrightnessAsync()
+      .then((value) => {
+        if (active) {
+          originalBrightness.current = value;
+          brightnessRef.current = value;
+        }
+      })
+      .catch((brightnessError: unknown) => {
+        console.error('[WatchScreen] Could not read the original display brightness.', brightnessError);
+      });
+    return () => {
+      active = false;
+      const previousBrightness = originalBrightness.current;
+      if (previousBrightness !== undefined) {
+        void Brightness.setBrightnessAsync(previousBrightness).catch((brightnessError: unknown) => {
+          console.error('[WatchScreen] Could not restore the original display brightness.', brightnessError);
+        });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    void AsyncStorage.getItem(PLAYER_GESTURE_HINT_KEY)
+      .then((dismissed) => {
+        if (active && dismissed !== 'true') {
+          setShowGestureHint(true);
+        }
+      })
+      .catch((storageError: unknown) => {
+        console.error('[WatchScreen] Could not read the player gesture hint preference.', storageError);
+        if (active) {
+          setShowGestureHint(true);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (feedbackTimeout.current) {
+        clearTimeout(feedbackTimeout.current);
+      }
+    },
+    [],
+  );
+
+  const showFeedback = useCallback((feedback: PlayerGestureFeedback) => {
+    if (feedbackTimeout.current) {
+      clearTimeout(feedbackTimeout.current);
+    }
+    setGestureFeedback(feedback);
+    feedbackTimeout.current = setTimeout(() => setGestureFeedback(undefined), 1100);
+  }, []);
+
+  const getGestureValue = useCallback(
+    (side: 'left' | 'right') => (side === 'left' ? brightnessRef.current : player.volume),
+    [player],
+  );
+
+  const handleVerticalDrag = useCallback(
+    (side: 'left' | 'right', startValue: number, deltaY: number, height: number) => {
+      const value = getDragTarget(startValue, deltaY, height);
+      if (side === 'left') {
+        if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
+          return;
+        }
+        brightnessRef.current = value;
+        void Brightness.setBrightnessAsync(value).catch((brightnessError: unknown) => {
+          console.error('[WatchScreen] Could not change the display brightness.', brightnessError);
+        });
+      } else {
+        setPlayerVolume(player, value);
+      }
+      showFeedback({ kind: 'level', side, value });
+    },
+    [player, showFeedback],
+  );
+
+  const handleSeekBy = useCallback(
+    (side: 'left' | 'right') => {
+      const delta = side === 'right' ? 10 : -10;
+      player.seekBy(
+        getSeekTarget(player.currentTime, player.duration, delta) - player.currentTime,
+      );
+      showFeedback({ kind: 'seek', label: `${delta > 0 ? '+' : ''}${delta}s` });
+    },
+    [player, showFeedback],
+  );
+
+  const rotatePlayer = async () => {
+    const landscape = togglePlayerOrientation(isLandscape);
+    if (Platform.OS === 'web') {
+      Alert.alert('Rotation unavailable', 'Screen rotation controls are available in the mobile app.');
+      return;
+    }
+    try {
+      await ScreenOrientation.lockAsync(
+        landscape
+          ? ScreenOrientation.OrientationLock.LANDSCAPE
+          : ScreenOrientation.OrientationLock.PORTRAIT_UP,
+      );
+      setIsLandscape(landscape);
+    } catch (orientationError) {
+      console.error('[WatchScreen] Could not change screen orientation.', orientationError);
+      Alert.alert('Rotation unavailable', 'Could not rotate the screen on this device.');
+    }
+  };
+
+  const dismissGestureHint = () => {
+    setShowGestureHint(false);
+    void AsyncStorage.setItem(PLAYER_GESTURE_HINT_KEY, 'true').catch((storageError: unknown) => {
+      console.error('[WatchScreen] Could not save the player gesture hint preference.', storageError);
+      Alert.alert('Could not save setting', 'The player gesture tip may appear again next time.');
+    });
+  };
 
   useEffect(() => {
     let active = true;
@@ -273,27 +445,61 @@ export default function WatchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, isLandscape && styles.fullscreenSafeArea]}>
+      <Stack.Screen
+        options={{
+          orientation: isLandscape ? 'landscape' : 'portrait',
+          statusBarHidden: isLandscape,
+          navigationBarHidden: isLandscape,
+        }}
+      />
       <PlayerHeader
         player={player}
         playbackUrl={playbackUrl}
         isLoading={isLoading}
         error={error}
         onRetry={retryPlayback}
+        isFullscreen={isLandscape}
+        gestureFeedback={gestureFeedback}
+        getGestureValue={getGestureValue}
+        onVerticalDrag={handleVerticalDrag}
+        onSeekBy={handleSeekBy}
       />
-      {!isOnline && !isOfflinePlayback ? (
+      {showGestureHint ? (
+        <View style={[styles.gestureHint, isLandscape && styles.fullscreenGestureHint]}>
+          <Text style={styles.gestureHintText}>
+            Double-tap left/right to skip 10 seconds. Swipe vertically on the left for brightness and right for volume.
+          </Text>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Dismiss player gesture tip"
+            onPress={dismissGestureHint}
+            style={styles.dismissHintButton}
+          >
+            <Text style={styles.dismissHintText}>Got it</Text>
+          </Pressable>
+        </View>
+      ) : null}
+      {!isLandscape && !isOnline && !isOfflinePlayback ? (
         <OfflineState
           onRetry={() => void retryPlayback()}
           message="You are offline. Download this title while connected to watch it here."
         />
       ) : null}
-      <View style={styles.header}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
-          <Text style={styles.backText}>‹  Back</Text>
-        </Pressable>
-        <Text style={styles.title}>{isTrailer ? `Trailer · ${movie?.title ?? ''}` : 'Now playing'}</Text>
+      <View style={[styles.header, isLandscape && styles.fullscreenHeader]}>
+        {!isLandscape ? (
+          <View style={styles.headerTitle}>
+            <Text style={styles.title}>{isTrailer ? `Trailer · ${movie?.title ?? ''}` : 'Now playing'}</Text>
+          </View>
+        ) : null}
+        <View style={styles.headerActions}>
+          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>‹  Back</Text>
+          </Pressable>
+          <RotateButton isLandscape={isLandscape} onPress={() => void rotatePlayer()} />
+        </View>
       </View>
-      {!isTrailer && movie?.availability.download ? (
+      {!isLandscape && !isTrailer && movie?.availability.download ? (
         <Pressable
           accessibilityRole="button"
           disabled={Boolean(isDownloaded)}
@@ -327,7 +533,7 @@ export default function WatchScreen() {
           </Text>
         </Pressable>
       ) : null}
-      {playbackEnded && nextEpisode ? (
+      {!isLandscape && playbackEnded && nextEpisode ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => router.replace({ pathname: '/watch/[id]', params: { id: nextEpisode.id } })}
@@ -337,13 +543,33 @@ export default function WatchScreen() {
           <Text style={styles.nextEpisodeTitle} numberOfLines={1}>{nextEpisode.title}</Text>
         </Pressable>
       ) : null}
-      {downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
-      <Text style={styles.disclaimer}>
-        {isOfflinePlayback
-          ? 'Playing the saved file on this device.'
-          : 'Playback is available for movies uploaded by an authorized Geniuz+ administrator.'}
-      </Text>
+      {!isLandscape && downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
+      {!isLandscape ? (
+        <Text style={styles.disclaimer}>
+          {isOfflinePlayback
+            ? 'Playing the saved file on this device.'
+            : 'Playback is available for movies uploaded by an authorized Geniuz+ administrator.'}
+        </Text>
+      ) : null}
     </SafeAreaView>
+  );
+}
+
+function RotateButton({ isLandscape, onPress }: { isLandscape: boolean; onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Rotate screen"
+      onPress={onPress}
+      style={styles.rotateButton}
+    >
+      <Ionicons
+        name={isLandscape ? 'phone-portrait-outline' : 'phone-landscape-outline'}
+        size={20}
+        color={theme.accent}
+      />
+      <Text style={styles.rotateText}>Rotate screen</Text>
+    </Pressable>
   );
 }
 
@@ -352,10 +578,29 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.background,
   },
+  fullscreenSafeArea: {
+    padding: 0,
+  },
   header: {
     paddingHorizontal: 18,
     paddingTop: 14,
     paddingBottom: 16,
+  },
+  headerTitle: {
+    marginBottom: 10,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 44,
+  },
+  fullscreenHeader: {
+    position: 'absolute',
+    top: 8,
+    left: 0,
+    right: 0,
+    zIndex: 2,
   },
   backButton: {
     alignSelf: 'flex-start',
@@ -367,6 +612,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
   },
+  rotateButton: {
+    minWidth: 44,
+    minHeight: 44,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 13,
+  },
+  rotateText: { color: theme.text, fontSize: 12, fontWeight: '700' },
   title: {
     color: theme.text,
     fontSize: 24,
@@ -415,4 +674,35 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 14,
   },
+  gestureHint: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 12,
+  },
+  fullscreenGestureHint: {
+    position: 'absolute',
+    left: 18,
+    right: 18,
+    bottom: 24,
+    zIndex: 2,
+    margin: 0,
+  },
+  gestureHintText: { color: theme.text, flex: 1, fontSize: 12, lineHeight: 18 },
+  dismissHintButton: {
+    minWidth: 56,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: theme.accent,
+    paddingHorizontal: 12,
+  },
+  dismissHintText: { color: theme.background, fontSize: 13, fontWeight: '800' },
 });

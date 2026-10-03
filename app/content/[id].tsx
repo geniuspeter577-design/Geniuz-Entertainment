@@ -32,6 +32,7 @@ import {
   VersionsCard,
 } from '../../src/components/detail/DetailComponents';
 import { DownloadSheet } from '../../src/components/detail/DownloadSheet';
+import { TitleTrailerHero } from '../../src/components/detail/TitleTrailerHero';
 import { EpisodeChips, SeasonSheet, SeriesDownloadSheet } from '../../src/components/detail/SeriesComponents';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
 import type { ContentItem, SeasonItem } from '../../src/models/content';
@@ -66,7 +67,7 @@ export default function ContentDetailsScreen() {
           source: 'local' as const,
         });
       }
-      return id.startsWith('geniuz:movie:') && supabaseMovieRepository
+      return /^(?:geniuz:movie:|geniuz:series:)/.test(id) && supabaseMovieRepository
         ? supabaseMovieRepository.getById(id).then((data) => ({ data, source: 'supabase' as const }))
         : contentService.getById(id, fallbackItem);
     },
@@ -244,6 +245,14 @@ export default function ContentDetailsScreen() {
     season.episodes.some((episode) => episode.availability.download),
   );
   const playTitle = () => router.push({ pathname: '/watch/[id]', params: { id: media.id } });
+  const playHeroTitle = () => {
+    const firstEpisode = selectedSeason?.episodes[0];
+    if (isSeries && firstEpisode) {
+      router.push({ pathname: '/watch/[id]', params: { id: firstEpisode.id } });
+      return;
+    }
+    playTitle();
+  };
   const playTrailer = () =>
     router.push({ pathname: '/watch/[id]', params: { id: media.id, trailer: '1' } });
   const handleShare = async () => {
@@ -320,22 +329,19 @@ export default function ContentDetailsScreen() {
           />
         }
       >
-        <View style={styles.heroWrap}>
-          <TitleImage
-            uri={media.coverUrl ?? media.backdropUrl ?? media.posterUrl}
-            style={styles.heroImage}
-            iconSize={48}
-          />
-          <View style={styles.heroOverlay} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Go back"
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={22} color={theme.text} />
-          </Pressable>
-        </View>
+        <TitleTrailerHero
+          item={media}
+          saved={saved}
+          onPlay={playHeroTitle}
+          onManualTrailer={playTrailer}
+          onToggleList={() => void library.toggleWatchlist(media)}
+          onShare={() => void handleShare()}
+          canPlay={
+            isSeries
+              ? Boolean(selectedSeason?.episodes[0])
+              : media.availability.stream && Boolean(media.mediaPath)
+          }
+        />
 
         <View style={styles.contentWrap}>
           {content.warning ? (
@@ -372,13 +378,6 @@ export default function ContentDetailsScreen() {
               </View>
             )}
           </View>
-          {media.trailerStorageKey ? (
-            <Pressable accessibilityRole="button" onPress={playTrailer} style={styles.trailerButton}>
-              <Ionicons name="play-circle-outline" size={19} color={theme.accent} />
-              <Text style={styles.trailerButtonText}>Watch trailer</Text>
-            </Pressable>
-          ) : null}
-
           <ActionChips
             saved={saved}
             downloadLabel={isSeries ? 'Download season' : downloadLabel}
@@ -609,46 +608,11 @@ function InfoLine({ label, value }: { label: string; value?: string }) {
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: theme.background },
   scrollContent: { paddingBottom: 96 },
-  heroWrap: { position: 'relative', height: 260, backgroundColor: theme.surface },
   offlinePoster: { width: 180, height: 270, borderRadius: 14, alignSelf: 'center', marginTop: 20 },
   offlineTitle: { color: theme.text, fontSize: 26, fontWeight: '800', marginHorizontal: 20, marginTop: 18 },
   offlineDescription: { color: theme.muted, fontSize: 15, lineHeight: 23, marginHorizontal: 20, marginTop: 10 },
-  heroImage: { width: '100%', height: '100%' },
-  heroOverlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: theme.imageScrim,
-  },
-  backButton: {
-    position: 'absolute',
-    top: 16,
-    left: 18,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.scrim,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   contentWrap: { paddingHorizontal: 18, paddingTop: 20, paddingBottom: 24 },
   primaryActions: { flexDirection: 'row', marginTop: 16 },
-  trailerButton: {
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.border,
-    backgroundColor: theme.surface,
-  },
-  trailerButtonText: { color: theme.text, fontSize: 13, fontWeight: '700' },
   primaryButton: {
     minHeight: 48,
     flexDirection: 'row',

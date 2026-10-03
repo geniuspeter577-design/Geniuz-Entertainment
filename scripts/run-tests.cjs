@@ -18,13 +18,20 @@ const sources = [
   'src/utils/videoFile.ts',
   'src/utils/watchlist.ts',
   'src/utils/adminCatalog.ts',
+  'src/utils/adminAccess.ts',
+  'src/utils/homeHero.ts',
+  'src/utils/playerControls.ts',
+  'src/utils/trailerAutoplay.ts',
   'src/utils/uploadSaveRecovery.ts',
   'src/utils/titleImageValidation.ts',
   'src/utils/downloadAvailability.ts',
   'src/utils/networkStatus.ts',
+  'src/utils/supabaseError.ts',
+  'src/utils/titleDeletion.ts',
   'src/utils/downloadQueue.ts',
   'src/utils/episodeSelection.ts',
   'src/services/OfflineDownloadService.ts',
+  'src/services/TitleCleanupStore.ts',
 ];
 
 function run(command, args) {

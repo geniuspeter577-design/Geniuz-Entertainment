@@ -68,6 +68,8 @@ The app uses Supabase for authentication and movie records, Backblaze B2 for new
 5. Start the API with `npm run backend:start`. In Codespaces, run `gh codespace ports visibility 4000:public -c "$CODESPACE_NAME"`, and set the app URL to `https://$CODESPACE_NAME-4000.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` (no trailing slash). Include both `http://localhost:8081` and `https://$CODESPACE_NAME-8081.$GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN` in backend `CORS_ORIGIN`.
 6. Restart Expo with `npm start -- --tunnel`, scan its QR code with Expo Go, and open **Profile → Admin console**. Choose a supported video up to 1 GiB, enter its listing details, confirm distribution rights, and upload. New files upload directly to B2 in 16 MiB parts, with at most three concurrent part uploads. A movie row is created only after storage confirms completion. Check **Allow users to download this title** to enable local downloads. Poster and cover images accept JPG, PNG, or WebP up to 5 MB and are resized/compressed before upload; trailers use the same multipart flow and are limited to 300 MB. The rights confirmation is required for image and trailer additions/replacements too.
 
+**Profile → Settings → Autoplay trailers** is on by default; title-page trailer previews stream from B2 and use mobile data. In the player, **Rotate screen** enters landscape fullscreen; double-tap either side to seek 10 seconds and vertically swipe the left/right sides for brightness/volume. The volume gesture changes in-app player volume, not the Android system volume.
+
 Configure this CORS rule for the B2 bucket (replace the forwarded origin with your Codespace's actual port-8081 origin):
 
 ```json

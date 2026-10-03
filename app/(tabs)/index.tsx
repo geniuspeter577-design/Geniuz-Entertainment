@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback } from 'react';
+import React, { useCallback, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -14,20 +14,22 @@ import {
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { ContentRail } from '../../src/components/ContentRail';
+import { HomeHeroCarousel } from '../../src/components/HomeHeroCarousel';
 import { OfflineState } from '../../src/components/OfflineState';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
-import type { ContentItem } from '../../src/models/content';
 import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
-import { formatGenres, formatRating, formatRuntime } from '../../src/utils/contentPresentation';
+import { formatRuntime } from '../../src/utils/contentPresentation';
+import { getHomeHeroItems } from '../../src/utils/homeHero';
 
 export default function HomeScreen() {
   const { isOnline, retryConnection } = useNetwork();
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const trendingQuery = useContentQuery('home-trending', contentService.getTrending, isOnline);
   const popularQuery = useContentQuery('home-popular', contentService.getPopular, isOnline);
   const upcomingQuery = useContentQuery('home-upcoming', contentService.getUpcoming, isOnline);
@@ -56,8 +58,6 @@ export default function HomeScreen() {
     continueWatching,
     error: libraryError,
     isInWatchlist,
-    isLoading: libraryLoading,
-    isSaving: librarySaving,
     toggleWatchlist,
   } = useLibrary();
   const trending = trendingQuery.data ?? [];
@@ -68,7 +68,7 @@ export default function HomeScreen() {
   const series = seriesQuery.data ?? [];
   const anime = animeQuery.data ?? [];
   const uploadedMovies = uploadedMoviesQuery.data ?? [];
-  const featured: ContentItem | undefined = trending[0];
+  const heroItems = getHomeHeroItems(uploadedMovies, downloads.records, isOnline);
   const premiumPicks = popular.filter((item) => item.availability.premium);
   const retries = [
     trendingQuery.retry,
@@ -97,7 +97,30 @@ export default function HomeScreen() {
   if (!isOnline) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineState onRetry={() => void retryConnection()} />
+        <ScrollView
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl
+              refreshing={isCheckingConnection}
+              onRefresh={() => {
+                setIsCheckingConnection(true);
+                void retryConnection().finally(() => setIsCheckingConnection(false));
+              }}
+              tintColor={theme.accent}
+              colors={[theme.accent]}
+            />
+          }
+        >
+          <Text style={styles.brand}>Geniuz+</Text>
+          <HomeHeroCarousel
+            items={heroItems}
+            isLoading={false}
+            offline
+            isInWatchlist={isInWatchlist}
+            onToggleWatchlist={(item) => void toggleWatchlist(item)}
+          />
+          <OfflineState onRetry={() => void retryConnection()} />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -159,62 +182,12 @@ export default function HomeScreen() {
           <ContentNotice message="Preview catalog — titles shown here are sample content, not playable streams." />
         ) : null}
 
-        {trendingQuery.isLoading ? (
-          <ContentNotice message="Loading featured titles…" />
-        ) : trendingQuery.error ? (
-          <ContentNotice message={trendingQuery.error} tone="error" actionLabel="Retry" onAction={trendingQuery.retry} />
-        ) : featured ? (
-          <View style={styles.heroCard}>
-            <Image
-              source={
-                featured.backdropUrl
-                  ? { uri: featured.backdropUrl }
-                  : require('../../assets/icon.png')
-              }
-              style={styles.heroImage}
-              resizeMode="cover"
-            />
-            <View style={styles.heroOverlay} />
-            <View style={styles.heroMeta}>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={`View details for ${featured.title}`}
-                onPress={() => router.push({ pathname: '/content/[id]', params: { id: featured.id } })}
-              >
-                <Text style={styles.heroTag}>
-                  {featured.availability.premium ? 'Premium pick' : 'Featured'}
-                </Text>
-                <Text style={styles.heroTitle}>{featured.title}</Text>
-                <Text style={styles.heroSubtitle}>
-                  {formatGenres(featured)} • {formatRating(featured)}
-                </Text>
-              </Pressable>
-              <View style={styles.heroActions}>
-                <Pressable
-                  style={styles.primaryAction}
-                  onPress={() => router.push({ pathname: '/content/[id]', params: { id: featured.id } })}
-                >
-                  <Text style={styles.primaryActionText}>View details</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={isInWatchlist(featured.id) ? 'Remove from My List' : 'Add to My List'}
-                  disabled={libraryLoading || librarySaving}
-                  style={styles.secondaryAction}
-                  onPress={() => void toggleWatchlist(featured)}
-                >
-                  <Ionicons
-                    name={isInWatchlist(featured.id) ? 'checkmark' : 'add-outline'}
-                    size={18}
-                    color={theme.text}
-                  />
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <ContentNotice message="No featured titles are available right now." />
-        )}
+        <HomeHeroCarousel
+          items={heroItems}
+          isLoading={uploadedMoviesQuery.isLoading}
+          isInWatchlist={isInWatchlist}
+          onToggleWatchlist={(item) => void toggleWatchlist(item)}
+        />
 
         <SectionHeader title="Continue watching" />
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>

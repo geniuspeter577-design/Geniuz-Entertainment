@@ -27,6 +27,7 @@ export interface ContentItem {
   title: string;
   type: ContentType;
   year?: number;
+  createdAt?: string;
   releaseDate?: string;
   genres: string[];
   posterUrl?: string;

@@ -139,3 +139,22 @@ test('content service keeps known normalized results available after the API goe
   assert.equal(result.source, 'tmdb');
   assert.match(result.warning, /live catalog is unavailable/i);
 });
+
+test('content service treats non-mock live catalog items as live results', async () => {
+  const item = {
+    id: 'geniuz:movie:42',
+    source: 'geniuz',
+    sourceId: '42',
+    title: 'Remote title',
+    type: 'movie',
+    genres: ['Drama'],
+    availability: { discoverable: true, stream: true, download: false, premium: false },
+  };
+  const remoteRepository = { getById: async () => item };
+  const service = new ContentService(remoteRepository, new MockContentRepository(), true);
+
+  const result = await service.getById(item.id);
+
+  assert.equal(result.data?.title, 'Remote title');
+  assert.equal(result.source, 'tmdb');
+});

@@ -26,6 +26,18 @@ type PartUrl = {
   url: string;
 };
 
+export class UploadRequestError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly code: string,
+    readonly serviceMessage: string,
+  ) {
+    super(message);
+    this.name = 'UploadRequestError';
+  }
+}
+
 function makeApiUrl(baseUrl: string, path: string) {
   const normalized = baseUrl.trim().replace(/\/+$/, '');
   let parsed: URL;
@@ -87,24 +99,26 @@ async function requestJson<T>(
     );
   }
 
-  if (response.status === 401 || response.status === 403) {
-    throw new Error('Your admin session is invalid or expired. Sign in as an admin again, then retry.');
-  }
-  if (response.status >= 500) {
-    throw new Error('The upload service encountered a server error. Please try again later.');
-  }
-
   let result: unknown;
   try {
     result = await response.json();
   } catch {
     if (!response.ok) {
-      throw new Error('The upload service could not complete the request.');
+      throw new UploadRequestError(
+        response.status === 401 || response.status === 403
+          ? 'Your admin session is invalid or expired. Sign in as an admin again, then retry.'
+          : response.status >= 500
+            ? 'The upload service encountered a server error. Please try again later.'
+            : 'The upload service could not complete the request.',
+        response.status,
+        'INVALID_ERROR_RESPONSE',
+        'The upload service returned an invalid error response.',
+      );
     }
     throw new Error('The upload service returned an invalid response.');
   }
   if (!response.ok) {
-    const message =
+    const serviceMessage =
       typeof result === 'object' &&
       result !== null &&
       'error' in result &&
@@ -114,7 +128,26 @@ async function requestJson<T>(
       typeof result.error.message === 'string'
         ? result.error.message
         : 'The upload service could not complete the request.';
-    throw new Error(message);
+    const code =
+      typeof result === 'object' &&
+      result !== null &&
+      'error' in result &&
+      typeof result.error === 'object' &&
+      result.error !== null &&
+      'code' in result.error &&
+      typeof result.error.code === 'string'
+        ? result.error.code
+        : 'UPLOAD_SERVICE_ERROR';
+    throw new UploadRequestError(
+      response.status === 401 || response.status === 403
+        ? 'Your admin session is invalid or expired. Sign in as an admin again, then retry.'
+        : response.status >= 500
+          ? 'The upload service encountered a server error. Please try again later.'
+          : serviceMessage,
+      response.status,
+      code,
+      serviceMessage,
+    );
   }
   return result as T;
 }

@@ -75,7 +75,7 @@ export class ContentService {
         item ?? this.knownItems.get(id) ?? fallbackItem ?? (await this.mockRepository.getById(id));
       return {
         data: resolvedItem,
-        source: resolvedItem?.source === 'tmdb' ? 'tmdb' : 'mock',
+        source: this.resolveResultSource(resolvedItem),
       };
     } catch (error) {
       console.error(`[ContentService] Catalog detail request failed for "${id}".`, error);
@@ -83,7 +83,7 @@ export class ContentService {
         this.knownItems.get(id) ?? fallbackItem ?? (await this.mockRepository.getById(id));
       return {
         data: resolvedItem,
-        source: resolvedItem?.source === 'tmdb' ? 'tmdb' : 'mock',
+        source: this.resolveResultSource(resolvedItem),
         warning: FALLBACK_WARNING,
       };
     }
@@ -116,6 +116,10 @@ export class ContentService {
         warning: FALLBACK_WARNING,
       };
     }
+  }
+
+  private resolveResultSource(item?: ContentItem | null): 'mock' | 'tmdb' {
+    return item?.source === 'mock' ? 'mock' : 'tmdb';
   }
 
   private remember(items: ContentItem[]) {

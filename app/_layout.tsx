@@ -29,6 +29,7 @@ export default function RootLayout() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="content/[id]" options={{ presentation: 'modal' }} />
             <Stack.Screen name="admin" options={{ presentation: 'modal' }} />
+            <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
             <Stack.Screen name="watch/[id]" options={{ presentation: 'fullScreenModal' }} />
             <Stack.Screen name="+not-found" />
           </Stack>

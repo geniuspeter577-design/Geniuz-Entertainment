@@ -153,12 +153,36 @@ export class B2StorageService {
     if (!/^(?:movies|episodes|trailers)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
       throw new HttpError(400, 'INVALID_OBJECT_KEY', 'The stored object key is invalid.');
     }
-    await this.client.send(
-      new DeleteObjectCommand({
-        Bucket: this.config.s3Bucket,
-        Key: key,
-      }),
-    );
+    try {
+      await this.client.send(
+        new DeleteObjectCommand({
+          Bucket: this.config.s3Bucket,
+          Key: key,
+        }),
+      );
+    } catch (error) {
+      if (process.env.NODE_ENV === 'development') {
+        const code =
+          typeof error === 'object' && error !== null && 'Code' in error
+            ? error.Code
+            : typeof error === 'object' && error !== null && 'code' in error
+              ? error.code
+              : undefined;
+        const message =
+          typeof error === 'object' && error !== null && 'message' in error
+            ? error.message
+            : undefined;
+        console.error('[B2StorageService] Object deletion failed.', {
+          code: typeof code === 'string' ? code : undefined,
+          message: typeof message === 'string' ? message : undefined,
+        });
+      }
+      throw new HttpError(
+        502,
+        'B2_DELETE_FAILED',
+        'Backblaze could not delete this object. Check the bucket-scoped key permissions and retry cleanup.',
+      );
+    }
   }
 
   private async verifyMultipartUpload(key: string, uploadId: string) {

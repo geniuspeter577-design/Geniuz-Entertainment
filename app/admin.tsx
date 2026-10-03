@@ -1,6 +1,7 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { File as ExpoFile, FileMode } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
@@ -8,6 +9,7 @@ import {
   Image,
   Modal,
   Pressable,
+  Platform,
   RefreshControl,
   SafeAreaView,
   ScrollView,
@@ -37,6 +39,16 @@ import {
 } from '../src/services/supabase';
 import { theme } from '../src/theme';
 import { detectVideoFileType, validateVideoFileSize } from '../src/utils/videoFile';
+import {
+  deleteRecordThenCleanup,
+  getTitleCleanupFailureMessage,
+  logTitleCleanupFailures,
+  retryTitleCleanup,
+  type PendingTitleCleanup,
+  type TitleCleanupAsset,
+} from '../src/utils/titleDeletion';
+import { TitleCleanupStore } from '../src/services/TitleCleanupStore';
+import { getAdminRouteState, isAdminMetadata } from '../src/utils/adminAccess';
 
 type AdminMovie = ContentItem & {
   published: boolean;
@@ -68,6 +80,8 @@ type AdminSeasonChoice = {
   release_year: number | null;
   published: boolean;
 };
+
+const titleCleanupStore = new TitleCleanupStore(AsyncStorage);
 
 async function readVideoPart(
   file: globalThis.File | ExpoFile,
@@ -207,6 +221,8 @@ function AdminTitleImagePicker({
 }
 
 export default function AdminScreen() {
+  const { signin: signinParam } = useLocalSearchParams<{ signin?: string }>();
+  const canSignIn = signinParam === '1' || Platform.OS === 'web';
   const { isOnline } = useNetwork();
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
@@ -240,6 +256,9 @@ export default function AdminScreen() {
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [moviesError, setMoviesError] = useState<string>();
   const [seriesError, setSeriesError] = useState<string>();
+  const [pendingCleanups, setPendingCleanups] = useState<PendingTitleCleanup[]>([]);
+  const [cleanupError, setCleanupError] = useState<string>();
+  const [retryingCleanupId, setRetryingCleanupId] = useState<string>();
   const [pendingMovieSave, setPendingMovieSave] = useState<{
     movie: NewMovie;
     storageKey: string;
@@ -295,6 +314,23 @@ export default function AdminScreen() {
     },
     [],
   );
+
+  useEffect(() => {
+    let active = true;
+    void titleCleanupStore.load().then((items) => {
+      if (active) {
+        setPendingCleanups(items);
+      }
+    }).catch((error: unknown) => {
+      console.error('[AdminScreen] Could not load the saved file-cleanup list.', error);
+      if (active) {
+        setCleanupError('The saved cleanup list could not be loaded. Retry after restarting the app.');
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const loadMovies = useCallback(async () => {
     const repository = supabaseMovieRepository;
@@ -367,7 +403,12 @@ export default function AdminScreen() {
     };
   }, [isOnline, loadMovies]);
 
-  const isAdmin = session?.user.app_metadata?.role === 'admin';
+  const isAdmin = isAdminMetadata(session?.user.app_metadata);
+  const routeState = getAdminRouteState({
+    isAdmin,
+    isSignedIn: Boolean(session),
+    canSignIn,
+  });
 
   const handleSignIn = useCallback(async () => {
     if (!supabase) {
@@ -1379,6 +1420,67 @@ export default function AdminScreen() {
     }
   }, []);
 
+  const removeTitleCleanupAsset = useCallback(
+    async (asset: TitleCleanupAsset, accessToken: string) => {
+      const repository = supabaseMovieRepository;
+      if (!repository) {
+        throw new Error('Supabase is not configured.');
+      }
+      if (asset.kind === 'b2') {
+        await deleteUploadedB2Object({
+          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
+          accessToken,
+          key: asset.key,
+        });
+      } else if (asset.kind === 'supabase-video') {
+        await repository.deleteSupabaseMovieVideo(asset.path);
+      } else {
+        await repository.deleteTitleImage(asset.url);
+      }
+    },
+    [],
+  );
+
+  const savePendingCleanups = useCallback(async (items: PendingTitleCleanup[]) => {
+    await titleCleanupStore.save(items);
+    setPendingCleanups(items);
+    setCleanupError(undefined);
+  }, []);
+
+  const retryCleanup = useCallback(async (job: PendingTitleCleanup) => {
+    if (!supabase) {
+      setCleanupError('Supabase is not configured; cleanup cannot be retried.');
+      return;
+    }
+    setRetryingCleanupId(job.titleId);
+    setCleanupError(undefined);
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      const accessToken = data.session?.access_token;
+      if (error || !accessToken) {
+        throw new Error('Your admin session expired. Sign in again before retrying cleanup.');
+      }
+      const result = await retryTitleCleanup(job, (asset) =>
+        removeTitleCleanupAsset(asset, accessToken),
+      );
+      logTitleCleanupFailures(result.failures);
+      const next = pendingCleanups.filter((item) => item.titleId !== job.titleId);
+      if (result.pending) {
+        next.push(result.pending);
+      }
+      await savePendingCleanups(next);
+      if (result.pending) {
+        const failedKinds = [...new Set(result.pending.assets.map((asset) => getTitleCleanupFailureMessage(asset.kind)))];
+        setCleanupError(`Cleanup still needs attention: ${failedKinds.join(', ')} could not be removed.`);
+      }
+    } catch (error) {
+      console.error('[AdminScreen] Could not retry title file cleanup.', error);
+      setCleanupError(error instanceof Error ? error.message : 'Cleanup could not be retried.');
+    } finally {
+      setRetryingCleanupId(undefined);
+    }
+  }, [pendingCleanups, removeTitleCleanupAsset, savePendingCleanups]);
+
   const deleteAdminTitle = useCallback(async (movie: AdminMovie) => {
     const repository = supabaseMovieRepository;
     if (!repository || !supabase) {
@@ -1392,21 +1494,43 @@ export default function AdminScreen() {
       if (error || !accessToken) {
         throw new Error('Your admin session expired. Sign in again before deleting a title.');
       }
-      const assets = await repository.getAdminTitleAssets(movie.id);
-      for (const key of assets.b2Keys) {
-        await deleteUploadedB2Object({
-          apiBaseUrl: process.env.EXPO_PUBLIC_GENIUZ_API_URL ?? '',
-          accessToken,
-          key,
-        });
+      let assets;
+      try {
+        assets = await repository.getAdminTitleAssets(movie.id);
+      } catch (error) {
+        console.error('[AdminScreen] Could not inspect title files before deletion.', error);
+        throw new Error('Files step failed: the title files could not be listed, so the record was left unchanged.');
       }
-      if (assets.supabaseVideoPath) {
-        await repository.deleteSupabaseMovieVideo(assets.supabaseVideoPath);
+      const cleanupAssets: TitleCleanupAsset[] = [
+        ...assets.b2Keys.map((key) => ({ kind: 'b2' as const, key })),
+        ...assets.supabaseVideoPaths.map((path) => ({ kind: 'supabase-video' as const, path })),
+        ...assets.images.map((url) => ({ kind: 'image' as const, url })),
+      ];
+      let result;
+      try {
+        result = await deleteRecordThenCleanup(
+          { titleId: movie.id, title: movie.title, assets: cleanupAssets },
+          () => repository.deleteAdminTitleRecord(movie.id),
+          (asset) => removeTitleCleanupAsset(asset, accessToken),
+        );
+      } catch (error) {
+        console.error('[AdminScreen] Title record deletion failed.', error);
+        throw new Error(
+          `Record step failed: ${error instanceof Error ? error.message : 'the title record was not deleted'}`,
+        );
       }
-      for (const imageUrl of assets.images) {
-        await repository.deleteTitleImage(imageUrl);
+      logTitleCleanupFailures(result.failures);
+      if (result.pending) {
+        const next = [
+          ...pendingCleanups.filter((item) => item.titleId !== movie.id),
+          result.pending,
+        ];
+        await savePendingCleanups(next);
+        const failedKinds = [...new Set(result.pending.assets.map((asset) => getTitleCleanupFailureMessage(asset.kind)))];
+        setCleanupError(`The title was deleted, but cleanup failed for its ${failedKinds.join(' and ')}. Retry cleanup below.`);
+      } else {
+        await savePendingCleanups(pendingCleanups.filter((item) => item.titleId !== movie.id));
       }
-      await repository.deleteAdminTitleRecord(movie.id);
       await loadMovies();
     } catch (error) {
       console.error('[AdminScreen] Could not delete title and its files.', error);
@@ -1414,10 +1538,68 @@ export default function AdminScreen() {
     } finally {
       setUpdatingMovieId(undefined);
     }
-  }, [loadMovies]);
+  }, [loadMovies, pendingCleanups, removeTitleCleanupAsset, savePendingCleanups]);
 
   const adminSeries = movies.filter((movie) => movie.type === 'series');
   const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
+
+  if (!authLoading && routeState === 'not-found') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <Text style={styles.sectionTitle}>Page not found</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
+          <Text style={styles.secondaryButtonText}>Go back</Text>
+        </Pressable>
+      </SafeAreaView>
+    );
+  }
+
+  if (!authLoading && routeState === 'sign-in') {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+            <Text style={styles.backText}>‹  Back</Text>
+          </Pressable>
+          <Text style={styles.header}>Admin sign in</Text>
+          <View style={styles.card}>
+            <Text style={styles.helper}>Use the administrator account configured in Supabase.</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="Email"
+              placeholderTextColor={theme.secondaryText}
+              autoCapitalize="none"
+              autoComplete="email"
+              keyboardType="email-address"
+              textContentType="emailAddress"
+              style={styles.input}
+            />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Password"
+              placeholderTextColor={theme.secondaryText}
+              autoCapitalize="none"
+              autoComplete="password"
+              secureTextEntry
+              textContentType="password"
+              style={styles.input}
+            />
+            {authError ? <Text style={styles.errorText}>{authError}</Text> : null}
+            <Pressable
+              accessibilityRole="button"
+              disabled={isSigningIn || !email.trim() || !password}
+              onPress={() => void handleSignIn()}
+              style={[styles.primaryButton, (isSigningIn || !email.trim() || !password) && styles.disabledButton]}
+            >
+              <Text style={styles.primaryButtonText}>{isSigningIn ? 'Signing in…' : 'Sign in'}</Text>
+            </Pressable>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   if (!isOnline) {
     return (
@@ -1983,6 +2165,33 @@ export default function AdminScreen() {
                 onAction={() => void loadMovies()}
               />
             ) : null}
+            {cleanupError ? (
+              <ContentNotice
+                message={cleanupError}
+                tone="warning"
+              />
+            ) : null}
+            {pendingCleanups.map((job) => (
+              <View key={job.titleId} style={styles.cleanupRow}>
+                <View style={styles.grow}>
+                  <Text style={styles.movieTitle}>Cleanup needed · {job.title}</Text>
+                  <Text style={styles.helper}>
+                    {job.assets.map((asset) => getTitleCleanupFailureMessage(asset.kind)).join(', ')}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Retry cleanup for ${job.title}`}
+                  disabled={retryingCleanupId === job.titleId}
+                  onPress={() => void retryCleanup(job)}
+                  style={styles.smallButton}
+                >
+                  <Text style={styles.smallButtonText}>
+                    {retryingCleanupId === job.titleId ? 'Retrying…' : 'Retry cleanup'}
+                  </Text>
+                </Pressable>
+              </View>
+            ))}
             {!moviesLoading && !moviesError && movies.length === 0 ? (
               <Text style={styles.helper}>No uploaded movies yet.</Text>
             ) : null}
@@ -2440,6 +2649,29 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 10,
     padding: 14,
+  },
+  cleanupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 10,
+  },
+  smallButton: {
+    minHeight: 40,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    backgroundColor: theme.accent,
+  },
+  smallButtonText: {
+    color: theme.background,
+    fontSize: 12,
+    fontWeight: '800',
   },
   catalogPoster: {
     width: 42,

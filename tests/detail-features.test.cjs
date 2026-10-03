@@ -10,6 +10,26 @@ const {
 const { validateTitleImage, TITLE_IMAGE_MAX_INPUT_BYTES } = require('../.test-build/src/utils/titleImageValidation.js');
 const { getDownloadUnavailableReason } = require('../.test-build/src/utils/downloadAvailability.js');
 const { isNetworkOnline } = require('../.test-build/src/utils/networkStatus.js');
+const { getSupabaseErrorDetails } = require('../.test-build/src/utils/supabaseError.js');
+const { getAdminRouteState, isAdminMetadata } = require('../.test-build/src/utils/adminAccess.js');
+const { getHomeHeroItems } = require('../.test-build/src/utils/homeHero.js');
+const {
+  getDragTarget,
+  isPlayerGestureArea,
+  getSeekTarget,
+  setPlayerMuted,
+  setPlayerVolume,
+  togglePlayerOrientation,
+} = require('../.test-build/src/utils/playerControls.js');
+const {
+  shouldAutoplayTrailer,
+  toggleTrailerMuted,
+} = require('../.test-build/src/utils/trailerAutoplay.js');
+const {
+  deleteRecordThenCleanup,
+  retryTitleCleanup,
+} = require('../.test-build/src/utils/titleDeletion.js');
+const { TitleCleanupStore } = require('../.test-build/src/services/TitleCleanupStore.js');
 const fs = require('node:fs');
 const path = require('node:path');
 const { toggleWatchlistItem } = require('../.test-build/src/utils/watchlist.js');
@@ -121,6 +141,191 @@ test('network status requires a connection and treats confirmed unreachable inte
   assert.equal(isNetworkOnline({ isConnected: true, isInternetReachable: null }), true);
   assert.equal(isNetworkOnline({ isConnected: true, isInternetReachable: false }), false);
   assert.equal(isNetworkOnline({ isConnected: false, isInternetReachable: true }), false);
+});
+
+test('Supabase diagnostics retain only code, message, details, and hint fields', () => {
+  assert.deepEqual(
+    getSupabaseErrorDetails({
+      code: 'PGRST204',
+      message: 'Column not found',
+      details: 'The requested column is absent.',
+      hint: 'Apply the current migration.',
+      access_token: 'must-not-be-logged',
+    }),
+    {
+      code: 'PGRST204',
+      message: 'Column not found',
+      details: 'The requested column is absent.',
+      hint: 'Apply the current migration.',
+    },
+  );
+});
+
+test('admin screen access permits admins, hides direct mobile access, and allows intentional sign-in', () => {
+  assert.equal(isAdminMetadata({ role: 'admin' }), true);
+  assert.equal(isAdminMetadata({ role: 'user' }), false);
+  assert.equal(getAdminRouteState({ isAdmin: false, isSignedIn: false, canSignIn: false }), 'not-found');
+  assert.equal(getAdminRouteState({ isAdmin: false, isSignedIn: false, canSignIn: true }), 'sign-in');
+  assert.equal(getAdminRouteState({ isAdmin: false, isSignedIn: true, canSignIn: true }), 'not-found');
+  assert.equal(getAdminRouteState({ isAdmin: true, isSignedIn: true, canSignIn: false }), 'admin');
+});
+
+test('Home hero selects five newest published titles and only downloaded cached items offline', () => {
+  const published = Array.from({ length: 7 }, (_, index) => ({
+    ...item(`title-${index}`),
+    createdAt: `2026-10-0${index + 1}T00:00:00.000Z`,
+  }));
+  published.push({
+    ...item('draft'),
+    createdAt: '2026-10-20T00:00:00.000Z',
+    availability: { discoverable: false, stream: false, download: false, premium: false },
+  });
+  const online = getHomeHeroItems(published, [], true);
+  assert.equal(online.length, 5);
+  assert.deepEqual(online.map(({ id }) => id), ['title-6', 'title-5', 'title-4', 'title-3', 'title-2']);
+
+  const cached = [
+    { item: item('queued'), status: 'queued', date: '2026-10-30' },
+    { item: item('old'), status: 'downloaded', date: '2026-10-01' },
+    { item: item('new'), status: 'downloaded', date: '2026-10-02' },
+  ];
+  assert.deepEqual(getHomeHeroItems([], cached, false).map(({ id }) => id), ['new', 'old']);
+});
+
+test('player controls clamp seeks and drag values and toggle orientation', () => {
+  assert.equal(getSeekTarget(5, 60, 10), 15);
+  assert.equal(getSeekTarget(5, 60, -10), 0);
+  assert.equal(getSeekTarget(58, 60, 10), 60);
+  assert.equal(getDragTarget(0.5, -25, 100), 0.75);
+  assert.equal(getDragTarget(0.5, 100, 100), 0);
+  assert.equal(getDragTarget(0.5, -100, 100), 1);
+  assert.equal(getDragTarget(0.5, 10, 0), 0.5);
+  assert.equal(togglePlayerOrientation(false), true);
+  assert.equal(togglePlayerOrientation(true), false);
+  assert.equal(isPlayerGestureArea(60, 100, 360, 200), true);
+  assert.equal(isPlayerGestureArea(180, 100, 360, 200), false);
+  assert.equal(isPlayerGestureArea(20, 100, 360, 200), false);
+  assert.equal(isPlayerGestureArea(60, 180, 360, 200), false);
+  const player = { volume: 0.5, muted: false };
+  setPlayerVolume(player, 2);
+  setPlayerMuted(player, true);
+  assert.equal(player.volume, 1);
+  assert.equal(player.muted, true);
+});
+
+test('trailer autoplay requires a published, online, focused title and respects mute state', () => {
+  const eligible = {
+    isPublished: true,
+    isOnline: true,
+    hasTrailer: true,
+    autoplayEnabled: true,
+    isFocused: true,
+    isAppActive: true,
+  };
+  assert.equal(shouldAutoplayTrailer(eligible), true);
+  for (const key of Object.keys(eligible)) {
+    assert.equal(shouldAutoplayTrailer({ ...eligible, [key]: false }), false, `${key} disables autoplay`);
+  }
+  assert.equal(toggleTrailerMuted(true), false);
+  assert.equal(toggleTrailerMuted(false), true);
+});
+
+test('published movie query columns are declared by project migrations', () => {
+  const repository = fs.readFileSync(
+    path.join(process.cwd(), 'src/repositories/SupabaseMovieRepository.ts'),
+    'utf8',
+  );
+  const columns = repository.match(/const MOVIE_COLUMNS =\s*'([^']+)'/)?.[1]?.split(',') ?? [];
+  const migrations = fs
+    .readdirSync(path.join(process.cwd(), 'supabase/migrations'))
+    .filter((name) => name.endsWith('.sql'))
+    .map((name) => fs.readFileSync(path.join(process.cwd(), 'supabase/migrations', name), 'utf8'))
+    .join('\n');
+  for (const column of columns) {
+    assert.match(migrations, new RegExp(`\\b${column}\\b`), `Missing migration column: ${column}`);
+  }
+});
+
+test('database and storage write policies require the trusted admin role', () => {
+  const migrationDirectory = path.join(process.cwd(), 'supabase/migrations');
+  const migrations = fs
+    .readdirSync(migrationDirectory)
+    .filter((name) => name.endsWith('.sql'))
+    .map((name) => fs.readFileSync(path.join(migrationDirectory, name), 'utf8'))
+    .join('\n');
+  assert.match(migrations, /auth\.jwt\(\) -> 'app_metadata' ->> 'role' = 'admin'/);
+  for (const relation of ['movies', 'seasons', 'episodes']) {
+    assert.match(migrations, new RegExp(`on public\\.${relation} for all[\\s\\S]*to authenticated[\\s\\S]*public\\.is_geniuz_admin\\(\\)[\\s\\S]*with check \\(public\\.is_geniuz_admin\\(\\)\\)`));
+  }
+  for (const bucket of ['movie-assets', 'title-images']) {
+    assert.match(migrations, new RegExp(`bucket_id = '${bucket}' and public\\.is_geniuz_admin\\(\\)`));
+  }
+});
+
+test('title deletion removes the database record first and retains only assets that failed cleanup', async () => {
+  const record = {
+    titleId: 'movie-1',
+    title: 'Test title',
+    assets: [
+      { kind: 'b2', key: 'movies/video.mp4' },
+      { kind: 'image', url: 'https://storage.example.test/poster.jpg' },
+      { kind: 'supabase-video', path: 'movie-assets/legacy.mp4' },
+    ],
+  };
+  const order = [];
+  const result = await deleteRecordThenCleanup(
+    record,
+    async () => order.push('record'),
+    async (asset) => {
+      order.push(asset.kind);
+      if (asset.kind !== 'image') {
+        throw Object.assign(new Error('permission denied'), { status: 502, code: 'B2_DELETE_FAILED' });
+      }
+    },
+  );
+  assert.deepEqual(order, ['record', 'b2', 'image', 'supabase-video']);
+  assert.deepEqual(result.pending.assets, [record.assets[0], record.assets[2]]);
+  assert.equal(result.failures.length, 2);
+});
+
+test('title cleanup never touches files when deleting the database record fails', async () => {
+  let removed = false;
+  await assert.rejects(
+    deleteRecordThenCleanup(
+      { titleId: 'movie-1', title: 'Test title', assets: [{ kind: 'image', url: 'image-url' }] },
+      async () => {
+        throw new Error('record permission denied');
+      },
+      async () => {
+        removed = true;
+      },
+    ),
+    /record permission denied/,
+  );
+  assert.equal(removed, false);
+});
+
+test('retry cleanup removes successful assets and persists any remaining work', async () => {
+  const values = new Map();
+  const store = new TitleCleanupStore({
+    getItem: async (key) => values.get(key) ?? null,
+    setItem: async (key, value) => values.set(key, value),
+  });
+  const job = {
+    titleId: 'movie-1',
+    title: 'Test title',
+    assets: [
+      { kind: 'b2', key: 'movies/video.mp4' },
+      { kind: 'image', url: 'https://storage.example.test/poster.jpg' },
+    ],
+  };
+  const retry = await retryTitleCleanup(job, async (asset) => {
+    if (asset.kind === 'b2') {
+      throw new Error('permission denied');
+    }
+  });
+  await store.save([retry.pending]);
+  assert.deepEqual((await store.load())[0].assets, [job.assets[0]]);
 });
 
 test('title image migration creates a public-read bucket with admin-only mutations', () => {
