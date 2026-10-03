@@ -45,12 +45,20 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     throw new Error('TMDB_BASE_URL must use HTTPS.');
   }
 
+  const defaultCorsOrigins = [
+    'http://localhost:8081',
+    'http://localhost:19006',
+    ...(environment.CODESPACE_NAME
+      ? [`https://${environment.CODESPACE_NAME}-8081.app.github.dev`]
+      : []),
+  ];
+
   return {
     port,
     tmdbApiKey: environment.TMDB_API_KEY?.trim() || undefined,
     tmdbBaseUrl: parsedTmdbBaseUrl.toString().replace(/\/+$/, ''),
     anilistApiUrl: environment.ANILIST_API_URL?.trim() || 'https://graphql.anilist.co',
-    corsOrigins: (environment.CORS_ORIGIN ?? 'http://localhost:8081,http://localhost:19006')
+    corsOrigins: (environment.CORS_ORIGIN ?? defaultCorsOrigins.join(','))
       .split(',')
       .map((origin) => origin.trim())
       .filter(Boolean),

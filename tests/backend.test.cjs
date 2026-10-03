@@ -283,6 +283,14 @@ test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => 
   assert.throws(() => loadConfig({ PORT: '65536' }), /65535/);
 });
 
+test('server CORS defaults include the current Codespaces web origin', () => {
+  const config = loadConfig({ CODESPACE_NAME: 'geniuz-workspace' });
+
+  assert.ok(config.corsOrigins.includes('http://localhost:8081'));
+  assert.ok(config.corsOrigins.includes('http://localhost:19006'));
+  assert.ok(config.corsOrigins.includes('https://geniuz-workspace-8081.app.github.dev'));
+});
+
 test('health endpoint does not require catalog credentials', async (context) => {
   const config = loadConfig({ PORT: '4000' });
   const provider = new HttpTMDBProvider(config);
