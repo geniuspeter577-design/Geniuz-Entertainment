@@ -1,7 +1,8 @@
-import { router, useFocusEffect } from 'expo-router';
-import React, { useCallback, useEffect, useState } from 'react';
+import { router } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
+  RefreshControl,
   SafeAreaView,
   ScrollView,
   StyleSheet,
@@ -15,156 +16,165 @@ import { OfflineState } from '../../src/components/OfflineState';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
-import { contentService } from '../../src/services/createContentService';
+import { MockContentRepository } from '../../src/repositories/MockContentRepository';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
-import { theme } from '../../src/theme';
 import { useNetwork } from '../../src/state/NetworkContext';
+import { theme } from '../../src/theme';
+import {
+  isDemoCatalogEnabled,
+  loadPublishedCatalog,
+  searchPublishedCatalog,
+  sortPublishedNewest,
+} from '../../src/utils/publishedCatalog';
 
-const categories = ['All', 'Science Fiction', 'Action', 'Drama', 'Live', 'Thriller'];
+const demoRepository = new MockContentRepository();
 
 export default function SearchScreen() {
   const { isOnline, retryConnection } = useNetwork();
   const [query, setQuery] = useState('');
   const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [selectedGenre, setSelectedGenre] = useState('All');
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350);
     return () => clearTimeout(timer);
   }, [query]);
 
-  const searchContent = useCallback(
-    () =>
-      contentService.search(debouncedQuery, {
-        ...(selectedCategory === 'All' ? {} : { genre: selectedCategory }),
-      }),
-    [debouncedQuery, selectedCategory],
+  const loadCatalog = useCallback(async () => {
+    const catalog = await loadPublishedCatalog(
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedMovies();
+      },
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedSeries();
+      },
+    );
+    if (
+      isDemoCatalogEnabled &&
+      !catalog.hasFailures &&
+      catalog.movies.length + catalog.series.length === 0
+    ) {
+      const demos = await demoRepository.getPopular();
+      return {
+        data: {
+          ...catalog,
+          movies: demos.filter((item) => item.type === 'movie'),
+          series: demos.filter((item) => item.type !== 'movie'),
+          showingDemo: true,
+        },
+        source: 'mock' as const,
+      };
+    }
+    return { data: { ...catalog, showingDemo: false }, source: 'supabase' as const };
+  }, []);
+  const catalogQuery = useContentQuery('search-supabase-catalog', loadCatalog, isOnline);
+  const catalogItems = useMemo(
+    () => sortPublishedNewest([
+      ...(catalogQuery.data?.movies ?? []),
+      ...(catalogQuery.data?.series ?? []),
+    ]),
+    [catalogQuery.data],
   );
-  const search = useContentQuery(
-    `search:${debouncedQuery}:${selectedCategory}`,
-    searchContent,
-    isOnline,
+  const genres = useMemo(
+    () => [...new Set(catalogItems.flatMap((item) => item.genres))],
+    [catalogItems],
   );
-  const searchUploaded = useCallback(
-    async () => ({
-      data: supabaseMovieRepository
-        ? await supabaseMovieRepository.searchPublished(
-            debouncedQuery,
-            selectedCategory === 'All' ? undefined : selectedCategory,
-          )
-        : [],
-      source: 'supabase' as const,
-    }),
-    [debouncedQuery, selectedCategory],
-  );
-  const uploadedSearch = useContentQuery(
-    `uploaded-search:${debouncedQuery}:${selectedCategory}`,
-    searchUploaded,
-    isOnline,
-  );
-  const retryUploadedSearch = uploadedSearch.retry;
-  useFocusEffect(
-    useCallback(() => {
-      if (isOnline) {
-        retryUploadedSearch();
-      }
-    }, [isOnline, retryUploadedSearch]),
-  );
-  const results = [...(search.data ?? []), ...(uploadedSearch.data ?? [])];
+  const visibleItems = useMemo(() => {
+    const searched = searchPublishedCatalog(catalogItems, debouncedQuery);
+    return selectedGenre === 'All'
+      ? searched
+      : searched.filter((item) =>
+          item.genres.some((genre) => genre.toLocaleLowerCase() === selectedGenre.toLocaleLowerCase()),
+        );
+  }, [catalogItems, debouncedQuery, selectedGenre]);
+  const retry = catalogQuery.retry;
+  const hasError = catalogQuery.error || catalogQuery.data?.hasFailures;
 
   if (!isOnline) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <OfflineState
-          onRetry={() => void retryConnection()}
-          message="Search needs an internet connection. Your downloaded titles are ready in My downloads."
-        />
+        <OfflineState onRetry={() => void retryConnection()} />
       </SafeAreaView>
     );
   }
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={catalogQuery.isRefreshing}
+            onRefresh={retry}
+            tintColor={theme.accent}
+            colors={[theme.accent]}
+          />
+        }
+      >
         <Text style={styles.header}>Discover</Text>
 
         <View style={styles.searchContainer}>
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search movies, shows, genres"
+            placeholder="Search title, genre, or year"
             placeholderTextColor={theme.secondaryText}
             style={styles.input}
-            accessibilityLabel="Search movies, shows, and genres"
+            accessibilityLabel="Search titles, genres, and years"
             returnKeyType="search"
           />
         </View>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipRow}>
-          {categories.map((category) => (
-            <Pressable
-              key={category}
-              onPress={() => setSelectedCategory(category)}
-              style={[styles.chip, selectedCategory === category && styles.activeChip]}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selectedCategory === category }}
-            >
-              <Text style={[styles.chipText, selectedCategory === category && styles.activeChipText]}>
-                {category}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
+        {genres.length ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+          >
+            {['All', ...genres].map((genre) => (
+              <Pressable
+                key={genre}
+                onPress={() => setSelectedGenre(genre)}
+                style={[styles.chip, selectedGenre === genre && styles.activeChip]}
+                accessibilityRole="button"
+                accessibilityState={{ selected: selectedGenre === genre }}
+              >
+                <Text style={[styles.chipText, selectedGenre === genre && styles.activeChipText]}>
+                  {genre}
+                </Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
 
-        {search.warning ? (
+        {hasError ? (
           <ContentNotice
-            message={search.warning}
-            tone="warning"
+            message="Some titles could not be loaded. Please retry."
+            tone="error"
             actionLabel="Retry"
-            onAction={search.retry}
+            onAction={retry}
             autoHideMs={5000}
           />
         ) : null}
-        {!search.isLoading &&
-        search.source === 'mock' &&
-        !search.warning &&
-        uploadedSearch.data?.length === 0 ? (
+        {catalogQuery.data?.showingDemo ? (
           <ContentNotice message="Demo catalog — search results are sample content." />
         ) : null}
-        <SectionHeader title={debouncedQuery ? 'Results' : 'Popular now'} />
+        {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
+        <SectionHeader title={debouncedQuery ? 'Results' : 'Published titles'} />
 
-        {search.isLoading || uploadedSearch.isLoading ? (
-          <ContentNotice message="Searching the catalog…" />
-        ) : null}
-        {search.error ? (
-          <ContentNotice
-            message={search.error}
-            tone="error"
-            actionLabel="Retry"
-            onAction={search.retry}
-            autoHideMs={5000}
-          />
-        ) : null}
-        {!search.isLoading &&
-        !uploadedSearch.isLoading &&
-        !search.error &&
-        !uploadedSearch.error &&
-        results.length === 0 ? (
-          <ContentNotice message="No titles match your search. Try another title or genre." />
-        ) : null}
-
-        {uploadedSearch.error ? (
-          <ContentNotice
-            message={uploadedSearch.error}
-            tone="error"
-            actionLabel="Retry"
-            onAction={uploadedSearch.retry}
-            autoHideMs={5000}
-          />
+        {!catalogQuery.isLoading && !hasError && visibleItems.length === 0 ? (
+          <ContentNotice message={catalogItems.length ? 'No results' : 'No titles yet'} />
         ) : null}
 
         <View style={styles.grid}>
-          {results.map((item) => (
+          {visibleItems.map((item) => (
             <PosterCard
               key={item.id}
               item={item}
@@ -179,14 +189,8 @@ export default function SearchScreen() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 30,
-  },
+  safeArea: { flex: 1, backgroundColor: theme.background },
+  content: { paddingHorizontal: 18, paddingBottom: 30 },
   header: {
     color: theme.text,
     fontSize: 30,
@@ -203,15 +207,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  input: {
-    color: theme.text,
-    fontSize: 16,
-    paddingVertical: 4,
-  },
-  chipRow: {
-    paddingVertical: 18,
-    paddingRight: 18,
-  },
+  input: { color: theme.text, fontSize: 16, paddingVertical: 4 },
+  chipRow: { paddingVertical: 18, paddingRight: 18 },
   chip: {
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -221,18 +218,9 @@ const styles = StyleSheet.create({
     borderColor: theme.border,
     marginRight: 10,
   },
-  activeChip: {
-    backgroundColor: theme.accent,
-    borderColor: theme.accent,
-  },
-  chipText: {
-    color: theme.text,
-    fontWeight: '700',
-    fontSize: 12,
-  },
-  activeChipText: {
-    color: theme.background,
-  },
+  activeChip: { backgroundColor: theme.accent, borderColor: theme.accent },
+  chipText: { color: theme.text, fontWeight: '700', fontSize: 12 },
+  activeChipText: { color: theme.background },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

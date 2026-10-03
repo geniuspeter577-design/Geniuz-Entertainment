@@ -6,6 +6,7 @@ import type {
 import type { ContentRepository, ContentSearchOptions } from '../repositories/ContentRepository';
 import { MockContentRepository } from '../repositories/MockContentRepository';
 import { getFriendlyCatalogErrorMessage } from '../utils/contentError';
+import { isDemoCatalogEnabled } from '../utils/publishedCatalog';
 
 const FALLBACK_WARNING = 'The live catalog is unavailable. Showing the Demo catalog.';
 const LIVE_FAILURE_WARNING = 'The catalog is temporarily unavailable. Please retry.';
@@ -20,7 +21,7 @@ export class ContentService {
     private readonly mockRepository = new MockContentRepository(),
     private readonly remoteEnabled = false,
     private readonly configurationWarning?: string,
-    private readonly allowDemoFallback = process.env.NODE_ENV === 'development',
+    private readonly allowDemoFallback = isDemoCatalogEnabled,
   ) {}
 
   getTrending = () => this.list('trending', () => this.repository.getTrending(), () => this.mockRepository.getTrending());

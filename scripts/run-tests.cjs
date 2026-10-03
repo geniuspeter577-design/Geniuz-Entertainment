@@ -28,6 +28,7 @@ const sources = [
   'src/utils/networkStatus.ts',
   'src/utils/supabaseError.ts',
   'src/utils/contentError.ts',
+  'src/utils/publishedCatalog.ts',
   'src/utils/titleDeletion.ts',
   'src/utils/downloadQueue.ts',
   'src/utils/episodeSelection.ts',

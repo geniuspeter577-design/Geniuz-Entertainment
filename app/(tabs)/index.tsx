@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router } from 'expo-router';
 import React, { useCallback, useState } from 'react';
 import {
   Image,
@@ -18,81 +18,77 @@ import { HomeHeroCarousel } from '../../src/components/HomeHeroCarousel';
 import { OfflineState } from '../../src/components/OfflineState';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
-import { contentService } from '../../src/services/createContentService';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
-import { useDownloads } from '../../src/state/DownloadsContext';
+import { MockContentRepository } from '../../src/repositories/MockContentRepository';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { formatRuntime } from '../../src/utils/contentPresentation';
-import { getHomeHeroItems } from '../../src/utils/homeHero';
+import {
+  isDemoCatalogEnabled,
+  loadPublishedCatalog,
+  sortPublishedNewest,
+} from '../../src/utils/publishedCatalog';
+
+const demoRepository = new MockContentRepository();
 
 export default function HomeScreen() {
   const { isOnline, retryConnection } = useNetwork();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
-  const trendingQuery = useContentQuery('home-trending', contentService.getTrending, isOnline);
-  const popularQuery = useContentQuery('home-popular', contentService.getPopular, isOnline);
-  const upcomingQuery = useContentQuery('home-upcoming', contentService.getUpcoming, isOnline);
-  const nowPlayingQuery = useContentQuery('home-now-playing', contentService.getNowPlaying, isOnline);
-  const moviesQuery = useContentQuery('home-movies', contentService.getMovies, isOnline);
-  const seriesQuery = useContentQuery('home-series', contentService.getSeries, isOnline);
-  const animeQuery = useContentQuery('home-anime', contentService.getAnime, isOnline);
-  const loadUploadedMovies = useCallback(
-    async () => ({
-      data: supabaseMovieRepository ? await supabaseMovieRepository.getPublished() : [],
-      source: 'supabase' as const,
-    }),
-    [],
+  const loadCatalog = useCallback(async () => {
+    const catalog = await loadPublishedCatalog(
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedMovies();
+      },
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedSeries();
+      },
+    );
+
+    if (
+      isDemoCatalogEnabled &&
+      !catalog.hasFailures &&
+      catalog.movies.length + catalog.series.length === 0
+    ) {
+      const demos = await demoRepository.getPopular();
+      return {
+        data: {
+          movies: demos.filter((item) => item.type === 'movie'),
+          series: demos.filter((item) => item.type !== 'movie'),
+          hasFailures: false,
+          showingDemo: true,
+        },
+        source: 'mock' as const,
+      };
+    }
+    return { data: { ...catalog, showingDemo: false }, source: 'supabase' as const };
+  }, []);
+  const catalogQuery = useContentQuery('home-supabase-catalog', loadCatalog, isOnline);
+  const { continueWatching, isInWatchlist, toggleWatchlist } = useLibrary();
+  const movies = catalogQuery.data?.movies ?? [];
+  const series = catalogQuery.data?.series ?? [];
+  const publishedItems = sortPublishedNewest([...movies, ...series]);
+  const heroItems = publishedItems.slice(0, 5);
+  const listedIds = new Set(publishedItems.map((item) => item.id));
+  const recent = continueWatching.filter(
+    ({ item }) => listedIds.has(item.id) || (catalogQuery.data?.showingDemo && item.source === 'mock'),
   );
-  const uploadedMoviesQuery = useContentQuery('uploaded-movies', loadUploadedMovies, isOnline);
-  const downloads = useDownloads();
-  const retryUploadedMovies = uploadedMoviesQuery.retry;
-  useFocusEffect(
-    useCallback(() => {
-      if (isOnline) {
-        retryUploadedMovies();
-      }
-    }, [isOnline, retryUploadedMovies]),
-  );
-  const {
-    continueWatching,
-    error: libraryError,
-    isInWatchlist,
-    toggleWatchlist,
-  } = useLibrary();
-  const trending = trendingQuery.data ?? [];
-  const popular = popularQuery.data ?? [];
-  const upcoming = upcomingQuery.data ?? [];
-  const nowPlaying = nowPlayingQuery.data ?? [];
-  const movies = moviesQuery.data ?? [];
-  const series = seriesQuery.data ?? [];
-  const anime = animeQuery.data ?? [];
-  const uploadedMovies = uploadedMoviesQuery.data ?? [];
-  const heroItems = getHomeHeroItems(uploadedMovies, downloads.records, isOnline);
-  const premiumPicks = popular.filter((item) => item.availability.premium);
-  const retries = [
-    trendingQuery.retry,
-    popularQuery.retry,
-    upcomingQuery.retry,
-    nowPlayingQuery.retry,
-    moviesQuery.retry,
-    seriesQuery.retry,
-    animeQuery.retry,
-  ];
-  const refreshHome = () => {
-    retries.forEach((retry) => retry());
-    retryUploadedMovies();
-  };
-  const refreshing = [
-    trendingQuery,
-    popularQuery,
-    upcomingQuery,
-    nowPlayingQuery,
-    moviesQuery,
-    seriesQuery,
-    animeQuery,
-    uploadedMoviesQuery,
-  ].some((query) => query.isRefreshing);
+  const genres = [...new Set(publishedItems.flatMap((item) => item.genres))];
+  const genresWithItems = genres
+    .map((genre) => ({
+      genre,
+      items: publishedItems.filter((item) =>
+        item.genres.some((itemGenre) => itemGenre.toLocaleLowerCase() === genre.toLocaleLowerCase()),
+      ),
+    }))
+    .filter(({ items }) => items.length > 0);
+  const retryCatalog = catalogQuery.retry;
 
   if (!isOnline) {
     return (
@@ -112,34 +108,16 @@ export default function HomeScreen() {
           }
         >
           <Text style={styles.brand}>Geniuz+</Text>
-          <HomeHeroCarousel
-            items={heroItems}
-            isLoading={false}
-            offline
-            isInWatchlist={isInWatchlist}
-            onToggleWatchlist={(item) => void toggleWatchlist(item)}
-          />
           <OfflineState onRetry={() => void retryConnection()} />
         </ScrollView>
       </SafeAreaView>
     );
   }
-  const warnings = [
-    {
-      message:
-        trendingQuery.warning ??
-        popularQuery.warning ??
-        upcomingQuery.warning ??
-        nowPlayingQuery.warning ??
-        moviesQuery.warning ??
-        seriesQuery.warning ??
-        animeQuery.warning,
-      onAction: () => {
-        retries.forEach((retry) => retry());
-      },
-    },
-    ...(libraryError ? [{ message: libraryError }] : []),
-  ].filter((warning) => Boolean(warning.message));
+
+  const noTitles = !catalogQuery.isLoading && !catalogQuery.data?.hasFailures && !publishedItems.length;
+  const catalogError = catalogQuery.error || (catalogQuery.data?.hasFailures
+    ? 'Some titles could not be loaded. Please retry.'
+    : undefined);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -148,8 +126,8 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={refreshing}
-            onRefresh={refreshHome}
+            refreshing={catalogQuery.isRefreshing}
+            onRefresh={retryCatalog}
             tintColor={theme.accent}
             colors={[theme.accent]}
           />
@@ -168,156 +146,115 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {warnings.map((warning) => (
+        {catalogError ? (
           <ContentNotice
-            key={warning.message}
-            message={warning.message!}
-            tone={warning.onAction ? 'warning' : 'error'}
-            actionLabel={warning.onAction ? 'Retry' : undefined}
-            onAction={warning.onAction}
+            message={catalogError}
+            tone="error"
+            actionLabel="Retry"
+            onAction={retryCatalog}
             autoHideMs={5000}
           />
-        ))}
-        {downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
-        {!trendingQuery.isLoading && trendingQuery.source === 'mock' && !trendingQuery.warning ? (
+        ) : null}
+        {catalogQuery.data?.showingDemo ? (
           <ContentNotice message="Demo catalog — titles shown here are sample content, not playable streams." />
         ) : null}
 
-        <HomeHeroCarousel
-          items={heroItems}
-          isLoading={uploadedMoviesQuery.isLoading}
-          isInWatchlist={isInWatchlist}
-          onToggleWatchlist={(item) => void toggleWatchlist(item)}
-        />
-
-        <SectionHeader title="Continue watching" />
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
-          {continueWatching.map((entry) => (
-            <Pressable
-              key={entry.item.id}
-              accessibilityRole="button"
-              accessibilityLabel={`Continue ${entry.item.title}`}
-              onPress={() =>
-                router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
-              }
-              style={styles.continueCard}
-            >
-              <Image
-                source={
-                  entry.item.posterUrl
-                    ? { uri: entry.item.posterUrl }
-                    : require('../../assets/icon.png')
-                }
-                style={styles.continuePoster}
-                resizeMode="cover"
-              />
-              <View style={styles.continueMeta}>
-                <Text style={styles.continueTitle} numberOfLines={1}>{entry.item.title}</Text>
-                <Text style={styles.continueCaption}>{formatRuntime(entry.item)} • {entry.progress}%</Text>
-                <View style={styles.continueTrack}>
-                  <View style={[styles.continueFill, { width: `${entry.progress}%` }]} />
-                </View>
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-        {!continueWatching.length ? (
-          <Text style={styles.continueEmpty}>
-            Your viewing progress will appear here when playback is available.
-          </Text>
-        ) : null}
-
-        {uploadedMovies.length || uploadedMoviesQuery.isLoading || uploadedMoviesQuery.error ? (
-          <ContentRail
-            title="On Geniuz+"
-            items={uploadedMovies}
-            isLoading={uploadedMoviesQuery.isLoading}
-            error={uploadedMoviesQuery.error}
-            retry={uploadedMoviesQuery.retry}
-            emptyMessage="No movies have been published yet."
+        {heroItems.length ? (
+          <HomeHeroCarousel
+            items={heroItems}
+            isLoading={catalogQuery.isLoading}
+            isInWatchlist={isInWatchlist}
+            onToggleWatchlist={(item) => void toggleWatchlist(item)}
           />
         ) : null}
+        {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
+        {noTitles ? <Text style={styles.emptyText}>No titles yet</Text> : null}
 
-        <ContentRail
-          title="Trending right now"
-          items={trending}
-          isLoading={trendingQuery.isLoading}
-          error={trendingQuery.error}
-          retry={trendingQuery.retry}
-          emptyMessage="No trending titles are available right now."
-        />
-        <ContentRail
-          title="Popular picks"
-          items={popular}
-          isLoading={popularQuery.isLoading}
-          error={popularQuery.error}
-          retry={popularQuery.retry}
-          emptyMessage="No popular titles are available right now."
-        />
-        <ContentRail
-          title="Now playing"
-          items={nowPlaying}
-          isLoading={nowPlayingQuery.isLoading}
-          error={nowPlayingQuery.error}
-          retry={nowPlayingQuery.retry}
-          emptyMessage="No now-playing titles are available right now."
-        />
-        <ContentRail
-          title="Coming soon"
-          items={upcoming}
-          isLoading={upcomingQuery.isLoading}
-          error={upcomingQuery.error}
-          retry={upcomingQuery.retry}
-          emptyMessage="No upcoming titles are available right now."
-        />
-        <ContentRail
-          title="Movies"
-          items={movies}
-          isLoading={moviesQuery.isLoading}
-          error={moviesQuery.error}
-          retry={moviesQuery.retry}
-          emptyMessage="No movies are available right now."
-        />
-        <ContentRail
-          title="Series"
-          items={series}
-          isLoading={seriesQuery.isLoading}
-          error={seriesQuery.error}
-          retry={seriesQuery.retry}
-          emptyMessage="No series are available right now."
-        />
-        <ContentRail
-          title="Anime"
-          items={anime}
-          isLoading={animeQuery.isLoading}
-          error={animeQuery.error}
-          retry={animeQuery.retry}
-          compact
-          emptyMessage="No anime metadata is available in this catalog."
-        />
-        <ContentRail
-          title="Premium picks"
-          items={premiumPicks}
-          isLoading={popularQuery.isLoading}
-          error={popularQuery.error}
-          retry={popularQuery.retry}
-          compact
-          emptyMessage="Premium availability is not provided by the discovery catalog."
-        />
+        {recent.length ? (
+          <>
+            <SectionHeader title="Continue watching" />
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
+              {recent.map((entry) => (
+                <Pressable
+                  key={entry.item.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Continue ${entry.item.title}`}
+                  onPress={() =>
+                    router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
+                  }
+                  style={styles.continueCard}
+                >
+                  <Image
+                    source={
+                      entry.item.posterUrl
+                        ? { uri: entry.item.posterUrl }
+                        : require('../../assets/icon.png')
+                    }
+                    style={styles.continuePoster}
+                    resizeMode="cover"
+                  />
+                  <View style={styles.continueMeta}>
+                    <Text style={styles.continueTitle} numberOfLines={1}>{entry.item.title}</Text>
+                    <Text style={styles.continueCaption}>
+                      {formatRuntime(entry.item)} • {entry.progress}%
+                    </Text>
+                    <View style={styles.continueTrack}>
+                      <View style={[styles.continueFill, { width: `${entry.progress}%` }]} />
+                    </View>
+                  </View>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </>
+        ) : null}
+
+        {publishedItems.length ? (
+          <>
+            <ContentRail
+              title="Latest"
+              items={publishedItems}
+              isLoading={catalogQuery.isLoading}
+              retry={retryCatalog}
+              emptyMessage="No titles yet"
+            />
+            {movies.length ? (
+              <ContentRail
+                title="Movies"
+                items={sortPublishedNewest(movies)}
+                isLoading={false}
+                retry={retryCatalog}
+                emptyMessage="No movies yet"
+              />
+            ) : null}
+            {series.length ? (
+              <ContentRail
+                title="Series"
+                items={sortPublishedNewest(series)}
+                isLoading={false}
+                retry={retryCatalog}
+                emptyMessage="No series yet"
+              />
+            ) : null}
+            {genresWithItems.map(({ genre, items }) => (
+              <ContentRail
+                key={genre}
+                title={genre}
+                items={items}
+                isLoading={false}
+                retry={retryCatalog}
+                emptyMessage={`No ${genre} titles yet`}
+              />
+            ))}
+          </>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-    backgroundColor: theme.background,
-  },
-  content: {
-    paddingHorizontal: 18,
-    paddingBottom: 30,
-  },
+  safeArea: { flex: 1, backgroundColor: theme.background },
+  content: { paddingHorizontal: 18, paddingBottom: 30 },
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -325,12 +262,7 @@ const styles = StyleSheet.create({
     marginTop: 14,
     marginBottom: 18,
   },
-  brand: {
-    fontSize: 28,
-    color: theme.text,
-    fontWeight: '800',
-    letterSpacing: -0.8,
-  },
+  brand: { fontSize: 28, color: theme.text, fontWeight: '800', letterSpacing: -0.8 },
   iconButton: {
     width: 40,
     height: 40,
@@ -341,16 +273,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
-  rowList: {
-    paddingRight: 18,
-    paddingBottom: 4,
-  },
-  continueEmpty: {
-    color: theme.secondaryText,
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 4,
-  },
+  emptyText: { color: theme.secondaryText, fontSize: 14, paddingVertical: 18 },
+  rowList: { paddingRight: 18, paddingBottom: 4 },
   continueCard: {
     width: 250,
     height: 100,
@@ -362,33 +286,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginRight: 12,
   },
-  continuePoster: {
-    width: 70,
-    height: '100%',
-  },
-  continueMeta: {
-    flex: 1,
-    justifyContent: 'center',
-    padding: 10,
-  },
-  continueTitle: {
-    color: theme.text,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  continueCaption: {
-    color: theme.secondaryText,
-    fontSize: 11,
-    marginVertical: 6,
-  },
+  continuePoster: { width: 70, height: '100%' },
+  continueMeta: { flex: 1, justifyContent: 'center', padding: 10 },
+  continueTitle: { color: theme.text, fontWeight: '700', fontSize: 14 },
+  continueCaption: { color: theme.secondaryText, fontSize: 11, marginVertical: 6 },
   continueTrack: {
     height: 4,
     borderRadius: 2,
     overflow: 'hidden',
     backgroundColor: theme.surfaceSoft,
   },
-  continueFill: {
-    height: '100%',
-    backgroundColor: theme.accent,
-  },
+  continueFill: { height: '100%', backgroundColor: theme.accent },
 });

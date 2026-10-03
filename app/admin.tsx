@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 
 import { ContentNotice } from '../src/components/ContentNotice';
+import { CategoryPicker } from '../src/components/CategoryPicker';
 import { useNetwork } from '../src/state/NetworkContext';
 import { TitleImage } from '../src/components/TitleImage';
 import { MAX_TRAILER_FILE_SIZE_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from '../src/constants/video';
@@ -234,6 +235,7 @@ export default function AdminScreen() {
   const [description, setDescription] = useState('');
   const [year, setYear] = useState('');
   const [genres, setGenres] = useState('');
+  const [categories, setCategories] = useState<string[]>([]);
   const [runtime, setRuntime] = useState('');
   const [contentRating, setContentRating] = useState('');
   const [posterUrl, setPosterUrl] = useState('');
@@ -278,6 +280,7 @@ export default function AdminScreen() {
   const [editTrailerRemoved, setEditTrailerRemoved] = useState(false);
   const [editTrailerDuration, setEditTrailerDuration] = useState('');
   const [editPublished, setEditPublished] = useState(false);
+  const [editCategories, setEditCategories] = useState<string[]>([]);
   const [editRightsConfirmed, setEditRightsConfirmed] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string>();
@@ -285,6 +288,7 @@ export default function AdminScreen() {
   const [seriesDescription, setSeriesDescription] = useState('');
   const [seriesYear, setSeriesYear] = useState('');
   const [seriesGenres, setSeriesGenres] = useState('');
+  const [seriesCategories, setSeriesCategories] = useState<string[]>([]);
   const [seriesContentRating, setSeriesContentRating] = useState('');
   const [seriesPosterUrl, setSeriesPosterUrl] = useState('');
   const [seriesPosterImage, setSeriesPosterImage] = useState<SelectedTitleImage>();
@@ -675,6 +679,7 @@ export default function AdminScreen() {
             .split(',')
             .map((genre) => genre.trim())
             .filter(Boolean),
+          categories,
           ...(storedPosterUrl ? { posterUrl: storedPosterUrl } : {}),
           ...(storedCoverUrl ? { coverUrl: storedCoverUrl } : {}),
           ...(parsedRuntime === undefined ? {} : { runtimeMinutes: parsedRuntime }),
@@ -715,6 +720,7 @@ export default function AdminScreen() {
       setDescription('');
       setYear('');
       setGenres('');
+      setCategories([]);
       setRuntime('');
       setContentRating('');
       setPosterUrl('');
@@ -759,6 +765,7 @@ export default function AdminScreen() {
     contentRating,
     description,
     genres,
+    categories,
     allowDownload,
     loadMovies,
     posterUrl,
@@ -935,6 +942,7 @@ export default function AdminScreen() {
         description: seriesDescription,
         ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
         genres: seriesGenres.split(',').map((genre) => genre.trim()).filter(Boolean),
+        categories: seriesCategories,
         ...(storedPosterUrl ? { posterUrl: storedPosterUrl } : {}),
         ...(storedCoverUrl ? { coverUrl: storedCoverUrl } : {}),
         ...(seriesContentRating.trim() ? { contentRating: seriesContentRating.trim() } : {}),
@@ -952,6 +960,7 @@ export default function AdminScreen() {
       setSeriesDescription('');
       setSeriesYear('');
       setSeriesGenres('');
+      setSeriesCategories([]);
       setSeriesContentRating('');
       setSeriesPosterUrl('');
       setSeriesPosterImage(undefined);
@@ -991,7 +1000,7 @@ export default function AdminScreen() {
       setIsUploading(false);
       setIsSavingSeries(false);
     }
-  }, [loadMovies, seriesContentRating, seriesDescription, seriesGenres, seriesPosterUrl, seriesPosterImage, seriesCoverImage, seriesTrailer, seriesTrailerDuration, seriesPublished, seriesRightsConfirmed, seriesTitle, seriesYear]);
+  }, [loadMovies, seriesCategories, seriesContentRating, seriesDescription, seriesGenres, seriesPosterUrl, seriesPosterImage, seriesCoverImage, seriesTrailer, seriesTrailerDuration, seriesPublished, seriesRightsConfirmed, seriesTitle, seriesYear]);
 
   const handleCreateSeason = useCallback(async () => {
     if (!supabaseMovieRepository || !seasonSeriesId) {
@@ -1173,6 +1182,7 @@ export default function AdminScreen() {
     setEditTrailerRemoved(false);
     setEditTrailerDuration(movie.trailerDurationSeconds ? String(movie.trailerDurationSeconds) : '');
     setEditPublished(movie.published);
+    setEditCategories(movie.categories ?? []);
     setEditRightsConfirmed(false);
     setEditError(undefined);
   }, []);
@@ -1297,6 +1307,7 @@ export default function AdminScreen() {
         title: editTitle,
         description: editDescription,
         ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
+        categories: editCategories,
         ...(editRating.trim() ? { contentRating: editRating.trim() } : {}),
         posterUrl: uploadedPosterUrl ?? (editPosterUrl.trim() || undefined),
         coverUrl: uploadedCoverUrl ?? (editCoverUrl.trim() || undefined),
@@ -1380,6 +1391,7 @@ export default function AdminScreen() {
   }, [
     editCoverImage,
     editCoverUrl,
+    editCategories,
     editDescription,
     editPublished,
     editPosterImage,
@@ -1813,6 +1825,7 @@ export default function AdminScreen() {
                   setPosterUrl('');
                 }}
               />
+              <CategoryPicker selected={categories} onChange={setCategories} disabled={isUploading} />
               <AdminTitleImagePicker
                 label="Cover"
                 uri={coverImage?.uri}
@@ -1968,6 +1981,7 @@ export default function AdminScreen() {
               <AdminTextField label="Description" value={seriesDescription} onChangeText={setSeriesDescription} multiline />
               <AdminTextField label="Release year" value={seriesYear} onChangeText={setSeriesYear} keyboardType="number-pad" />
               <AdminTextField label="Genres" value={seriesGenres} onChangeText={setSeriesGenres} />
+              <CategoryPicker selected={seriesCategories} onChange={setSeriesCategories} disabled={isSavingSeries} />
               <AdminTextField label="Content rating" value={seriesContentRating} onChangeText={setSeriesContentRating} />
               <AdminTextField label="Poster image URL (optional)" value={seriesPosterUrl} onChangeText={setSeriesPosterUrl} />
               <View style={styles.filePicker}>
@@ -2282,6 +2296,7 @@ export default function AdminScreen() {
                   <AdminTextField label="Title" value={editTitle} onChangeText={setEditTitle} />
                   <AdminTextField label="Description" value={editDescription} onChangeText={setEditDescription} multiline />
                   <AdminTextField label="Release year" value={editYear} onChangeText={setEditYear} keyboardType="number-pad" />
+                  <CategoryPicker selected={editCategories} onChange={setEditCategories} disabled={editSaving} />
                   <AdminTextField label="Content rating" value={editRating} onChangeText={setEditRating} />
                   <AdminTextField label="Poster image URL (optional)" value={editPosterUrl} onChangeText={setEditPosterUrl} />
                   <AdminTitleImagePicker

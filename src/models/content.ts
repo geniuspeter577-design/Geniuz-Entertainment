@@ -30,6 +30,7 @@ export interface ContentItem {
   createdAt?: string;
   releaseDate?: string;
   genres: string[];
+  categories?: string[];
   posterUrl?: string;
   coverUrl?: string;
   backdropUrl?: string;
@@ -65,6 +66,7 @@ export interface SeasonItem {
   year?: number;
   published: boolean;
   episodes: EpisodeItem[];
+  episodesError?: string;
 }
 
 export interface EpisodeItem extends ContentItem {

@@ -7,7 +7,7 @@ import { logSupabaseError } from '../utils/supabaseError';
 
 const MOVIE_BUCKET = 'movie-assets';
 const MOVIE_COLUMNS =
-  'id,title,description,release_year,genres,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type';
+  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type';
 const TITLE_IMAGE_BUCKET = 'title-images';
 const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
@@ -18,6 +18,7 @@ type MovieRecord = {
   description: string | null;
   release_year: number | null;
   genres: string[] | null;
+  categories?: string[] | null;
   poster_url: string | null;
   cover_url?: string | null;
   runtime_minutes: number | null;
@@ -51,6 +52,7 @@ export type NewMovie = {
   description: string;
   releaseYear?: number;
   genres: string[];
+  categories: string[];
   posterUrl?: string;
   coverUrl?: string;
   runtimeMinutes?: number;
@@ -72,6 +74,7 @@ export type AdminTitleUpdate = {
   title: string;
   description: string;
   releaseYear?: number;
+  categories: string[];
   contentRating?: string;
   posterUrl?: string;
   coverUrl?: string;
@@ -87,6 +90,7 @@ type NewSeries = {
   description: string;
   releaseYear?: number;
   genres: string[];
+  categories: string[];
   posterUrl?: string;
   coverUrl?: string;
   contentRating?: string;
@@ -136,6 +140,7 @@ function toContentItem(movie: MovieRecord): ContentItem {
     type: isSeries ? 'series' : 'movie',
     ...(movie.release_year === null ? {} : { year: movie.release_year }),
     genres: movie.genres ?? [],
+    categories: movie.categories ?? [],
     ...(movie.poster_url ? { posterUrl: movie.poster_url } : {}),
     ...(movie.cover_url ? { coverUrl: movie.cover_url, backdropUrl: movie.cover_url } : {}),
     ...(movie.description ? { description: movie.description } : {}),
@@ -223,12 +228,13 @@ export class SupabaseMovieRepository {
     }
   }
 
-  async getPublished() {
+  async getPublishedMovies() {
     const { data, error } = await this.client
       .from('movies')
       .select(`${MOVIE_COLUMNS},created_at`)
       .eq('published', true)
-      .or('content_type.eq.series,video_path.not.is.null,storage_key.not.is.null')
+      .eq('content_type', 'movie')
+      .or('video_path.not.is.null,storage_key.not.is.null')
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -242,7 +248,44 @@ export class SupabaseMovieRepository {
     return (data as MovieRecord[]).map(toContentItem);
   }
 
-  async searchPublished(query: string, genre?: string) {
+  async getPublishedSeries() {
+    const { data, error } = await this.client
+      .from('movies')
+      .select(`${MOVIE_COLUMNS},created_at`)
+      .eq('published', true)
+      .eq('content_type', 'series')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logSupabaseError('[SupabaseMovieRepository] Could not load published series.', error, {
+        table: 'movies',
+        columns: `${MOVIE_COLUMNS},created_at`,
+      });
+      throw new Error('Could not load published series.', { cause: error });
+    }
+
+    return (data as MovieRecord[]).map(toContentItem);
+  }
+
+  async getPublished() {
+    const [moviesResult, seriesResult] = await Promise.allSettled([
+      this.getPublishedMovies(),
+      this.getPublishedSeries(),
+    ]);
+    const movies = moviesResult.status === 'fulfilled' ? moviesResult.value : [];
+    const series = seriesResult.status === 'fulfilled' ? seriesResult.value : [];
+    if (moviesResult.status === 'rejected' && seriesResult.status === 'rejected') {
+      throw new AggregateError(
+        [moviesResult.reason, seriesResult.reason],
+        'Could not load published movies or series.',
+      );
+    }
+    return [...movies, ...series].sort((first, second) =>
+      (second.createdAt ?? '').localeCompare(first.createdAt ?? ''),
+    );
+  }
+
+  async searchPublished(query: string, genre?: string, year?: string) {
     const normalizedQuery = query.trim();
     const movies = await this.getPublished();
     const normalized = normalizedQuery.toLocaleLowerCase();
@@ -251,10 +294,12 @@ export class SupabaseMovieRepository {
       const matchesQuery =
         !normalized ||
         movie.title.toLocaleLowerCase().includes(normalized) ||
-        movie.genres.some((movieGenre) => movieGenre.toLocaleLowerCase().includes(normalized));
+        movie.genres.some((movieGenre) => movieGenre.toLocaleLowerCase().includes(normalized)) ||
+        (movie.year !== undefined && String(movie.year).includes(normalized));
       const matchesGenre =
         !normalizedGenre || movie.genres.some((movieGenre) => movieGenre.toLocaleLowerCase() === normalizedGenre);
-      return matchesQuery && matchesGenre;
+      const matchesYear = !year || String(movie.year ?? '') === year;
+      return matchesQuery && matchesGenre && matchesYear;
     });
   }
 
@@ -312,6 +357,7 @@ export class SupabaseMovieRepository {
         title: title.title.trim(),
         description: title.description.trim() || null,
         release_year: title.releaseYear ?? null,
+        categories: title.categories,
         content_rating: title.contentRating?.trim() || null,
         poster_url: title.posterUrl?.trim() || null,
         cover_url: title.coverUrl?.trim() || null,
@@ -418,6 +464,7 @@ export class SupabaseMovieRepository {
       description: movie.description.trim() || null,
       release_year: movie.releaseYear ?? null,
       genres: movie.genres,
+      categories: movie.categories,
       poster_url: movie.posterUrl?.trim() || null,
       runtime_minutes: movie.runtimeMinutes ?? null,
       content_rating: movie.contentRating?.trim() || null,
@@ -596,6 +643,7 @@ export class SupabaseMovieRepository {
         description: movie.description.trim() || null,
         release_year: movie.releaseYear ?? null,
         genres: movie.genres,
+        categories: movie.categories,
         poster_url: movie.posterUrl?.trim() || null,
         cover_url: movie.coverUrl?.trim() || null,
         trailer_storage_key: movie.trailerStorageKey ?? null,
@@ -633,6 +681,7 @@ export class SupabaseMovieRepository {
           description: series.description.trim() || null,
           release_year: series.releaseYear ?? null,
           genres: series.genres,
+          categories: series.categories,
           poster_url: series.posterUrl?.trim() || null,
           cover_url: series.coverUrl?.trim() || null,
           trailer_storage_key: series.trailerStorageKey ?? null,
@@ -748,20 +797,25 @@ export class SupabaseMovieRepository {
         release_year: number | null;
         published: boolean;
       }[];
-      return Promise.all(
-        seasons.map(async (season): Promise<SeasonItem> => ({
+      const episodesResults = await Promise.allSettled(
+        seasons.map((season) =>
+          this.getEpisodesForSeason(season.id, normalizedId, season.season_number),
+        ),
+      );
+      return seasons.map((season, index): SeasonItem => {
+        const episodesResult = episodesResults[index];
+        return {
           id: season.id,
           seriesId: season.series_id,
           seasonNumber: season.season_number,
           ...(season.release_year === null ? {} : { year: season.release_year }),
           published: season.published,
-          episodes: await this.getEpisodesForSeason(
-            season.id,
-            normalizedId,
-            season.season_number,
-          ),
-        })),
-      );
+          episodes: episodesResult.status === 'fulfilled' ? episodesResult.value : [],
+          ...(episodesResult.status === 'rejected'
+            ? { episodesError: 'Episodes for this season could not be loaded.' }
+            : {}),
+        };
+      });
     }
 
     private async getEpisodesForSeason(

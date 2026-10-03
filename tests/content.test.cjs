@@ -5,6 +5,11 @@ const { ApiClient, ApiError } = require('../.test-build/src/api/ApiClient.js');
 const { MockContentRepository } = require('../.test-build/src/repositories/MockContentRepository.js');
 const { ContentService } = require('../.test-build/src/services/ContentService.js');
 const { getFriendlyCatalogErrorMessage } = require('../.test-build/src/utils/contentError.js');
+const {
+  loadPublishedCatalog,
+  searchPublishedCatalog,
+  sortPublishedNewest,
+} = require('../.test-build/src/utils/publishedCatalog.js');
 
 test('mock repository supports search, genre filtering, and explicit missing details', async () => {
   const repository = new MockContentRepository();
@@ -86,7 +91,7 @@ test('content service falls back to mocks and reports the fallback', async (cont
   const result = await service.getTrending();
 
   assert.equal(result.source, 'mock');
-  assert.match(result.warning, /live catalog is unavailable/i);
+  assert.match(result.warning, /Demo catalog/i);
   assert.equal(result.data[0].source, 'mock');
 });
 
@@ -227,6 +232,54 @@ test('a failed catalog request does not hide results from another request', asyn
   assert.deepEqual(trending.data, []);
   assert.match(trending.warning, /temporarily unavailable/i);
   assert.deepEqual(popular.data, [liveItem]);
+});
+
+test('published movies and series load independently when either query fails', async () => {
+  const movie = {
+    id: 'geniuz:movie:1',
+    source: 'geniuz',
+    title: 'Movie',
+    type: 'movie',
+    genres: [],
+    availability: { discoverable: true, stream: true, download: false, premium: false },
+  };
+  const catalog = await loadPublishedCatalog(
+    async () => [movie],
+    async () => {
+      throw new Error('series read failed');
+    },
+  );
+  assert.deepEqual(catalog.movies, [movie]);
+  assert.deepEqual(catalog.series, []);
+  assert.equal(catalog.hasFailures, true);
+});
+
+test('published catalog search matches title, genre, and year, newest first', () => {
+  const items = [
+    {
+      id: 'older',
+      source: 'geniuz',
+      title: 'Old Comedy',
+      type: 'movie',
+      year: 1999,
+      createdAt: '2025-01-01',
+      genres: ['Comedy'],
+      availability: { discoverable: true, stream: true, download: false, premium: false },
+    },
+    {
+      id: 'newer',
+      source: 'geniuz',
+      title: 'Recent Drama',
+      type: 'series',
+      year: 2026,
+      createdAt: '2026-01-01',
+      genres: ['Drama'],
+      availability: { discoverable: true, stream: false, download: false, premium: false },
+    },
+  ];
+  assert.deepEqual(searchPublishedCatalog(items, 'comedy').map(({ id }) => id), ['older']);
+  assert.deepEqual(searchPublishedCatalog(items, '1999').map(({ id }) => id), ['older']);
+  assert.deepEqual(sortPublishedNewest(items).map(({ id }) => id), ['newer', 'older']);
 });
 
 test('catalog errors map to short friendly messages without exposing provider details', () => {

@@ -4,6 +4,7 @@ import React from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import type { ContentItem } from '../models/content';
+import { CategoryLabels } from './CategoryPicker';
 import { TitleImage } from './TitleImage';
 import { useDownloads } from '../state/DownloadsContext';
 import { theme } from '../theme';
@@ -55,6 +56,7 @@ export function PosterCard({ item, onPress, compact = false, grid = false, progr
           end={{ x: 0.5, y: 1 }}
           style={styles.metaWrap}
         >
+          <CategoryLabels categories={item.categories ?? []} />
           <Text style={styles.title} numberOfLines={1}>
             {item.title}
           </Text>

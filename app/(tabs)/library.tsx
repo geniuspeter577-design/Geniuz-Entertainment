@@ -1,18 +1,68 @@
 import { router } from 'expo-router';
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { OfflineState } from '../../src/components/OfflineState';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
+import { useContentQuery } from '../../src/hooks/useContentQuery';
+import { MockContentRepository } from '../../src/repositories/MockContentRepository';
+import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
+import { isDemoCatalogEnabled, loadPublishedCatalog } from '../../src/utils/publishedCatalog';
+
+const demoRepository = new MockContentRepository();
 
 export default function LibraryScreen() {
   const { isOnline, retryConnection } = useNetwork();
   const { continueWatching, error, isLoading, retryLoad, watchlist } = useLibrary();
+  const loadCatalog = useCallback(
+    () =>
+      loadPublishedCatalog(
+        () => {
+          if (!supabaseMovieRepository) {
+            throw new Error('Supabase catalog is not configured.');
+          }
+          return supabaseMovieRepository.getPublishedMovies();
+        },
+        () => {
+          if (!supabaseMovieRepository) {
+            throw new Error('Supabase catalog is not configured.');
+          }
+          return supabaseMovieRepository.getPublishedSeries();
+        },
+      ).then(async (catalog) => ({
+        data: {
+          ...catalog,
+          demos:
+            isDemoCatalogEnabled && !catalog.hasFailures && !catalog.movies.length && !catalog.series.length
+              ? await demoRepository.getPopular()
+              : [],
+        },
+        source: 'supabase' as const,
+      })),
+    [],
+  );
+  const catalogQuery = useContentQuery('library-supabase-catalog', loadCatalog, isOnline);
+  const publishedIds = new Set([
+    ...(catalogQuery.data?.movies ?? []).map(({ id }) => id),
+    ...(catalogQuery.data?.series ?? []).map(({ id }) => id),
+  ]);
+  const demoIds = new Set((catalogQuery.data?.demos ?? []).map(({ id }) => id));
+  const visibleWatchlist = watchlist.filter(
+    (item) => publishedIds.has(item.id) || demoIds.has(item.id),
+  );
+  const visibleContinueWatching = continueWatching.filter(
+    ({ item }) => publishedIds.has(item.id) || demoIds.has(item.id),
+  );
+  const retryAll = () => {
+    retryLoad();
+    catalogQuery.retry();
+  };
+  const refreshing = isLoading || catalogQuery.isRefreshing;
 
   if (!isOnline) {
     return (
@@ -32,8 +82,8 @@ export default function LibraryScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
-            refreshing={isLoading}
-            onRefresh={retryLoad}
+            refreshing={refreshing}
+            onRefresh={retryAll}
             tintColor={theme.accent}
             colors={[theme.accent]}
           />
@@ -44,11 +94,11 @@ export default function LibraryScreen() {
         <View style={styles.summaryRow}>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Watchlist</Text>
-            <Text style={styles.summaryValue}>{watchlist.length}</Text>
+            <Text style={styles.summaryValue}>{visibleWatchlist.length}</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>In progress</Text>
-            <Text style={styles.summaryValue}>{continueWatching.length}</Text>
+            <Text style={styles.summaryValue}>{visibleContinueWatching.length}</Text>
           </View>
           <View style={styles.summaryCard}>
             <Text style={styles.summaryLabel}>Offline</Text>
@@ -56,14 +106,26 @@ export default function LibraryScreen() {
           </View>
         </View>
 
-        {isLoading ? <ContentNotice message="Loading your device library…" /> : null}
+        {(isLoading || catalogQuery.isLoading) ? <ContentNotice message="Loading your library…" /> : null}
         {error ? (
           <ContentNotice message={error} tone="error" actionLabel="Retry" onAction={retryLoad} />
+        ) : null}
+        {catalogQuery.error || catalogQuery.data?.hasFailures ? (
+          <ContentNotice
+            message="Some titles could not be loaded. Please retry."
+            tone="error"
+            actionLabel="Retry"
+            onAction={retryAll}
+            autoHideMs={5000}
+          />
+        ) : null}
+        {catalogQuery.data?.demos.length ? (
+          <ContentNotice message="Demo catalog — saved sample titles are shown." />
         ) : null}
 
         <SectionHeader title="My watchlist" />
         <View style={styles.grid}>
-          {watchlist.map((item) => (
+          {visibleWatchlist.map((item) => (
             <PosterCard
               key={item.id}
               item={item}
@@ -72,12 +134,12 @@ export default function LibraryScreen() {
             />
           ))}
         </View>
-        {!isLoading && !error && watchlist.length === 0 ? (
-          <Text style={styles.emptyText}>Add titles to My List and they’ll be saved on this device.</Text>
+        {!isLoading && !catalogQuery.isLoading && !error && visibleWatchlist.length === 0 ? (
+          <Text style={styles.emptyText}>No titles yet</Text>
         ) : null}
 
         <SectionHeader title="Recently watched" />
-        {continueWatching.map((entry) => (
+        {visibleContinueWatching.map((entry) => (
           <Pressable
             key={entry.item.id}
             style={styles.rowItem}
@@ -101,7 +163,7 @@ export default function LibraryScreen() {
             <Text style={styles.rowProgress}>{entry.progress}%</Text>
           </Pressable>
         ))}
-        {!continueWatching.length ? (
+        {!visibleContinueWatching.length ? (
           <Text style={styles.emptyText}>Viewing progress will be saved here when playback is available.</Text>
         ) : null}
       </ScrollView>
