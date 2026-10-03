@@ -96,7 +96,7 @@ export function isVideoFormatLikelySupported(
     return ['3gp', 'm4v', 'mov', 'mp4'].includes(normalizedExtension);
   }
   if (platform === 'android') {
-    return ['3gp', 'm4v', 'mkv', 'mov', 'mp4', 'ts', 'webm'].includes(normalizedExtension);
+    return ['3gp', 'm4v', 'mov', 'mp4', 'ts', 'webm'].includes(normalizedExtension);
   }
   if (platform === 'web') {
     return ['m4v', 'mov', 'mp4', 'webm'].includes(normalizedExtension);

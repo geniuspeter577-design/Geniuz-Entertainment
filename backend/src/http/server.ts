@@ -239,6 +239,64 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/admin/system-status') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client } = await authenticateAdmin(config, request.headers.authorization);
+    const checks: Record<'backend' | 'supabase' | 'bucket' | 'presignedRead', 'ok' | 'not_ok'> = {
+      backend: 'ok',
+      supabase: 'not_ok',
+      bucket: 'not_ok',
+      presignedRead: 'not_ok',
+    };
+    const movieQuery = await client.from('movies').select('id').limit(1);
+    if (!movieQuery.error) {
+      checks.supabase = 'ok';
+    }
+
+    let storage: B2StorageService | undefined;
+    try {
+      storage = getB2Storage(config);
+      await storage.checkBucket();
+      checks.bucket = 'ok';
+    } catch {
+      storage = undefined;
+    }
+
+    if (storage) {
+      try {
+        const { data, error } = await client
+          .from('movies')
+          .select('storage_key')
+          .eq('published', true)
+          .eq('storage_provider', 'b2')
+          .not('storage_key', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (!error && typeof data?.storage_key === 'string' && data.storage_key.trim()) {
+          const signedUrl = await storage.createPlaybackProbeUrl(data.storage_key);
+          const probe = await fetch(signedUrl, {
+            headers: { Range: 'bytes=0-0' },
+            signal: AbortSignal.timeout(8_000),
+          });
+          checks.presignedRead = probe.ok ? 'ok' : 'not_ok';
+          try {
+            await probe.body?.cancel();
+          } catch {
+            // The status result is sufficient for this diagnostic read.
+          }
+        }
+      } catch {
+        checks.presignedRead = 'not_ok';
+      }
+    }
+
+    writeJson(response, 200, { checks });
+    return;
+  }
+
   if (pathname.startsWith('/uploads/')) {
     await authenticateAdmin(config, request.headers.authorization);
     const storage = getB2Storage(config);
@@ -339,8 +397,11 @@ async function handleRequest(
       );
     }
     requirePublishedOrAdmin(data.published === true, isAdmin);
-    if (data.storage_provider !== 'b2' || typeof data.storage_key !== 'string') {
+    if (data.storage_provider !== 'b2') {
       throw new HttpError(409, 'NOT_B2_STORAGE', 'This movie is not stored in Backblaze.');
+    }
+    if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
+      throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This movie is missing its video file.');
     }
     const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
@@ -379,8 +440,11 @@ async function handleRequest(
       );
     }
     requirePublishedOrAdmin(data.published === true, isAdmin);
-    if (data.storage_provider !== 'b2' || typeof data.storage_key !== 'string') {
+    if (data.storage_provider !== 'b2') {
       throw new HttpError(409, 'NOT_B2_STORAGE', 'This episode is not stored in Backblaze.');
+    }
+    if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
+      throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This episode is missing its video file.');
     }
     const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
@@ -418,7 +482,7 @@ async function handleRequest(
       );
     }
     requirePublishedOrAdmin(data.published === true, isAdmin);
-    if (typeof data.trailer_storage_key !== 'string') {
+    if (typeof data.trailer_storage_key !== 'string' || !data.trailer_storage_key.trim()) {
       throw new HttpError(404, 'TRAILER_NOT_FOUND', 'This title does not have a trailer.');
     }
     const trailerUrl = await getB2Storage(config).createTrailerPlayUrl(data.trailer_storage_key);

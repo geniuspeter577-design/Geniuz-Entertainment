@@ -3,6 +3,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { Upload } from 'tus-js-client';
 import type { ContentItem, EpisodeItem, SeasonItem } from '../models/content';
 import { supabase } from '../services/supabase';
+import { PlaybackError } from '../utils/playbackError';
 import { logSupabaseError } from '../utils/supabaseError';
 
 const MOVIE_BUCKET = 'movie-assets';
@@ -130,7 +131,8 @@ const tusUrlStorage = {
 
 function toContentItem(movie: MovieRecord): ContentItem {
   const isSeries = movie.content_type === 'series';
-  const hasVideo = movie.storage_provider === 'b2' ? movie.storage_key !== null : movie.video_path !== null;
+  const mediaPath = movie.storage_provider === 'b2' ? movie.storage_key : movie.video_path;
+  const hasVideo = typeof mediaPath === 'string' && Boolean(mediaPath.trim());
   return {
     id: `geniuz:${isSeries ? 'series' : 'movie'}:${movie.id}`,
     source: 'geniuz',
@@ -146,9 +148,7 @@ function toContentItem(movie: MovieRecord): ContentItem {
     ...(movie.description ? { description: movie.description } : {}),
     ...(movie.runtime_minutes === null ? {} : { runtimeMinutes: movie.runtime_minutes }),
     ...(movie.content_rating ? { contentRating: movie.content_rating } : {}),
-    ...((movie.storage_provider === 'b2' ? movie.storage_key : movie.video_path)
-      ? { mediaPath: movie.storage_provider === 'b2' ? movie.storage_key! : movie.video_path! }
-      : {}),
+    ...(hasVideo ? { mediaPath: mediaPath! } : {}),
     ...(movie.storage_provider ? { storageProvider: movie.storage_provider } : {}),
     ...(movie.storage_key ? { storageKey: movie.storage_key } : {}),
     ...(movie.file_extension ? { fileExtension: movie.file_extension } : {}),
@@ -850,7 +850,7 @@ export class SupabaseMovieRepository {
         allow_download: boolean;
         published: boolean;
       }[]).flatMap((episode) => {
-        if (!episode.storage_key) {
+        if (!episode.storage_key?.trim()) {
           return [];
         }
         return [
@@ -913,8 +913,8 @@ export class SupabaseMovieRepository {
     }
 
     async getEpisodePlaybackUrl(episode: Pick<ContentItem, 'id' | 'mediaPath' | 'storageProvider'>) {
-      if (!episode.mediaPath) {
-        throw new Error('This episode does not have an available video file.');
+      if (!episode.mediaPath?.trim()) {
+        throw new PlaybackError('This episode is missing its video file.', 'PLAYBACK_FILE_MISSING', 404);
       }
       if (episode.storageProvider !== 'b2') {
         return this.getSignedPlaybackUrl(episode.mediaPath);
@@ -923,20 +923,36 @@ export class SupabaseMovieRepository {
     }
 
   async getSignedPlaybackUrl(path: string) {
+    if (!path.trim()) {
+      throw new PlaybackError('This movie is missing its video file.', 'PLAYBACK_FILE_MISSING', 404);
+    }
     const { data, error } = await this.client.storage
       .from(MOVIE_BUCKET)
       .createSignedUrl(path, 60 * 60);
 
     if (error) {
-      throw new Error('Could not prepare this movie for playback.', { cause: error });
+      const details = error as { status?: number; statusCode?: string; code?: string; error?: string };
+      const status = details.status ?? (Number(details.statusCode) || undefined);
+      const isMissing = status === 404 || details.code === 'not_found' || details.error === 'not_found';
+      throw new PlaybackError(
+        isMissing
+          ? 'The video file is missing from storage.'
+          : 'Could not prepare the video from storage. Check the file and retry.',
+        isMissing ? 'PLAYBACK_FILE_NOT_FOUND' : details.code ?? 'SUPABASE_SIGNED_URL_FAILED',
+        status,
+        { cause: error },
+      );
     }
-
-    return data.signedUrl;
+    const signedUrl = typeof data?.signedUrl === 'string' ? data.signedUrl.trim() : '';
+    if (!isHttpUrl(signedUrl)) {
+      throw new PlaybackError('Storage returned an invalid playback URL.', 'INVALID_PLAYBACK_URL', 502);
+    }
+    return signedUrl;
   }
 
   async getPlaybackUrl(movie: Pick<ContentItem, 'id' | 'mediaPath' | 'storageProvider'>) {
-    if (!movie.mediaPath) {
-      throw new Error('This movie does not have an available video file.');
+    if (!movie.mediaPath?.trim()) {
+      throw new PlaybackError('This movie is missing its video file.', 'PLAYBACK_FILE_MISSING', 404);
     }
     if (movie.storageProvider !== 'b2') {
       return this.getSignedPlaybackUrl(movie.mediaPath);
@@ -945,8 +961,8 @@ export class SupabaseMovieRepository {
   }
 
   async getTrailerPlaybackUrl(item: Pick<ContentItem, 'id' | 'trailerStorageKey'>) {
-    if (!item.trailerStorageKey) {
-      throw new Error('This title does not have an available trailer.');
+    if (!item.trailerStorageKey?.trim()) {
+      throw new PlaybackError('This title does not have an available trailer.', 'TRAILER_NOT_FOUND', 404);
     }
     const resource = item.id.startsWith('geniuz:series:') ? 'series' : 'movies';
     return this.getApiPlaybackUrl(resource, item.id.replace(/^geniuz:(?:movie|series):/, ''), 'trailer');
@@ -959,12 +975,15 @@ export class SupabaseMovieRepository {
   ) {
     const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
     if (!apiBaseUrl) {
-      throw new Error('The Geniuz API is not configured. Restart the app after setting its URL.');
+      throw new PlaybackError(
+        'The video service is not configured. Restart Expo after setting its API URL.',
+        'API_URL_NOT_CONFIGURED',
+      );
     }
     const { data, error: sessionError } = await this.client.auth.getSession();
     const accessToken = data.session?.access_token;
     if (sessionError) {
-      throw new Error('Could not verify your session before preparing playback.', {
+      throw new PlaybackError('Could not verify your session before preparing playback.', 'SESSION_UNAVAILABLE', undefined, {
         cause: sessionError,
       });
     }
@@ -979,21 +998,23 @@ export class SupabaseMovieRepository {
         requestOptions,
       );
     } catch (fetchError) {
-      throw new Error('Could not reach the video service. Check your connection and retry.', {
-        cause: fetchError,
-      });
+      throw new PlaybackError(
+        'Could not reach the video service. Check your connection and retry.',
+        'BACKEND_UNREACHABLE',
+        undefined,
+        { cause: fetchError },
+      );
     }
 
     let result: unknown;
     try {
       result = await response.json();
     } catch (parseError) {
-      const error = new Error('The video service returned an invalid response.', { cause: parseError });
-      Reflect.set(error, 'status', response.status);
-      Reflect.set(error, 'code', 'INVALID_PLAYBACK_RESPONSE');
-      throw error;
+      throw new PlaybackError('The video service returned an invalid response.', 'INVALID_PLAYBACK_RESPONSE', response.status, {
+        cause: parseError,
+      });
     }
-    if (!response.ok || typeof result !== 'object' || result === null || !('url' in result)) {
+    if (!response.ok) {
       const message =
         typeof result === 'object' &&
         result !== null &&
@@ -1004,9 +1025,7 @@ export class SupabaseMovieRepository {
         typeof result.error.message === 'string'
           ? result.error.message
           : 'Could not prepare this movie for playback.';
-      const error = new Error(message);
-      Reflect.set(error, 'status', response.status);
-      Reflect.set(error, 'code',
+      const code =
         typeof result === 'object' &&
         result !== null &&
         'error' in result &&
@@ -1015,14 +1034,11 @@ export class SupabaseMovieRepository {
         'code' in result.error &&
         typeof result.error.code === 'string'
           ? result.error.code
-          : 'PLAYBACK_ERROR');
-      throw error;
+          : 'PLAYBACK_ERROR';
+      throw new PlaybackError(message, code, response.status);
     }
-    if (typeof result.url !== 'string') {
-      const error = new Error('The video service returned an invalid playback URL.');
-      Reflect.set(error, 'status', response.status);
-      Reflect.set(error, 'code', 'INVALID_PLAYBACK_URL');
-      throw error;
+    if (typeof result !== 'object' || result === null || !('url' in result) || !isHttpUrl(result.url)) {
+      throw new PlaybackError('The video service returned an invalid playback URL.', 'INVALID_PLAYBACK_URL', response.status);
     }
     return result.url;
   }
@@ -1041,6 +1057,18 @@ export class SupabaseMovieRepository {
 
 const configuredUrl = process.env.EXPO_PUBLIC_SUPABASE_URL?.trim();
 const configuredKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY?.trim();
+
+function isHttpUrl(value: unknown): value is string {
+  if (typeof value !== 'string' || !value.trim()) {
+    return false;
+  }
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
 
 export const supabaseMovieRepository =
   supabase && configuredUrl && configuredKey

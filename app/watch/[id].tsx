@@ -10,6 +10,7 @@ import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { OfflineState } from '../../src/components/OfflineState';
 import { logger } from '../../src/utils/logger';
+import { getPlaybackErrorDetails, PlaybackError } from '../../src/utils/playbackError';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
@@ -20,6 +21,7 @@ import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
 import {
   getDragTarget,
   getSeekTarget,
+  runPlayerActionIfActive,
   setPlayerVolume,
   togglePlayerOrientation,
 } from '../../src/utils/playerControls';
@@ -54,6 +56,7 @@ export default function WatchScreen() {
   const originalOrientationLock = useRef<ScreenOrientation.OrientationLock | undefined>(undefined);
   const originalBrightness = useRef<number | undefined>(undefined);
   const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const playerReleasedRef = useRef(false);
   const brightnessRef = useRef(0.5);
   const [nextEpisodeState, setNextEpisodeState] = useState<{
     currentId: string;
@@ -83,6 +86,13 @@ export default function WatchScreen() {
         : undefined;
 
   useEffect(() => {
+    playerReleasedRef.current = false;
+    return () => {
+      playerReleasedRef.current = true;
+    };
+  }, [player]);
+
+  useEffect(() => {
     if (Platform.OS === 'web') {
       return;
     }
@@ -101,7 +111,7 @@ export default function WatchScreen() {
       const previousLock = originalOrientationLock.current;
       if (previousLock !== undefined) {
         void ScreenOrientation.lockAsync(previousLock).catch((orientationError: unknown) => {
-          console.error('[WatchScreen] Could not restore the original screen orientation.', orientationError);
+          logger.warn('[WatchScreen] Screen orientation restore failed.', 'n/a', 'ORIENTATION_RESTORE_FAILED');
         });
       }
     };
@@ -120,7 +130,7 @@ export default function WatchScreen() {
         }
       })
       .catch((brightnessError: unknown) => {
-        console.error('[WatchScreen] Could not read the original display brightness.', brightnessError);
+        logger.warn('[WatchScreen] Display brightness read failed.', 'n/a', 'BRIGHTNESS_READ_FAILED');
       });
     return () => {
       active = false;
@@ -169,7 +179,8 @@ export default function WatchScreen() {
   }, []);
 
   const getGestureValue = useCallback(
-    (side: 'left' | 'right') => (side === 'left' ? brightnessRef.current : player.volume),
+    (side: 'left' | 'right') =>
+      side === 'left' || playerReleasedRef.current ? brightnessRef.current : player.volume,
     [player],
   );
 
@@ -185,7 +196,7 @@ export default function WatchScreen() {
           logger.warn('[WatchScreen] Could not change the display brightness.');
         });
       } else {
-        setPlayerVolume(player, value);
+        runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerVolume(player, value));
       }
       showFeedback({ kind: 'level', side, value });
     },
@@ -195,9 +206,11 @@ export default function WatchScreen() {
   const handleSeekBy = useCallback(
     (side: 'left' | 'right') => {
       const delta = side === 'right' ? 10 : -10;
-      player.seekBy(
-        getSeekTarget(player.currentTime, player.duration, delta) - player.currentTime,
-      );
+      runPlayerActionIfActive(playerReleasedRef.current, () => {
+        player.seekBy(
+          getSeekTarget(player.currentTime, player.duration, delta) - player.currentTime,
+        );
+      });
       showFeedback({ kind: 'seek', label: `${delta > 0 ? '+' : ''}${delta}s` });
     },
     [player, showFeedback],
@@ -255,7 +268,8 @@ export default function WatchScreen() {
               : 'other',
           )
         ) {
-          setError('This video format may not play on this device.');
+          const format = extension ? extension.toUpperCase() : 'UNKNOWN';
+          setError(`This device may not support ${format} video files. Try an MP4 file.`);
           setIsLoading(false);
           return;
         }
@@ -280,8 +294,8 @@ export default function WatchScreen() {
         }
         try {
           const title = await supabaseMovieRepository.getById(id);
-          if (!title?.trailerStorageKey) {
-            throw new Error('This title does not have an available trailer.');
+          if (!title?.trailerStorageKey?.trim()) {
+            throw new PlaybackError('This title does not have an available trailer.', 'TRAILER_NOT_FOUND', 404);
           }
           const url = await supabaseMovieRepository.getTrailerPlaybackUrl(title);
           if (active) {
@@ -291,11 +305,13 @@ export default function WatchScreen() {
           }
         } catch (trailerError) {
           if (active) {
+            const { status, code } = getPlaybackErrorDetails(trailerError);
             setError(
               trailerError instanceof Error
                 ? trailerError.message
                 : 'Could not prepare this trailer. Please retry.',
             );
+            logger.warn('[WatchScreen] Trailer preparation failed.', status ?? 'n/a', code ?? 'TRAILER_PREPARATION_FAILED');
           }
         } finally {
           if (active) {
@@ -319,8 +335,18 @@ export default function WatchScreen() {
         const movie = isEpisode
           ? await supabaseMovieRepository.getEpisodeById(id)
           : await supabaseMovieRepository.getById(id);
-        if (!movie?.availability.stream || !movie.mediaPath) {
-          throw new Error('This title is not published for streaming.');
+        if (!movie) {
+          throw new PlaybackError(
+            'This title is unavailable. Check that it is published and has a video file.',
+            'TITLE_UNAVAILABLE',
+            404,
+          );
+        }
+        if (!movie.availability.stream) {
+          throw new PlaybackError('This title is not published for streaming.', 'TITLE_NOT_PUBLISHED', 403);
+        }
+        if (!movie.mediaPath?.trim()) {
+          throw new PlaybackError('This title is missing its video file.', 'PLAYBACK_FILE_MISSING', 404);
         }
 
         const extension = movie.fileExtension ?? getFileExtension(movie.mediaPath);
@@ -332,7 +358,11 @@ export default function WatchScreen() {
               : 'other',
           )
         ) {
-          throw new Error('This video format may not play on this device.');
+          const format = extension ? extension.toUpperCase() : 'UNKNOWN';
+          throw new PlaybackError(
+            `This device may not support ${format} video files. Try an MP4 file.`,
+            'UNSUPPORTED_VIDEO_FORMAT',
+          );
         }
 
         const url = isEpisode
@@ -344,12 +374,7 @@ export default function WatchScreen() {
           setPlaybackUrl(url);
         }
       } catch (loadError) {
-        const status = typeof loadError === 'object' && loadError !== null && 'status' in loadError
-          ? Number(loadError.status)
-          : undefined;
-        const code = typeof loadError === 'object' && loadError !== null && 'code' in loadError
-          ? String(loadError.code)
-          : undefined;
+        const { status, code } = getPlaybackErrorDetails(loadError);
         if (active) {
           const message =
             loadError instanceof Error
@@ -358,7 +383,7 @@ export default function WatchScreen() {
           const devSuffix = __DEV__ && (status || code) ? ` [HTTP ${status ?? 'n/a'} • ${code ?? 'unknown'}]` : '';
           setError(`${message}${devSuffix}`);
         }
-        logger.warn('[WatchScreen] Could not prepare movie playback.', status ?? 'n/a', code ?? 'unknown');
+        logger.warn('[WatchScreen] Playback preparation failed.', status ?? 'n/a', code ?? 'PLAYBACK_ERROR');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -373,7 +398,7 @@ export default function WatchScreen() {
   }, [downloads.isLoading, id, isOnline, isTrailer, localDownload, retryAttempt]);
 
   useEffect(() => {
-    if (!playbackUrl) {
+    if (!playbackUrl || playerReleasedRef.current) {
       return;
     }
 
@@ -381,39 +406,32 @@ export default function WatchScreen() {
     void player
       .replaceAsync(playbackUrl)
       .then(() => {
-        if (active) {
-          player.play();
+        if (active && !playerReleasedRef.current) {
+          runPlayerActionIfActive(playerReleasedRef.current, () => player.play());
         }
       })
-      .catch(() => {
-        console.error('[WatchScreen] Video player could not load the movie.');
+      .catch((loadError: unknown) => {
         if (active) {
-          setError('Could not load the video. Check your connection and retry.');
+          const { status, code } = getPlaybackErrorDetails(loadError);
+          setError('Could not load the video file. It may be missing or unavailable. Check your connection and retry.');
+          logger.warn('[WatchScreen] Video load failed.', status ?? 'n/a', code ?? 'PLAYER_LOAD_FAILED');
           setIsLoading(false);
         }
       });
 
     return () => {
       active = false;
-      try {
-        player.pause();
-      } catch {
-        // ignore released-player cleanup edge cases
-      }
+      runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
     };
   }, [player, playbackUrl]);
 
   useEffect(() => {
     const subscription = player.addListener('statusChange', ({ status }) => {
-      if (status === 'error') {
-        logger.warn('[WatchScreen] Video playback failed.');
-        setError('Could not play this video. Check your connection and retry.');
+      if (status === 'error' && !playerReleasedRef.current) {
+        logger.warn('[WatchScreen] Video playback failed.', 'n/a', 'PLAYER_ERROR');
+        setError('Could not play this video file. It may be missing or use an unsupported codec. Check your connection and retry.');
         setIsLoading(false);
-        try {
-          player.pause();
-        } catch {
-          // ignore released-player cleanup edge cases
-        }
+        runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
       }
     });
     return () => subscription.remove();

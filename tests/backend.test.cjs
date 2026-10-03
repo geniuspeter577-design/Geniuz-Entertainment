@@ -8,6 +8,7 @@ const { TMDBContentRepository } = require('../.test-build/backend/backend/src/re
 const { MemoryCache } = require('../.test-build/backend/backend/src/repositories/MemoryCache.js');
 const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
+const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
 
 const tmdbRecord = {
   id: 101,
@@ -105,6 +106,7 @@ async function startApi(options = {}) {
     ...(options.supabasePublishableKey
       ? { supabasePublishableKey: options.supabasePublishableKey }
       : {}),
+    ...(options.storage ?? {}),
   };
   const fakeFetch = makeFetch(options);
   const provider = new HttpTMDBProvider(
@@ -203,6 +205,7 @@ test('unauthenticated and non-admin callers are denied every upload, delete, cle
 
 test('trailer play URLs are public for published titles and admin-only for drafts', async (context) => {
   const originalFetch = global.fetch;
+  const originalCreateTrailerPlayUrl = B2StorageService.prototype.createTrailerPlayUrl;
   let published = true;
   global.fetch = async (input) => {
     const url = new URL(String(input));
@@ -221,8 +224,10 @@ test('trailer play URLs are public for published titles and admin-only for draft
     }
     return makeResponse({ error: 'unexpected request' }, 404);
   };
+  B2StorageService.prototype.createTrailerPlayUrl = async () => 'https://b2.example.test/trailers/signed';
   context.after(() => {
     global.fetch = originalFetch;
+    B2StorageService.prototype.createTrailerPlayUrl = originalCreateTrailerPlayUrl;
   });
 
   const config = {
@@ -262,6 +267,178 @@ test('trailer play URLs are public for published titles and admin-only for draft
     headers: { Authorization: 'Bearer admin-test-token' },
   });
   assert.equal(adminResponse.status, 200);
+});
+
+test('published B2 movie play URLs are public, drafts require admin, and non-B2 rows use the app signed-URL path', async (context) => {
+  const originalFetch = global.fetch;
+  const originalCreatePlayUrl = B2StorageService.prototype.createPlayUrl;
+  let record = {
+    storage_provider: 'b2',
+    storage_key: 'movies/00000000-0000-4000-8000-000000000001.mp4',
+    published: true,
+  };
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({ id: '00000000-0000-4000-8000-000000000009', app_metadata: { role: 'admin' } });
+    }
+    if (url.pathname === '/rest/v1/movies') {
+      return makeResponse(record);
+    }
+    return makeResponse({}, 404);
+  };
+  B2StorageService.prototype.createPlayUrl = async () => 'https://b2.example.test/signed';
+  context.after(() => {
+    global.fetch = originalFetch;
+    B2StorageService.prototype.createPlayUrl = originalCreatePlayUrl;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+    storage: {
+      s3Endpoint: 'https://s3.example.test',
+      s3Region: 'us-east-1',
+      s3AccessKeyId: 'test-key',
+      s3SecretAccessKey: 'test-secret',
+      s3Bucket: 'test-bucket',
+    },
+  });
+  context.after(api.close);
+  const url = `${api.baseUrl}/movies/00000000-0000-4000-8000-000000000001/play-url`;
+
+  const publicResponse = await originalFetch(url);
+  assert.equal(publicResponse.status, 200);
+  assert.equal((await publicResponse.json()).expiresIn, 7200);
+
+  record = { ...record, published: false };
+  const draftResponse = await originalFetch(url);
+  assert.equal(draftResponse.status, 403);
+  assert.equal((await draftResponse.json()).error.code, 'ADMIN_REQUIRED');
+
+  const adminResponse = await originalFetch(url, { headers: { Authorization: 'Bearer admin-test-token' } });
+  assert.equal(adminResponse.status, 200);
+
+  record = { ...record, storage_provider: 'supabase', published: true };
+  const supabaseResponse = await originalFetch(url);
+  assert.equal(supabaseResponse.status, 409);
+  assert.equal((await supabaseResponse.json()).error.code, 'NOT_B2_STORAGE');
+
+  record = { ...record, storage_provider: 'b2', storage_key: '', published: true };
+  const missingKeyResponse = await originalFetch(url);
+  assert.equal(missingKeyResponse.status, 404);
+  assert.equal((await missingKeyResponse.json()).error.code, 'PLAYBACK_FILE_MISSING');
+});
+
+test('published B2 episode play URLs are public while unpublished episodes require admin', async (context) => {
+  const originalFetch = global.fetch;
+  const originalCreatePlayUrl = B2StorageService.prototype.createPlayUrl;
+  let episode = {
+    storage_provider: 'b2',
+    storage_key: 'episodes/00000000-0000-4000-8000-000000000002.mp4',
+    published: true,
+  };
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({ id: '00000000-0000-4000-8000-000000000009', app_metadata: { role: 'admin' } });
+    }
+    if (url.pathname === '/rest/v1/episodes') {
+      return makeResponse(episode);
+    }
+    return makeResponse({}, 404);
+  };
+  B2StorageService.prototype.createPlayUrl = async () => 'https://b2.example.test/episodes/signed';
+  context.after(() => {
+    global.fetch = originalFetch;
+    B2StorageService.prototype.createPlayUrl = originalCreatePlayUrl;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+    storage: {
+      s3Endpoint: 'https://s3.example.test',
+      s3Region: 'us-east-1',
+      s3AccessKeyId: 'test-key',
+      s3SecretAccessKey: 'test-secret',
+      s3Bucket: 'test-bucket',
+    },
+  });
+  context.after(api.close);
+  const url = `${api.baseUrl}/episodes/00000000-0000-4000-8000-000000000002/play-url`;
+
+  const publicResponse = await originalFetch(url);
+  assert.equal(publicResponse.status, 200);
+  assert.equal((await publicResponse.json()).expiresIn, 7200);
+
+  episode = { ...episode, published: false };
+  const blocked = await originalFetch(url);
+  assert.equal(blocked.status, 403);
+  assert.equal((await blocked.json()).error.code, 'ADMIN_REQUIRED');
+
+  const adminResponse = await originalFetch(url, { headers: { Authorization: 'Bearer admin-test-token' } });
+  assert.equal(adminResponse.status, 200);
+});
+
+test('system status is admin-only and reports only check states', async (context) => {
+  const originalFetch = global.fetch;
+  const originalCheckBucket = B2StorageService.prototype.checkBucket;
+  const originalCreateProbeUrl = B2StorageService.prototype.createPlaybackProbeUrl;
+  let adminCaller = false;
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000009',
+        app_metadata: { role: adminCaller ? 'admin' : 'user' },
+      });
+    }
+    if (url.pathname === '/rest/v1/movies') {
+      return url.searchParams.get('select') === 'storage_key'
+        ? makeResponse({ storage_key: 'movies/00000000-0000-4000-8000-000000000001.mp4' })
+        : makeResponse([{ id: '00000000-0000-4000-8000-000000000001' }]);
+    }
+    if (url.hostname === 'b2.example.test') {
+      return new Response(new Uint8Array([0]), { status: 206 });
+    }
+    return makeResponse({}, 404);
+  };
+  B2StorageService.prototype.checkBucket = async () => {};
+  B2StorageService.prototype.createPlaybackProbeUrl = async () => 'https://b2.example.test/probe';
+  context.after(() => {
+    global.fetch = originalFetch;
+    B2StorageService.prototype.checkBucket = originalCheckBucket;
+    B2StorageService.prototype.createPlaybackProbeUrl = originalCreateProbeUrl;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+    storage: {
+      s3Endpoint: 'https://s3.example.test',
+      s3Region: 'us-east-1',
+      s3AccessKeyId: 'test-key',
+      s3SecretAccessKey: 'test-secret',
+      s3Bucket: 'test-bucket',
+    },
+  });
+  context.after(api.close);
+  const url = `${api.baseUrl}/admin/system-status`;
+
+  assert.equal((await originalFetch(url)).status, 401);
+  const nonAdmin = await originalFetch(url, { headers: { Authorization: 'Bearer normal-user-token' } });
+  assert.equal(nonAdmin.status, 403);
+
+  adminCaller = true;
+  const response = await originalFetch(url, { headers: { Authorization: 'Bearer admin-user-token' } });
+  assert.equal(response.status, 200);
+  assert.deepEqual((await response.json()).checks, {
+    backend: 'ok',
+    supabase: 'ok',
+    bucket: 'ok',
+    presignedRead: 'ok',
+  });
 });
 
 test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => {

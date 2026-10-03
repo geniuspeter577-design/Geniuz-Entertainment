@@ -5,6 +5,7 @@ const { MAX_VIDEO_FILE_SIZE_BYTES } = require('../.test-build/src/constants/vide
 const { OfflineDownloadService } = require('../.test-build/src/services/OfflineDownloadService.js');
 const {
   detectVideoFileType,
+  isVideoFormatLikelySupported,
   validateVideoFileSize,
 } = require('../.test-build/src/utils/videoFile.js');
 
@@ -95,6 +96,12 @@ test('video type detection uses extensions when MIME is empty or generic and use
   assert.equal(detectVideoFileType('movie.avi', 'image/jpeg').mimeType, 'video/x-msvideo');
   assert.equal(detectVideoFileType('movie.txt', 'text/plain'), null);
   assert.equal(detectVideoFileType('unknown', 'application/octet-stream'), null);
+});
+
+test('playback warns for formats that are not reliably supported on the target device', () => {
+  assert.equal(isVideoFormatLikelySupported('mp4', 'android'), true);
+  assert.equal(isVideoFormatLikelySupported('mkv', 'android'), false);
+  assert.equal(isVideoFormatLikelySupported('mkv', 'ios'), false);
 });
 
 test('the 1 GB file limit accepts the boundary and reports the actual oversized file size', () => {

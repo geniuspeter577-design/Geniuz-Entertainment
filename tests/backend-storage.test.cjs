@@ -12,6 +12,75 @@ const {
   validatePartNumbers,
   validateUploadInput,
 } = require('../.test-build/backend/backend/src/storage/uploadValidation.js');
+const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+
+test('B2 playback verifies the object and signs a two-hour GET URL with Range-compatible headers', async () => {
+  const storage = new B2StorageService({
+    s3Endpoint: 'https://s3.example.test',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: 'test-key',
+    s3SecretAccessKey: 'test-secret',
+    s3Bucket: 'test-bucket',
+  });
+  const commands = [];
+  storage.client.send = async (command) => {
+    commands.push(command);
+    return {};
+  };
+
+  const signedUrl = new URL(await storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'));
+  assert.equal(commands[0].constructor.name, 'HeadObjectCommand');
+  assert.equal(commands[0].input.Key, 'movies/00000000-0000-4000-8000-000000000001.mp4');
+  assert.equal(signedUrl.searchParams.get('X-Amz-Expires'), '7200');
+  assert.equal(signedUrl.searchParams.get('X-Amz-SignedHeaders'), 'host');
+});
+
+test('B2 playback reports missing storage objects without exposing provider details', async () => {
+  const storage = new B2StorageService({
+    s3Endpoint: 'https://s3.example.test',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: 'test-key',
+    s3SecretAccessKey: 'test-secret',
+    s3Bucket: 'test-bucket',
+  });
+  storage.client.send = async () => {
+    const error = new Error('provider response must not reach the client');
+    error.name = 'NotFound';
+    error.$metadata = { httpStatusCode: 404 };
+    throw error;
+  };
+
+  await assert.rejects(
+    storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'),
+    (error) => error.status === 404 && error.code === 'PLAYBACK_FILE_NOT_FOUND' && !/provider response/.test(error.message),
+  );
+});
+
+test('B2 playback gives an actionable error when the backend key cannot read objects', async () => {
+  const storage = new B2StorageService({
+    s3Endpoint: 'https://s3.example.test',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: 'test-key',
+    s3SecretAccessKey: 'test-secret',
+    s3Bucket: 'test-bucket',
+  });
+  storage.client.send = async () => {
+    const error = new Error('provider response must not reach the client');
+    error.name = 'AccessDenied';
+    error.$metadata = { httpStatusCode: 403 };
+    throw error;
+  };
+
+  await assert.rejects(
+    storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'),
+    (error) =>
+      error.status === 502 &&
+      error.code === 'B2_READ_ACCESS_DENIED' &&
+      /daily download cap/.test(error.message) &&
+      /readFiles/.test(error.message) &&
+      !/provider response/.test(error.message),
+  );
+});
 
 test('upload validation enforces names, video content types, and the shared 1 GiB limit', () => {
   assert.deepEqual(

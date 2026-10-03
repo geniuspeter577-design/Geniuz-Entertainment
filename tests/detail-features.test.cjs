@@ -17,6 +17,7 @@ const {
   getDragTarget,
   isPlayerGestureArea,
   getSeekTarget,
+  runPlayerActionIfActive,
   setPlayerMuted,
   setPlayerVolume,
   togglePlayerOrientation,
@@ -211,6 +212,14 @@ test('player controls clamp seeks and drag values and toggle orientation', () =>
   setPlayerMuted(player, true);
   assert.equal(player.volume, 1);
   assert.equal(player.muted, true);
+});
+
+test('released trailer players do not receive further commands', () => {
+  let calls = 0;
+  assert.equal(runPlayerActionIfActive(true, () => calls++), false);
+  assert.equal(calls, 0);
+  assert.equal(runPlayerActionIfActive(false, () => calls++), true);
+  assert.equal(calls, 1);
 });
 
 test('trailer autoplay requires a published, online, focused title and respects mute state', () => {

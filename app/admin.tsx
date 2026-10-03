@@ -1741,6 +1741,13 @@ export default function AdminScreen() {
           </View>
         ) : (
           <>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => router.push('/admin-status')}
+              style={styles.secondaryButton}
+            >
+              <Text style={styles.secondaryButtonText}>System status</Text>
+            </Pressable>
             <View style={styles.card}>
               <View style={styles.sectionHeader}>
                 <View style={styles.grow}>

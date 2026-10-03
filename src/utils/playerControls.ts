@@ -52,3 +52,15 @@ export function setPlayerLoop(player: VideoPlayer, loop: boolean): void {
 export function setPlayerTimeUpdateInterval(player: VideoPlayer, seconds: number): void {
   player.timeUpdateEventInterval = seconds;
 }
+
+export function runPlayerActionIfActive(isReleased: boolean, action: () => void): boolean {
+  if (isReleased) {
+    return false;
+  }
+  try {
+    action();
+    return true;
+  } catch {
+    return false;
+  }
+}

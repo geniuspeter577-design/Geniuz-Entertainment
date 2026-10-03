@@ -2,6 +2,8 @@ import {
   AbortMultipartUploadCommand,
   CompleteMultipartUploadCommand,
   CreateMultipartUploadCommand,
+  HeadBucketCommand,
+  HeadObjectCommand,
   GetObjectCommand,
   ListPartsCommand,
   DeleteObjectCommand,
@@ -125,6 +127,7 @@ export class B2StorageService {
   }
 
   async createPlayUrl(key: string) {
+    await this.verifyObjectExists(key);
     return getSignedUrl(
       this.client,
       new GetObjectCommand({
@@ -135,10 +138,26 @@ export class B2StorageService {
     );
   }
 
+  async checkBucket() {
+    await this.client.send(new HeadBucketCommand({ Bucket: this.config.s3Bucket }));
+  }
+
+  async createPlaybackProbeUrl(key: string) {
+    if (!key.trim()) {
+      throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This movie is missing its video file.');
+    }
+    return getSignedUrl(
+      this.client,
+      new GetObjectCommand({ Bucket: this.config.s3Bucket, Key: key }),
+      { expiresIn: 60 },
+    );
+  }
+
   async createTrailerPlayUrl(key: string) {
     if (!/^trailers\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
       throw new HttpError(400, 'INVALID_TRAILER_KEY', 'The trailer object key is invalid.');
     }
+    await this.verifyObjectExists(key);
     return getSignedUrl(
       this.client,
       new GetObjectCommand({
@@ -200,6 +219,37 @@ export class B2StorageService {
       );
     } catch {
       throw new HttpError(404, 'UPLOAD_NOT_FOUND', 'The active video upload could not be found.');
+    }
+  }
+
+  private async verifyObjectExists(key: string) {
+    try {
+      await this.client.send(
+        new HeadObjectCommand({
+          Bucket: this.config.s3Bucket,
+          Key: key,
+        }),
+      );
+    } catch (error) {
+      const candidate = error as {
+        name?: string;
+        code?: string;
+        Code?: string;
+        $metadata?: { httpStatusCode?: number };
+      };
+      const status = candidate.$metadata?.httpStatusCode;
+      const code = candidate.code ?? candidate.Code ?? candidate.name;
+      if (status === 404 || code === 'NoSuchKey' || code === 'NotFound') {
+        throw new HttpError(404, 'PLAYBACK_FILE_NOT_FOUND', 'The video file is missing from storage.');
+      }
+      if (status === 403 || code === 'AccessDenied') {
+        throw new HttpError(
+          502,
+          'B2_READ_ACCESS_DENIED',
+          'Backblaze denied playback access. Check the daily download cap and the backend key readFiles scope for this bucket.',
+        );
+      }
+      throw new HttpError(502, 'B2_PLAYBACK_CHECK_FAILED', 'Could not verify the video file in storage.');
     }
   }
 }

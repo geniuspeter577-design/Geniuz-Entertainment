@@ -14,12 +14,14 @@ import {
 
 import { TitleImage } from '../TitleImage';
 import { logger } from '../../utils/logger';
+import { getPlaybackErrorDetails } from '../../utils/playbackError';
 import type { ContentItem } from '../../models/content';
 import { supabaseMovieRepository } from '../../repositories/SupabaseMovieRepository';
 import { useNetwork } from '../../state/NetworkContext';
 import { theme } from '../../theme';
 import { getAutoplayTrailers } from '../../services/TrailerAutoplayPreference';
 import {
+  runPlayerActionIfActive,
   setPlayerLoop,
   setPlayerMuted,
   setPlayerTimeUpdateInterval,
@@ -69,7 +71,7 @@ export function TitleTrailerHero({
   const [isVideoMounted, setIsVideoMounted] = useState(false);
   const playerReleasedRef = useRef(false);
 
-  const hasTrailer = Boolean(item.trailerStorageKey);
+  const hasTrailer = Boolean(item.trailerStorageKey?.trim());
   const shouldAutoplay = shouldAutoplayTrailer({
     isPublished: item.availability.discoverable,
     isOnline,
@@ -81,7 +83,7 @@ export function TitleTrailerHero({
   const coverUri = item.coverUrl ?? item.backdropUrl ?? item.posterUrl;
 
   useEffect(() => {
-    setPlayerLoop(player, false);
+    runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerLoop(player, false));
   }, [player]);
 
   useEffect(() => {
@@ -122,22 +124,15 @@ export function TitleTrailerHero({
     return () => subscription.remove();
   }, []);
 
-  useEffect(() => () => {
-    playerReleasedRef.current = true;
-    try {
-      player.pause();
-    } catch {
-      // ignore released-player cleanup edge cases
-    }
-    try {
-      player.release();
-    } catch {
-      // ignore released-player cleanup edge cases
-    }
+  useEffect(() => {
+    playerReleasedRef.current = false;
+    return () => {
+      playerReleasedRef.current = true;
+    };
   }, [player]);
 
   useEffect(() => {
-    setPlayerTimeUpdateInterval(player, 0.25);
+    runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerTimeUpdateInterval(player, 0.25));
     const playingSubscription = player.addListener('playingChange', ({ isPlaying: playing }) => {
       setIsPlaying(playing);
     });
@@ -145,7 +140,10 @@ export function TitleTrailerHero({
       setCurrentTime(time);
     });
     const endSubscription = player.addListener('playToEnd', () => {
-      player.pause();
+      if (playerReleasedRef.current) {
+        return;
+      }
+      runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
       setIsPlaying(false);
       setTrailerEnded(true);
       setIsTrailerVisible(false);
@@ -157,12 +155,13 @@ export function TitleTrailerHero({
       }).start();
     });
     const statusSubscription = player.addListener('statusChange', ({ status }) => {
-      if (status === 'error' && loadedTrailerKey.current === item.trailerStorageKey) {
-        try {
-          player.pause();
-        } catch {
-          // player may already have been released during teardown
-        }
+      if (
+        !playerReleasedRef.current &&
+        Boolean(item.trailerStorageKey?.trim()) &&
+        status === 'error' &&
+        loadedTrailerKey.current === item.trailerStorageKey
+      ) {
+        runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
         setIsPlaying(false);
         setIsTrailerLoading(false);
         setIsTrailerUnavailable(true);
@@ -183,13 +182,7 @@ export function TitleTrailerHero({
 
   useEffect(() => {
     if (!preferenceReadyForFocus.current || !shouldAutoplay) {
-      if (!playerReleasedRef.current) {
-        try {
-          player.pause();
-        } catch {
-          // ignore released-player cleanup edge cases
-        }
-      }
+      runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
       setIsPlaying(false);
       setIsTrailerVisible(false);
       coverOpacity.setValue(1);
@@ -207,7 +200,8 @@ export function TitleTrailerHero({
       currentRequestId === requestId.current &&
       preferenceReadyForFocus.current &&
       isFocused &&
-      isAppActive;
+      isAppActive &&
+      !playerReleasedRef.current;
 
     if (!supabaseMovieRepository) {
       void Promise.resolve().then(() => {
@@ -224,12 +218,14 @@ export function TitleTrailerHero({
 
     if (loadedTrailerKey.current === trailerKey) {
       if (!trailerEnded) {
-        setPlayerMuted(player, isTrailerMutedRef.current);
-        player.play();
+        runPlayerActionIfActive(playerReleasedRef.current, () => {
+          setPlayerMuted(player, isTrailerMutedRef.current);
+          player.play();
+        });
       }
       return () => {
         active = false;
-        player.pause();
+        runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
       };
     }
 
@@ -241,7 +237,9 @@ export function TitleTrailerHero({
     setShowOverlay(true);
     setCurrentTime(0);
     coverOpacity.setValue(1);
-    setPlayerMuted(player, isTrailerMutedRef.current);
+    runPlayerActionIfActive(playerReleasedRef.current, () =>
+      setPlayerMuted(player, isTrailerMutedRef.current),
+    );
     void supabaseMovieRepository
       .getTrailerPlaybackUrl(item)
       .then((url) => {
@@ -252,11 +250,11 @@ export function TitleTrailerHero({
           if (isCurrentRequest()) {
             loadedTrailerKey.current = trailerKey;
             setIsVideoMounted(true);
-            player.play();
+            runPlayerActionIfActive(playerReleasedRef.current, () => player.play());
           }
         });
       })
-      .catch(() => {
+      .catch((trailerError: unknown) => {
         if (isCurrentRequest()) {
           setIsTrailerLoading(false);
           setIsTrailerUnavailable(true);
@@ -264,20 +262,19 @@ export function TitleTrailerHero({
           setIsTrailerVisible(false);
           setShowOverlay(true);
           coverOpacity.setValue(1);
-          logger.warn('[TitleTrailerHero] Could not prepare the trailer.');
+          const { status, code } = getPlaybackErrorDetails(trailerError);
+          logger.warn(
+            '[TitleTrailerHero] Trailer preparation failed.',
+            status ?? 'n/a',
+            code ?? 'TRAILER_PREPARATION_FAILED',
+          );
         }
       });
 
     return () => {
       active = false;
       requestId.current += 1;
-      if (!playerReleasedRef.current) {
-        try {
-          player.pause();
-        } catch {
-          // ignore released-player cleanup edge cases
-        }
-      }
+      runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
     };
   }, [
     autoplayEnabled,
@@ -329,6 +326,9 @@ export function TitleTrailerHero({
   };
 
   const replayTrailer = () => {
+    if (playerReleasedRef.current) {
+      return;
+    }
     if (isTrailerUnavailable || !loadedTrailerKey.current) {
       retryTrailer();
       return;
@@ -338,9 +338,11 @@ export function TitleTrailerHero({
     setShowOverlay(true);
     setCurrentTime(0);
     coverOpacity.setValue(1);
-    player.seekBy(-player.currentTime);
-    setPlayerMuted(player, isTrailerMuted);
-    player.play();
+    runPlayerActionIfActive(playerReleasedRef.current, () => {
+      player.seekBy(-player.currentTime);
+      setPlayerMuted(player, isTrailerMuted);
+      player.play();
+    });
   };
 
   const manualTrailerVisible =
@@ -404,7 +406,7 @@ export function TitleTrailerHero({
           onPress={() => {
             const muted = toggleTrailerMuted(isTrailerMuted);
             isTrailerMutedRef.current = muted;
-            setPlayerMuted(player, muted);
+            runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerMuted(player, muted));
             setIsTrailerMuted(muted);
           }}
           style={styles.muteButton}
@@ -443,7 +445,7 @@ export function TitleTrailerHero({
                 accessibilityState={{ disabled: !canPlay }}
                 disabled={!canPlay}
                 onPress={() => {
-                  player.pause();
+                  runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
                   onPlay();
                 }}
                 style={[styles.playButton, !canPlay && styles.disabledPlayButton]}
