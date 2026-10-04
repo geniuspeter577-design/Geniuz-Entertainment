@@ -22,6 +22,7 @@ import { ProfileRepository } from '../src/services/ProfileRepository';
 import { theme } from '../src/theme';
 import { getProfileInitial } from '../src/utils/accountAuth';
 import { getUsernameError, normalizeUsername } from '../src/utils/accountProfile';
+import { backOrReplace } from '../src/utils/navigation';
 
 const AVATAR_MAX_BYTES = 2 * 1024 * 1024;
 
@@ -291,7 +292,7 @@ export default function EditProfileScreen() {
               <Text style={styles.secondaryButtonText}>Retry</Text>
             </Pressable>
           ) : null}
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.secondaryButton}>
             <Text style={styles.secondaryButtonText}>Back</Text>
           </Pressable>
         </View>
@@ -302,7 +303,7 @@ export default function EditProfileScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.backButton}>
           <Text style={styles.linkText}>Back</Text>
         </Pressable>
         <Text style={styles.title}>Edit profile</Text>

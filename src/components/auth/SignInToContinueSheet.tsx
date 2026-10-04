@@ -16,7 +16,7 @@ type Props = {
 };
 
 export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) {
-  const { signIn, signUp, resetPassword } = useAuth();
+  const { signIn, signUp, resetPassword, resendConfirmation } = useAuth();
   const [mode, setMode] = useState<SignInSheetMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -29,6 +29,24 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
     setMode(next);
     setError(undefined);
     setMessage(undefined);
+  };
+
+  const resendEmailConfirmation = async () => {
+    if (!email.trim()) {
+      setError('Enter your email address to resend the confirmation link.');
+      return;
+    }
+    setError(undefined);
+    setMessage(undefined);
+    setIsSubmitting(true);
+    try {
+      await resendConfirmation(email);
+      setMessage('A new confirmation email has been sent.');
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : 'Could not resend the confirmation email.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const submit = async () => {
@@ -124,6 +142,16 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
             ) : null}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             {message ? <Text accessibilityRole="alert" style={styles.message}>{message}</Text> : null}
+            {error?.toLowerCase().includes('confirm your email') ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSubmitting || !email.trim()}
+                onPress={() => void resendEmailConfirmation()}
+                style={styles.linkButton}
+              >
+                <Text style={styles.linkText}>{isSubmitting ? 'Sending…' : 'Resend confirmation'}</Text>
+              </Pressable>
+            ) : null}
             <Pressable
               accessibilityRole="button"
               disabled={isSubmitting || !email.trim() || (mode !== 'reset-password' && !password)}

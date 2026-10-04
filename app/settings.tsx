@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentNotice } from '../src/components/ContentNotice';
 import { getAutoplayTrailers, setAutoplayTrailers } from '../src/services/TrailerAutoplayPreference';
 import { theme } from '../src/theme';
+import { backOrReplace } from '../src/utils/navigation';
 
 export default function SettingsScreen() {
   const [autoplayEnabled, setAutoplayEnabled] = useState(true);
@@ -71,7 +71,7 @@ export default function SettingsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={() => backOrReplace('/')}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={22} color={theme.text} />

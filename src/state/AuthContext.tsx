@@ -8,6 +8,7 @@ import { supabase } from '../services/supabase';
 import {
   createAccount,
   getAuthState,
+  resendConfirmation,
   sendPasswordReset,
   signInToAccount,
   signOutOfAccount,
@@ -23,6 +24,7 @@ type AuthContextValue = {
   isAdmin: boolean;
   signUp: (email: string, password: string, displayName: string) => Promise<{ hasSession: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
+  resendConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
@@ -122,6 +124,13 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     await signInToAccount(authClient, email, password);
   }, []);
 
+  const resendConfirmationForEmail = useCallback(async (email: string) => {
+    if (!authClient) {
+      throw new Error('Account service is not configured.');
+    }
+    await resendConfirmation(authClient, email);
+  }, []);
+
   const signOut = useCallback(async () => {
     if (!authClient) {
       throw new Error('Account service is not configured.');
@@ -175,6 +184,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     isAdmin: getAuthState(session).isAdmin,
     signUp,
     signIn,
+    resendConfirmation: resendConfirmationForEmail,
     signOut,
     resetPassword,
     updateDisplayName,
@@ -182,7 +192,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     refreshProfile,
     openSignInSheet,
     closeSignInSheet,
-  }), [session, profile, isLoading, profileError, signUp, signIn, signOut, resetPassword, updateDisplayName, updateProfile, refreshProfile, openSignInSheet, closeSignInSheet]);
+  }), [session, profile, isLoading, profileError, signUp, signIn, resendConfirmationForEmail, signOut, resetPassword, updateDisplayName, updateProfile, refreshProfile, openSignInSheet, closeSignInSheet]);
 
   return (
     <AuthContext.Provider value={value}>

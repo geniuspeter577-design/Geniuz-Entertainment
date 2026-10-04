@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useIsFocused } from 'expo-router';
+import { useIsFocused } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
@@ -15,6 +15,7 @@ import {
 import { TitleImage } from '../TitleImage';
 import { logger } from '../../utils/logger';
 import { getPlaybackErrorDetails } from '../../utils/playbackError';
+import { backOrReplace } from '../../utils/navigation';
 import type { ContentItem } from '../../models/content';
 import { supabaseMovieRepository } from '../../repositories/SupabaseMovieRepository';
 import { useNetwork } from '../../state/NetworkContext';
@@ -393,7 +394,7 @@ export function TitleTrailerHero({
       <Pressable
         accessibilityRole="button"
         accessibilityLabel="Go back"
-        onPress={() => router.back()}
+        onPress={() => backOrReplace('/')}
         style={styles.backButton}
       >
         <Ionicons name="arrow-back" size={22} color={theme.text} />

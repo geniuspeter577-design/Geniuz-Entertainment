@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { test } = require('node:test');
 
-const { createAccount, getAuthState, getFriendlyAuthError, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
+const { createAccount, getAuthState, getFriendlyAuthError, resendConfirmation, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
 const { isValidProfileCreation } = require('../.test-build/src/utils/accountProfile.js');
 const { getUsernameError, isValidUsername, normalizeUsername } = require('../.test-build/src/utils/accountProfile.js');
 const { isAccountProfile } = require('../.test-build/src/models/profile.js');
@@ -12,6 +12,7 @@ function createAuth(overrides = {}) {
   return {
     signUp: async () => ({ data: { session: { user: { id: 'user-id' } } }, error: null }),
     signInWithPassword: async () => ({ data: { session: { user: { id: 'user-id' } } }, error: null }),
+    resend: async () => ({ error: null }),
     signOut: async () => ({ error: null }),
     resetPasswordForEmail: async () => ({ error: null }),
     ...overrides,
@@ -59,17 +60,27 @@ test('sign-in, sign-out, and password reset use Supabase Auth through mocked cal
   const calls = [];
   const auth = createAuth({
     signInWithPassword: async (input) => { calls.push(['sign-in', input.email]); return { data: { session: {} }, error: null }; },
+    resend: async (input) => { calls.push(['resend', input.email, input.type]); return { error: null }; },
     signOut: async () => { calls.push(['sign-out']); return { error: null }; },
     resetPasswordForEmail: async (email, options) => { calls.push(['reset', email, options]); return { error: null }; },
   });
   await signInToAccount(auth, ' user@example.test ', 'password');
+  await resendConfirmation(auth, ' user@example.test ');
   await signOutOfAccount(auth);
   await sendPasswordReset(auth, ' user@example.test ', 'geniuz://auth/recovery');
   assert.deepEqual(calls, [
     ['sign-in', 'user@example.test'],
+    ['resend', 'user@example.test', 'signup'],
     ['sign-out'],
     ['reset', 'user@example.test', { redirectTo: 'geniuz://auth/recovery' }],
   ]);
+});
+
+test('sign-in rejects a successful response without a Supabase session', async () => {
+  const auth = createAuth({
+    signInWithPassword: async () => ({ data: { session: null }, error: null }),
+  });
+  await assert.rejects(signInToAccount(auth, 'user@example.test', 'password'), /could not be completed/i);
 });
 
 test('account errors explain invalid credentials, unconfirmed email, network, and duplicate signup', () => {

@@ -20,6 +20,7 @@ import {
   markNotificationRead,
   type AppNotification,
 } from '../src/services/NotificationsStore';
+import { backOrReplace } from '../src/utils/navigation';
 
 export default function NotificationsScreen() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -76,7 +77,7 @@ export default function NotificationsScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"
-          onPress={() => router.back()}
+          onPress={() => backOrReplace('/')}
           style={styles.backButton}
         >
           <Ionicons name="arrow-back" size={22} color={theme.text} />

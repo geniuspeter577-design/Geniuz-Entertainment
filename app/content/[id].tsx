@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { backOrReplace } from '../../src/utils/navigation';
 import { Paths } from 'expo-file-system';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
@@ -288,7 +289,7 @@ export default function ContentDetailsScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView contentContainerStyle={styles.scrollContent}>
-          <Pressable onPress={() => router.back()} style={styles.homeButton}>
+          <Pressable onPress={() => backOrReplace('/')} style={styles.homeButton}>
             <Text style={styles.homeButtonText}>‹  Back</Text>
           </Pressable>
           <TitleImage uri={media.posterUrl} style={styles.offlinePoster} />

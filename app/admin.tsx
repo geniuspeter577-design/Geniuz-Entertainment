@@ -50,6 +50,7 @@ import {
 import { TitleCleanupStore } from '../src/services/TitleCleanupStore';
 import { getAdminRouteState, isAdminMetadata } from '../src/utils/adminAccess';
 import { getFriendlyAuthError } from '../src/utils/accountAuth';
+import { backOrReplace } from '../src/utils/navigation';
 
 type AdminMovie = ContentItem & {
   published: boolean;
@@ -1597,7 +1598,7 @@ export default function AdminScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <Text style={styles.sectionTitle}>Page not found</Text>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.secondaryButton}>
+        <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.secondaryButton}>
           <Text style={styles.secondaryButtonText}>Go back</Text>
         </Pressable>
       </SafeAreaView>
@@ -1608,7 +1609,7 @@ export default function AdminScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.backButton}>
             <Text style={styles.backText}>‹  Back</Text>
           </Pressable>
           <Text style={styles.header}>Admin sign in</Text>
@@ -1654,7 +1655,7 @@ export default function AdminScreen() {
   if (!isOnline) {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.backButton}>
           <Text style={styles.backText}>‹  Back</Text>
         </Pressable>
         <Text style={styles.header}>Admin console</Text>
@@ -1676,7 +1677,7 @@ export default function AdminScreen() {
           />
         }
       >
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => backOrReplace('/(tabs)/profile')} style={styles.backButton}>
           <Text style={styles.backText}>‹  Back</Text>
         </Pressable>
         <Text style={styles.header}>Admin console</Text>

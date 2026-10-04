@@ -150,7 +150,7 @@ export default function HomeScreen() {
             key: 'latest',
             title: 'Latest',
             items: publishedItems,
-            emptyMessage: 'No titles yet',
+            emptyMessage: 'Nothing here yet',
             isLoading: catalogQuery.isLoading,
           },
           ...(movies.length
@@ -158,7 +158,7 @@ export default function HomeScreen() {
                 key: 'movies',
                 title: 'Movies',
                 items: sortPublishedNewest(movies),
-                emptyMessage: 'No movies yet',
+                emptyMessage: 'Nothing here yet',
                 isLoading: false,
               }]
             : []),
@@ -167,7 +167,7 @@ export default function HomeScreen() {
                 key: 'series',
                 title: 'Series',
                 items: sortPublishedNewest(series),
-                emptyMessage: 'No series yet',
+                emptyMessage: 'Nothing here yet',
                 isLoading: false,
               }]
             : []),
@@ -178,7 +178,7 @@ export default function HomeScreen() {
               items: publishedItems.filter((item) =>
                 item.genres.some((itemGenre) => itemGenre.toLocaleLowerCase() === genre.toLocaleLowerCase()),
               ),
-              emptyMessage: `No ${genre} titles yet`,
+              emptyMessage: 'Nothing here yet',
               isLoading: false,
             }))
             .filter(({ items }) => items.length > 0),
@@ -188,7 +188,7 @@ export default function HomeScreen() {
             key: `category:${selectedCategory}`,
             title: selectedCategory,
             items: activeCategoryItems,
-            emptyMessage: `No ${selectedCategory} titles yet`,
+            emptyMessage: 'Nothing here yet',
             isLoading: catalogQuery.isLoading,
           }]
         : [];
@@ -349,9 +349,9 @@ export default function HomeScreen() {
           />
         ) : null}
         {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
-        {noTitles ? <Text style={styles.emptyText}>No titles yet</Text> : null}
+        {noTitles ? <Text style={styles.emptyText}>Nothing here yet</Text> : null}
         {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'Trending' && activeCategoryItems.length === 0 ? (
-          <Text style={styles.emptyText}>No titles in this category yet</Text>
+          <Text style={styles.emptyText}>Nothing here yet</Text>
         ) : null}
 
         {recent.length ? (

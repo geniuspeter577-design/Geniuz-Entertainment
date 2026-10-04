@@ -8,6 +8,7 @@ export type AccountAuthClient = {
     data: { session: unknown };
     error: unknown | null;
   }>;
+  resend: (input: { type: 'signup'; email: string }) => Promise<{ error: unknown | null }>;
   signOut: () => Promise<{ error: unknown | null }>;
   resetPasswordForEmail: (email: string, options?: { redirectTo?: string }) => Promise<{ error: unknown | null }>;
 };
@@ -89,6 +90,33 @@ export function getFriendlyAuthError(error: unknown) {
   return 'Your account request could not be completed. Check your details and try again.';
 }
 
+function getAuthErrorMetadata(error: unknown) {
+  const candidate = typeof error === 'object' && error !== null
+    ? error as Record<string, unknown>
+    : {};
+  return {
+    code: typeof candidate.code === 'string' ? candidate.code : undefined,
+    status: typeof candidate.status === 'number' ? candidate.status : undefined,
+    name: typeof candidate.name === 'string'
+      ? candidate.name
+      : error instanceof Error
+        ? error.name
+        : undefined,
+    message: typeof candidate.message === 'string'
+      ? candidate.message.slice(0, 240)
+      : error instanceof Error
+        ? error.message.slice(0, 240)
+        : undefined,
+  };
+}
+
+export function logAuthErrorContext(label: string, error: unknown) {
+  if (typeof __DEV__ === 'undefined' || !__DEV__) {
+    return;
+  }
+  console.warn(`[Auth:${label}] Supabase error`, getAuthErrorMetadata(error));
+}
+
 export function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
@@ -124,6 +152,7 @@ export async function createAccount(
     }
     return { hasSession: Boolean(data.session) };
   } catch (error) {
+    logAuthErrorContext('signUp', error);
     throw new Error(getFriendlyAuthError(error));
   }
 }
@@ -134,11 +163,31 @@ export async function signInToAccount(auth: AccountAuthClient, email: string, pa
     throw new Error('Enter a valid email address.');
   }
   try {
-    const { error } = await auth.signInWithPassword({ email: normalizedEmail, password });
+    const { data, error } = await auth.signInWithPassword({ email: normalizedEmail, password });
+    if (error) {
+      throw error;
+    }
+    if (!data?.session) {
+      throw new Error('Supabase sign-in returned no session.');
+    }
+  } catch (error) {
+    logAuthErrorContext('signIn', error);
+    throw new Error(getFriendlyAuthError(error));
+  }
+}
+
+export async function resendConfirmation(auth: AccountAuthClient, email: string) {
+  const normalizedEmail = email.trim();
+  if (!isValidEmail(normalizedEmail)) {
+    throw new Error('Enter a valid email address.');
+  }
+  try {
+    const { error } = await auth.resend({ type: 'signup', email: normalizedEmail });
     if (error) {
       throw error;
     }
   } catch (error) {
+    logAuthErrorContext('resendConfirmation', error);
     throw new Error(getFriendlyAuthError(error));
   }
 }

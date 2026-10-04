@@ -26,6 +26,7 @@ import {
   setPlayerVolume,
   togglePlayerOrientation,
 } from '../../src/utils/playerControls';
+import { backOrReplace } from '../../src/utils/navigation';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
 
 const PLAYER_GESTURE_HINT_KEY = 'geniuz:player-gesture-hint-dismissed';
@@ -529,7 +530,7 @@ export default function WatchScreen() {
           </View>
         ) : null}
         <View style={styles.headerActions}>
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.backButton}>
             <Text style={styles.backText}>‹  Back</Text>
           </Pressable>
           <RotateButton isLandscape={isLandscape} onPress={() => void rotatePlayer()} />

@@ -1,4 +1,4 @@
-import { router, Stack } from 'expo-router';
+import { Stack } from 'expo-router';
 import React, { useCallback } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { supabaseMovieRepository } from '../src/repositories/SupabaseMovieReposi
 import { useNetwork } from '../src/state/NetworkContext';
 import { theme } from '../src/theme';
 import { useContentQuery } from '../src/hooks/useContentQuery';
+import { backOrReplace } from '../src/utils/navigation';
 
 export default function ShortsScreen() {
   const { isOnline } = useNetwork();
@@ -29,7 +30,7 @@ export default function ShortsScreen() {
       {!isOnline ? (
         <View style={styles.messageState}>
           <ContentNotice message="Connect to the internet to watch Shorts." tone="warning" />
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.button}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.button}>
             <Text style={styles.buttonText}>Back</Text>
           </Pressable>
         </View>
@@ -41,16 +42,16 @@ export default function ShortsScreen() {
       ) : query.error ? (
         <View style={styles.messageState}>
           <ContentNotice message={query.error} tone="error" actionLabel="Retry" onAction={query.retry} />
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.button}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.button}>
             <Text style={styles.buttonText}>Back</Text>
           </Pressable>
         </View>
       ) : query.data?.length ? (
-        <ShortsFeed items={query.data} height={height} onBack={() => router.back()} />
+        <ShortsFeed items={query.data} height={height} onBack={() => backOrReplace('/')} />
       ) : (
         <View style={styles.messageState}>
           <ContentNotice message="No Shorts are available yet." />
-          <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.button}>
+          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.button}>
             <Text style={styles.buttonText}>Back</Text>
           </Pressable>
         </View>

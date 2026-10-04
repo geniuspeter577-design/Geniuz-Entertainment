@@ -1,5 +1,4 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +7,7 @@ import { ContentNotice } from '../src/components/ContentNotice';
 import { supabase } from '../src/services/supabase';
 import { theme } from '../src/theme';
 import { isAdminMetadata } from '../src/utils/adminAccess';
+import { backOrReplace } from '../src/utils/navigation';
 
 type StatusName = 'backend' | 'supabase' | 'bucket' | 'presignedRead';
 type CheckStatus = 'ok' | 'not_ok';
@@ -117,14 +117,14 @@ export default function AdminStatusScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.header}>
-        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Go back" onPress={() => backOrReplace('/admin')} style={styles.backButton}>
           <Ionicons name="arrow-back" size={21} color={theme.text} />
         </Pressable>
         <Text style={styles.title}>System status</Text>
       </View>
       <ScrollView contentContainerStyle={styles.content}>
         {isAdmin === false ? (
-          <ContentNotice message={error ?? 'Admin access is required.'} tone="error" actionLabel="Back" onAction={() => router.back()} />
+          <ContentNotice message={error ?? 'Admin access is required.'} tone="error" actionLabel="Back" onAction={() => backOrReplace('/admin')} />
         ) : null}
         {isAdmin === undefined ? <ContentNotice message="Checking admin access…" /> : null}
         {isAdmin && error ? <ContentNotice message={error} tone="error" actionLabel="Retry" onAction={() => void runChecks()} /> : null}

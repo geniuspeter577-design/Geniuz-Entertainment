@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -8,6 +8,7 @@ import { supabase } from '../../src/services/supabase';
 import { theme } from '../../src/theme';
 import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../../src/components/KeyboardAwareScrollView';
 import { getFriendlyAuthError } from '../../src/utils/accountAuth';
+import { backOrReplace } from '../../src/utils/navigation';
 
 export default function PasswordRecoveryScreen() {
   const { code: routeCode } = useLocalSearchParams<{ code?: string | string[] }>();
@@ -92,7 +93,7 @@ export default function PasswordRecoveryScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAwareScrollView contentContainerStyle={styles.content}>
-        <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
+        <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.backButton}>
           <Text style={styles.backText}>Back</Text>
         </Pressable>
         <Text style={styles.title}>Reset password</Text>
