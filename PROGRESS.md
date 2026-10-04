@@ -17,7 +17,7 @@ Updated: 2026-10-04
 ## Phase Status
 
 - Phase 0: done.
-- Phase 1: in progress. Immediate focus is Home tab animation and keyboard handling; auth/security and env audit remain part of this phase.
+- Phase 1: in progress. Added a spring-animated Home tab indicator and corrected keyboard-aware scrolling to measure after the keyboard opens, using a tested visible-viewport calculation. Email/password validation and admin security remain in place; the broader auth/security/env audit and Google OAuth/date-of-birth work remain.
 - Phases 2-8: not started. No payment, member earnings/payout, FFmpeg conversion, multi-endpoint balancing, or device-transfer system exists today. External provider approvals/credentials are not present in the repository; code will use environment variables and no secrets will be added.
 
 ## Execution Boundaries
@@ -25,3 +25,12 @@ Updated: 2026-10-04
 - Work is on local branch `part-a-merged`.
 - Do not push, run `supabase db push`, force-update refs, or merge branches.
 - Apply migrations only as new files when needed; never execute them against a database.
+
+## Latest Validation
+
+- `npm install`: passed; npm reported existing Expo peer-dependency and install-script warnings.
+- `npm run typecheck`: passed.
+- `npm run lint`: passed.
+- `npm test`: passed, 94/94.
+- `npm run backend:build`: passed.
+- Keyboard geometry has unit coverage; device-level keyboard and animation behavior still needs a real-device check.

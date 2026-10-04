@@ -22,6 +22,7 @@ const sources = [
   'src/utils/adminAccess.ts',
   'src/utils/homeHero.ts',
   'src/utils/playerControls.ts',
+  'src/utils/keyboardScroll.ts',
   'src/utils/trailerAutoplay.ts',
   'src/utils/uploadSaveRecovery.ts',
   'src/utils/titleImageValidation.ts',

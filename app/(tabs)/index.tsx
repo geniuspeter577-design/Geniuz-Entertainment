@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Animated,
   Image,
   Pressable,
   RefreshControl,
@@ -42,6 +43,9 @@ export default function HomeScreen() {
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [shuffleSeed, setShuffleSeed] = useState(createHomeShuffleSeed);
+  const [tabIndicatorLeft] = useState(() => new Animated.Value(0));
+  const [tabIndicatorWidth] = useState(() => new Animated.Value(0));
+  const tabLayoutsRef = useRef(new Map<string, { x: number; width: number }>());
   const loadCatalog = useCallback(async () => {
     const catalog = await loadPublishedCatalog(
       () => {
@@ -139,6 +143,28 @@ export default function HomeScreen() {
       animated: true,
     });
   }, [categoryTabs, selectedCategory]);
+  useEffect(() => {
+    const layout = tabLayoutsRef.current.get(selectedCategory);
+    if (!layout) {
+      return;
+    }
+    Animated.parallel([
+      Animated.spring(tabIndicatorLeft, {
+        toValue: layout.x,
+        damping: 24,
+        stiffness: 260,
+        mass: 0.8,
+        useNativeDriver: false,
+      }),
+      Animated.spring(tabIndicatorWidth, {
+        toValue: layout.width,
+        damping: 24,
+        stiffness: 260,
+        mass: 0.8,
+        useNativeDriver: false,
+      }),
+    ]).start();
+  }, [selectedCategory, tabIndicatorLeft, tabIndicatorWidth]);
   const listedIds = new Set(publishedItems.map((item) => item.id));
   const recent = continueWatching.filter(
     ({ item }) => listedIds.has(item.id) || (catalogQuery.data?.showingDemo && item.source === 'mock'),
@@ -317,26 +343,40 @@ export default function HomeScreen() {
             contentContainerStyle={styles.categoryTabs}
             snapToInterval={120}
           >
-            {categoryTabs.map(({ key, label }) => {
-              const isSelected = selectedCategory === key;
-              return (
-                <Pressable
-                  key={key}
-                  accessibilityRole="tab"
-                  accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={`${label} category`}
-                  onPress={() => {
-                    setSelectedCategory(key);
-                    if (key === 'Shorts') {
-                      router.push('/shorts');
-                    }
-                  }}
-                  style={[styles.categoryTab, isSelected && styles.selectedCategoryTab]}
-                >
-                  <Text style={[styles.categoryTabText, isSelected && styles.selectedCategoryTabText]}>{label}</Text>
-                </Pressable>
-              );
-            })}
+            <View style={styles.categoryTabsTrack}>
+              <Animated.View
+                pointerEvents="none"
+                style={[styles.categoryTabIndicator, { left: tabIndicatorLeft, width: tabIndicatorWidth }]}
+              />
+              {categoryTabs.map(({ key, label }) => {
+                const isSelected = selectedCategory === key;
+                return (
+                  <Pressable
+                    key={key}
+                    accessibilityRole="tab"
+                    accessibilityState={{ selected: isSelected }}
+                    accessibilityLabel={`${label} category`}
+                    onLayout={(event) => {
+                      const { x, width } = event.nativeEvent.layout;
+                      tabLayoutsRef.current.set(key, { x, width });
+                      if (isSelected) {
+                        tabIndicatorLeft.setValue(x);
+                        tabIndicatorWidth.setValue(width);
+                      }
+                    }}
+                    onPress={() => {
+                      setSelectedCategory(key);
+                      if (key === 'Shorts') {
+                        router.push('/shorts');
+                      }
+                    }}
+                    style={[styles.categoryTab, isSelected && styles.selectedCategoryTab]}
+                  >
+                    <Text style={[styles.categoryTabText, isSelected && styles.selectedCategoryTabText]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </ScrollView>
         ) : null}
 
@@ -460,7 +500,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   emptyText: { color: theme.secondaryText, fontSize: 14, paddingVertical: 18 },
-  categoryTabs: { paddingTop: 4, paddingBottom: 12, paddingHorizontal: 2, gap: 8 },
+  categoryTabs: { paddingTop: 4, paddingBottom: 12, paddingHorizontal: 2 },
+  categoryTabsTrack: { flexDirection: 'row', position: 'relative', paddingBottom: 3 },
+  categoryTabIndicator: { position: 'absolute', bottom: 0, height: 3, borderRadius: 2, backgroundColor: theme.accent },
   categoryTab: {
     minHeight: 44,
     paddingHorizontal: 14,
@@ -473,7 +515,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   selectedCategoryTab: {
-    borderBottomColor: theme.accent,
+    borderBottomColor: 'transparent',
   },
   categoryTabText: {
     color: theme.secondaryText,

@@ -13,6 +13,7 @@ const { isNetworkOnline } = require('../.test-build/src/utils/networkStatus.js')
 const { getSupabaseErrorDetails } = require('../.test-build/src/utils/supabaseError.js');
 const { getAdminRouteState, isAdminMetadata } = require('../.test-build/src/utils/adminAccess.js');
 const { getHomeHeroItems } = require('../.test-build/src/utils/homeHero.js');
+const { getKeyboardScrollTarget } = require('../.test-build/src/utils/keyboardScroll.js');
 const {
   getDragTarget,
   isPlayerGestureArea,
@@ -52,6 +53,23 @@ function item(id, title = id) {
     availability: { discoverable: true, stream: true, download: false, premium: false },
   };
 }
+
+test('keyboard scroll target keeps a focused input above the visible keyboard edge', () => {
+  const viewport = {
+    viewportTop: 100,
+    viewportHeight: 500,
+    keyboardTop: 500,
+    currentScrollOffset: 120,
+  };
+  assert.equal(getKeyboardScrollTarget({ ...viewport, inputTop: 400, inputHeight: 60 }), 120);
+  assert.equal(getKeyboardScrollTarget({ ...viewport, inputTop: 450, inputHeight: 60 }), 146);
+  assert.equal(getKeyboardScrollTarget({
+    ...viewport,
+    keyboardTop: undefined,
+    inputTop: 650,
+    inputHeight: 40,
+  }), 226);
+});
 
 test('watchlist toggling adds a title once and removes it by ID', () => {
   const first = item('first');
