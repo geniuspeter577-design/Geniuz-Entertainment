@@ -39,6 +39,13 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/branding/favicon.png"
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ecb9ecb7-36e5-4ab8-8ea1-cacf8f83dede"
+      }
+    },
+    "owner": "geniuzlab57"
   }
 }
