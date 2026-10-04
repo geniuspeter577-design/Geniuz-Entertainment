@@ -1,8 +1,9 @@
+import { isValidDateOfBirth } from './accountProfile';
 export type AccountAuthClient = {
   signUp: (input: {
     email: string;
     password: string;
-    options: { data: { display_name: string }; emailRedirectTo?: string };
+    options: { data: { display_name: string; date_of_birth: string }; emailRedirectTo?: string };
   }) => Promise<{ data: { session: unknown }; error: unknown | null }>;
   signInWithPassword: (input: { email: string; password: string }) => Promise<{
     data: { session: unknown };
@@ -46,6 +47,13 @@ export function getFriendlyAuthError(error: unknown) {
     message.includes('invalid email')
   ) {
     return 'Enter a valid email address.';
+  }
+  if (
+    code.includes('provider_disabled') ||
+    code.includes('unsupported_provider') ||
+    message.includes('provider is not enabled')
+  ) {
+    return 'Google sign-in is not configured. Use email and password or contact support.';
   }
   if (
     status === 429 ||
@@ -102,12 +110,23 @@ function getAuthErrorMetadata(error: unknown) {
       : error instanceof Error
         ? error.name
         : undefined,
-    message: typeof candidate.message === 'string'
-      ? candidate.message.slice(0, 240)
-      : error instanceof Error
-        ? error.message.slice(0, 240)
-        : undefined,
+    message: sanitizeAuthLogMessage(
+      typeof candidate.message === 'string'
+        ? candidate.message
+        : error instanceof Error
+          ? error.message
+          : undefined,
+    ),
   };
+}
+
+function sanitizeAuthLogMessage(message?: string) {
+  return message
+    ?.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, '[email]')
+    .replace(/\b(?:access|refresh|id)[_-]?token\s*[:=]\s*\S+/gi, '[token redacted]')
+    .replace(/\b[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\b/g, '[token redacted]')
+    .slice(0, 240);
 }
 
 export function logAuthErrorContext(label: string, error: unknown) {
@@ -126,6 +145,7 @@ export async function createAccount(
   email: string,
   password: string,
   displayName: string,
+  dateOfBirth: string,
   emailRedirectTo?: string,
 ) {
   const normalizedEmail = email.trim();
@@ -138,12 +158,15 @@ export async function createAccount(
   if (displayName.trim().length < 1 || displayName.trim().length > 80) {
     throw new Error('Display name must be between 1 and 80 characters.');
   }
+  if (!isValidDateOfBirth(dateOfBirth)) {
+    throw new Error('Enter a valid date of birth in YYYY-MM-DD format.');
+  }
   try {
     const { data, error } = await auth.signUp({
       email: normalizedEmail,
       password,
       options: {
-        data: { display_name: displayName.trim() },
+        data: { display_name: displayName.trim(), date_of_birth: dateOfBirth },
         ...(emailRedirectTo ? { emailRedirectTo } : {}),
       },
     });

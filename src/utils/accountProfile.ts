@@ -31,3 +31,17 @@ export function getUsernameError(username: string) {
   }
   return undefined;
 }
+
+export function isValidDateOfBirth(dateOfBirth: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) {
+    return false;
+  }
+  const parsed = new Date(`${dateOfBirth}T00:00:00.000Z`);
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    Number.isFinite(parsed.getTime()) &&
+    parsed.toISOString().slice(0, 10) === dateOfBirth &&
+    dateOfBirth >= '1900-01-01' &&
+    dateOfBirth <= today
+  );
+}

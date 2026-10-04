@@ -3,8 +3,9 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { AccountProfile } from '../models/profile';
 import { isAccountProfile } from '../models/profile';
 import { normalizeUsername, isValidUsername } from '../utils/accountProfile';
+import { isValidDateOfBirth } from '../utils/accountProfile';
 
-const PROFILE_COLUMNS = 'id,display_name,avatar_color,public_id,created_at,username,bio,avatar_url';
+const PROFILE_COLUMNS = 'id,display_name,avatar_color,public_id,created_at,username,bio,avatar_url,date_of_birth';
 
 export type AccountProfileUpdate = {
   display_name: string;
@@ -90,6 +91,18 @@ export class ProfileRepository {
       throw new Error('The account profile could not be updated.');
     }
     return data;
+  }
+
+  async completeDateOfBirth(dateOfBirth: string): Promise<void> {
+    if (!isValidDateOfBirth(dateOfBirth)) {
+      throw new Error('Enter a valid date of birth in YYYY-MM-DD format.');
+    }
+    const { error } = await this.client.rpc('complete_profile_date_of_birth', {
+      requested_date: dateOfBirth,
+    });
+    if (error) {
+      throw new Error('Your date of birth could not be saved. Please retry.', { cause: error });
+    }
   }
 
   async requestAccountDeletion(userId: string, reason: string): Promise<void> {

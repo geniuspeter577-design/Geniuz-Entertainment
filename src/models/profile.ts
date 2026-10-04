@@ -7,6 +7,7 @@ export type AccountProfile = {
   username: string | null;
   bio: string | null;
   avatar_url: string | null;
+  date_of_birth: string | null;
 };
 
 export function isAccountProfile(value: unknown, userId?: string): value is AccountProfile {
@@ -24,6 +25,7 @@ export function isAccountProfile(value: unknown, userId?: string): value is Acco
     typeof profile.created_at === 'string' &&
     (typeof profile.username === 'string' || profile.username === null) &&
     (typeof profile.bio === 'string' || profile.bio === null) &&
-    (typeof profile.avatar_url === 'string' || profile.avatar_url === null)
+    (typeof profile.avatar_url === 'string' || profile.avatar_url === null) &&
+    (typeof profile.date_of_birth === 'string' || profile.date_of_birth === null)
   );
 }

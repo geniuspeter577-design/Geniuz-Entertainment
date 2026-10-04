@@ -6,6 +6,7 @@ import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../KeyboardAwar
 
 import { useAuth } from '../../state/AuthContext';
 import { theme } from '../../theme';
+import { isValidDateOfBirth } from '../../utils/accountProfile';
 
 export type SignInSheetMode = 'sign-in' | 'create-account' | 'reset-password';
 
@@ -16,11 +17,13 @@ type Props = {
 };
 
 export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) {
-  const { signIn, signUp, resetPassword, resendConfirmation } = useAuth();
+  const { signIn, signUp, signInWithGoogle, completeDateOfBirth, resetPassword, resendConfirmation } = useAuth();
   const [mode, setMode] = useState<SignInSheetMode>(initialMode);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [displayName, setDisplayName] = useState('');
+  const [dateOfBirth, setDateOfBirth] = useState('');
+  const [googleNeedsDateOfBirth, setGoogleNeedsDateOfBirth] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>();
   const [message, setMessage] = useState<string>();
@@ -49,6 +52,48 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
     }
   };
 
+  const continueWithGoogle = async () => {
+    setError(undefined);
+    setMessage(undefined);
+    setIsSubmitting(true);
+    try {
+      const result = await signInWithGoogle();
+      if (result.cancelled) {
+        setMessage('Google sign-in was cancelled.');
+        return;
+      }
+      if (result.needsDateOfBirth) {
+        if (isValidDateOfBirth(dateOfBirth)) {
+          await completeDateOfBirth(dateOfBirth);
+          onClose();
+          return;
+        }
+        setGoogleNeedsDateOfBirth(true);
+        setMessage('Enter your date of birth to finish setting up your account.');
+        return;
+      }
+      onClose();
+    } catch (authError) {
+      setError(authError instanceof Error ? authError.message : 'Google sign-in could not be completed.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const saveGoogleDateOfBirth = async () => {
+    setError(undefined);
+    setMessage(undefined);
+    setIsSubmitting(true);
+    try {
+      await completeDateOfBirth(dateOfBirth);
+      onClose();
+    } catch (profileError) {
+      setError(profileError instanceof Error ? profileError.message : 'Your date of birth could not be saved.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const submit = async () => {
     setError(undefined);
     setMessage(undefined);
@@ -58,7 +103,7 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
         if (displayName.trim().length < 1 || displayName.trim().length > 80) {
           throw new Error('Display name must be between 1 and 80 characters.');
         }
-        const result = await signUp(email, password, displayName);
+        const result = await signUp(email, password, displayName, dateOfBirth);
         if (result.hasSession) {
           onClose();
         } else {
@@ -111,6 +156,18 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
                 style={styles.input}
               />
             ) : null}
+            {mode === 'create-account' || googleNeedsDateOfBirth ? (
+              <KeyboardAwareTextInput
+                accessibilityLabel="Date of birth"
+                value={dateOfBirth}
+                onChangeText={setDateOfBirth}
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+                placeholder="Date of birth (YYYY-MM-DD)"
+                placeholderTextColor={theme.secondaryText}
+                style={styles.input}
+              />
+            ) : null}
             <KeyboardAwareTextInput
               accessibilityLabel="Email address"
               value={email}
@@ -142,6 +199,16 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
             ) : null}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             {message ? <Text accessibilityRole="alert" style={styles.message}>{message}</Text> : null}
+            {googleNeedsDateOfBirth ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSubmitting}
+                onPress={() => void saveGoogleDateOfBirth()}
+                style={styles.secondaryButton}
+              >
+                <Text style={styles.secondaryButtonText}>{isSubmitting ? 'Saving…' : 'Complete account'}</Text>
+              </Pressable>
+            ) : null}
             {error?.toLowerCase().includes('confirm your email') ? (
               <Pressable
                 accessibilityRole="button"
@@ -162,6 +229,16 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
                 {isSubmitting ? 'Please wait…' : mode === 'create-account' ? 'Create account' : mode === 'reset-password' ? 'Send reset link' : 'Sign in'}
               </Text>
             </Pressable>
+            {!googleNeedsDateOfBirth && mode !== 'reset-password' ? (
+              <Pressable
+                accessibilityRole="button"
+                disabled={isSubmitting}
+                onPress={() => void continueWithGoogle()}
+                style={styles.secondaryButton}
+              >
+                <Text style={styles.secondaryButtonText}>{isSubmitting ? 'Connecting…' : 'Continue with Google'}</Text>
+              </Pressable>
+            ) : null}
             {mode === 'sign-in' ? (
               <>
                 <Pressable accessibilityRole="button" onPress={() => switchMode('create-account')} style={styles.linkButton}>
@@ -199,6 +276,8 @@ const styles = StyleSheet.create({
   error: { color: theme.error, fontSize: 13, lineHeight: 18 },
   message: { color: theme.success, fontSize: 13, lineHeight: 18 },
   primaryButton: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: theme.accent },
+  secondaryButton: { minHeight: 46, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: theme.border },
+  secondaryButtonText: { color: theme.text, fontSize: 14, fontWeight: '700' },
   disabledButton: { opacity: 0.55 },
   primaryText: { color: theme.background, fontSize: 15, fontWeight: '800' },
   linkButton: { minHeight: 44, alignItems: 'center', justifyContent: 'center' },

@@ -1,6 +1,8 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { Platform } from 'react-native';
 
 import type { AccountProfile } from '../models/profile';
 import { ProfileRepository, type AccountProfileUpdate } from '../services/ProfileRepository';
@@ -8,6 +10,8 @@ import { supabase } from '../services/supabase';
 import {
   createAccount,
   getAuthState,
+  getFriendlyAuthError,
+  logAuthErrorContext,
   resendConfirmation,
   sendPasswordReset,
   signInToAccount,
@@ -22,8 +26,10 @@ type AuthContextValue = {
   isLoading: boolean;
   profileError?: string;
   isAdmin: boolean;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ hasSession: boolean }>;
+  signUp: (email: string, password: string, displayName: string, dateOfBirth: string) => Promise<{ hasSession: boolean }>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<{ cancelled: boolean; needsDateOfBirth: boolean }>;
+  completeDateOfBirth: (dateOfBirth: string) => Promise<void>;
   resendConfirmation: (email: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -37,6 +43,10 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | null>(null);
 const profileRepository = supabase ? new ProfileRepository(supabase) : null;
 const authClient = supabase?.auth as unknown as AccountAuthClient | undefined;
+
+if (Platform.OS === 'web') {
+  WebBrowser.maybeCompleteAuthSession();
+}
 
 export function AuthProvider({ children }: React.PropsWithChildren) {
   const [session, setSession] = useState<Session | null>(null);
@@ -110,11 +120,11 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     };
   }, [loadProfile]);
 
-  const signUp = useCallback((email: string, password: string, displayName: string) => {
+  const signUp = useCallback((email: string, password: string, displayName: string, dateOfBirth: string) => {
     if (!authClient) {
       return Promise.reject(new Error('Account service is not configured.'));
     }
-    return createAccount(authClient, email, password, displayName, Linking.createURL('auth/confirm'));
+    return createAccount(authClient, email, password, displayName, dateOfBirth, Linking.createURL('auth/confirm'));
   }, []);
 
   const signIn = useCallback(async (email: string, password: string) => {
@@ -123,6 +133,87 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     }
     await signInToAccount(authClient, email, password);
   }, []);
+
+  const signInWithGoogle = useCallback(async () => {
+    if (!supabase) {
+      throw new Error('Account service is not configured.');
+    }
+    const redirectTo = Linking.createURL('auth/confirm');
+    if (Platform.OS === 'web') {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      });
+      if (error) {
+        logAuthErrorContext('googleSignIn', error);
+        throw new Error(getFriendlyAuthError(error));
+      }
+      return { cancelled: false, needsDateOfBirth: false };
+    }
+
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo, skipBrowserRedirect: true },
+    });
+    if (error) {
+      logAuthErrorContext('googleSignIn', error);
+      throw new Error(getFriendlyAuthError(error));
+    }
+    if (!data.url) {
+      throw new Error('Google sign-in is not configured. Enable Google in Supabase Authentication settings.');
+    }
+
+    const browserResult = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+    if (browserResult.type !== 'success') {
+      return { cancelled: true, needsDateOfBirth: false };
+    }
+
+    let callbackUrl: URL;
+    try {
+      callbackUrl = new URL(browserResult.url);
+    } catch {
+      throw new Error('Google sign-in returned an invalid callback. Please retry.');
+    }
+    if (callbackUrl.searchParams.has('error')) {
+      throw new Error('Google sign-in was not completed. Please retry.');
+    }
+    const code = callbackUrl.searchParams.get('code');
+    if (!code) {
+      throw new Error('Google sign-in did not return a session. Please retry.');
+    }
+    const { data: exchangeData, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+    if (exchangeError || !exchangeData.session) {
+      if (exchangeError) {
+        logAuthErrorContext('googleSessionExchange', exchangeError);
+      }
+      throw new Error('Google sign-in could not establish a session. Please retry.');
+    }
+
+    setSession(exchangeData.session);
+    if (!profileRepository) {
+      return { cancelled: false, needsDateOfBirth: true };
+    }
+    setIsLoading(true);
+    try {
+      const nextProfile = await profileRepository.getForUser(exchangeData.session.user.id);
+      setProfile(nextProfile);
+      setProfileError(undefined);
+      return { cancelled: false, needsDateOfBirth: !nextProfile?.date_of_birth };
+    } catch {
+      setProfileError('Your profile could not be loaded. Retry to try again.');
+      throw new Error('Your profile could not be loaded after Google sign-in. Please retry.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const completeDateOfBirth = useCallback(async (dateOfBirth: string) => {
+    if (!session || !profileRepository) {
+      throw new Error('Sign in to complete your profile.');
+    }
+    await profileRepository.completeDateOfBirth(dateOfBirth);
+    setProfile(await profileRepository.getForUser(session.user.id));
+  }, [session]);
 
   const resendConfirmationForEmail = useCallback(async (email: string) => {
     if (!authClient) {
@@ -184,6 +275,8 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     isAdmin: getAuthState(session).isAdmin,
     signUp,
     signIn,
+    signInWithGoogle,
+    completeDateOfBirth,
     resendConfirmation: resendConfirmationForEmail,
     signOut,
     resetPassword,
@@ -192,7 +285,7 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     refreshProfile,
     openSignInSheet,
     closeSignInSheet,
-  }), [session, profile, isLoading, profileError, signUp, signIn, resendConfirmationForEmail, signOut, resetPassword, updateDisplayName, updateProfile, refreshProfile, openSignInSheet, closeSignInSheet]);
+  }), [session, profile, isLoading, profileError, signUp, signIn, signInWithGoogle, completeDateOfBirth, resendConfirmationForEmail, signOut, resetPassword, updateDisplayName, updateProfile, refreshProfile, openSignInSheet, closeSignInSheet]);
 
   return (
     <AuthContext.Provider value={value}>

@@ -2,9 +2,9 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { test } = require('node:test');
 
-const { createAccount, getAuthState, getFriendlyAuthError, resendConfirmation, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
+const { createAccount, getAuthState, getFriendlyAuthError, logAuthErrorContext, resendConfirmation, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
 const { isValidProfileCreation } = require('../.test-build/src/utils/accountProfile.js');
-const { getUsernameError, isValidUsername, normalizeUsername } = require('../.test-build/src/utils/accountProfile.js');
+const { getUsernameError, isValidDateOfBirth, isValidUsername, normalizeUsername } = require('../.test-build/src/utils/accountProfile.js');
 const { isAccountProfile } = require('../.test-build/src/models/profile.js');
 const { createChunkedSecureStorage, splitSecureValue } = require('../.test-build/src/utils/secureStorage.js');
 
@@ -46,13 +46,13 @@ test('account creation trims email and display name and reports email-confirmati
       return { data: { session: null }, error: null };
     },
   });
-  assert.deepEqual(await createAccount(auth, ' person@example.test ', 'password-value', ' Name ', 'geniuz://auth/confirm'), {
+  assert.deepEqual(await createAccount(auth, ' person@example.test ', 'password-value', ' Name ', '1990-01-02', 'geniuz://auth/confirm'), {
     hasSession: false,
   });
   assert.deepEqual(request, {
     email: 'person@example.test',
     password: 'password-value',
-    options: { data: { display_name: 'Name' }, emailRedirectTo: 'geniuz://auth/confirm' },
+    options: { data: { display_name: 'Name', date_of_birth: '1990-01-02' }, emailRedirectTo: 'geniuz://auth/confirm' },
   });
 });
 
@@ -93,11 +93,42 @@ test('account errors explain invalid credentials, unconfirmed email, network, an
   assert.match(getFriendlyAuthError({ status: 429 }), /too many attempts/i);
 });
 
+test('auth error logging is dev-only and redacts email and token-like values', () => {
+  const previousDev = global.__DEV__;
+  const originalWarn = console.warn;
+  const logged = [];
+  try {
+    global.__DEV__ = false;
+    console.warn = (...args) => logged.push(args);
+    logAuthErrorContext('test', { code: 'auth_error', message: 'request failed' });
+    assert.equal(logged.length, 0);
+
+    global.__DEV__ = true;
+    logAuthErrorContext('test', {
+      code: 'auth_error',
+      status: 401,
+      message: 'user@example.test Bearer abcdefghijklmnopqrstuvwxyz.abcdefghijklmnopqrstuv.abcdefghijklmnopqrstuv',
+    });
+    assert.equal(logged.length, 1);
+    const serialized = JSON.stringify(logged[0]);
+    assert.doesNotMatch(serialized, /user@example\.test|abcdefghijklmnopqrstuvwxyz/);
+    assert.match(serialized, /auth_error/);
+  } finally {
+    console.warn = originalWarn;
+    if (previousDev === undefined) {
+      delete global.__DEV__;
+    } else {
+      global.__DEV__ = previousDev;
+    }
+  }
+});
+
 test('signup rejects malformed email and weak passwords before calling Supabase', async () => {
   let calls = 0;
   const auth = createAuth({ signUp: async () => { calls += 1; return { data: { session: null }, error: null }; } });
   await assert.rejects(createAccount(auth, 'invalid', 'long-enough-password', 'Name'), /valid email/i);
   await assert.rejects(createAccount(auth, 'person@example.test', 'short', 'Name'), /at least 8 characters/i);
+  await assert.rejects(createAccount(auth, 'person@example.test', 'long-enough-password', 'Name', 'not-a-date'), /date of birth/i);
   assert.equal(calls, 0);
 });
 
@@ -106,6 +137,13 @@ test('usernames normalize and enforce the documented profile format', () => {
   assert.equal(isValidUsername('geniuz_user'), true);
   assert.equal(isValidUsername('1bad'), false);
   assert.match(getUsernameError('1bad'), /start with a letter/i);
+});
+
+test('date of birth accepts real non-future ISO dates only', () => {
+  assert.equal(isValidDateOfBirth('1990-01-02'), true);
+  assert.equal(isValidDateOfBirth('2020-02-30'), false);
+  assert.equal(isValidDateOfBirth('3000-01-01'), false);
+  assert.equal(isValidDateOfBirth('01-02-1990'), false);
 });
 
 test('profile creation and returned profile validation require the auth ID and short numeric public ID', () => {
@@ -126,6 +164,7 @@ test('profile creation and returned profile validation require the auth ID and s
     username: null,
     bio: '',
     avatar_url: null,
+    date_of_birth: '1990-01-02',
   };
   assert.equal(isAccountProfile(profile, input.userId), true);
   assert.equal(isAccountProfile({ ...profile, id: 'another-user' }, input.userId), false);
@@ -140,6 +179,16 @@ test('new profile migration protects avatar ownership and adds short categories 
   assert.match(migration, /check \(content_type in \('movie', 'series', 'short'\)\)/i);
   assert.match(migration, /values \('Anime'\), \('Kids'\), \('Shorts'\), \('TV'\), \('Nollywood'\), \('Football'\)/i);
   assert.doesNotMatch(migration, /insert into public\.movies/i);
+});
+
+test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261014000000_profile_date_of_birth.sql', 'utf8');
+  assert.match(migration, /add column if not exists date_of_birth date/i);
+  assert.match(migration, /revoke update on table public\.profiles from authenticated/i);
+  assert.match(migration, /grant update \(display_name, username, bio, avatar_url\)/i);
+  assert.match(migration, /new\.raw_user_meta_data ->> 'date_of_birth'/i);
+  assert.match(migration, /function public\.complete_profile_date_of_birth\(requested_date date\)/i);
+  assert.match(migration, /where id = auth\.uid\(\)[\s\S]*date_of_birth is null/i);
 });
 
 test('SecureStore adapter chunks large UTF-8 sessions, replaces old chunks, and removes the whole value', async () => {
