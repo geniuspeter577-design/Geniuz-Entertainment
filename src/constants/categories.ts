@@ -3,6 +3,7 @@ export const TITLE_CATEGORIES = [
   'Hollywood',
   'Bollywood',
   'Anime',
+  'Animation',
   'Cartoon',
   'K-Drama',
   'Series',

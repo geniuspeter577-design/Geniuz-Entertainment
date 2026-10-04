@@ -74,6 +74,24 @@ test('category tabs are ordered by count and filtered by category name', () => {
   assert.deepEqual(horrorItems.map(({ title }) => title), ['Horror Night']);
 });
 
+test('Animation titles are filtered by the Animation category', () => {
+  const animationItems = getCategoryItems([
+    ...categoryItems,
+    {
+      id: 'movie:animation',
+      source: 'geniuz',
+      title: 'Animated Adventure',
+      type: 'movie',
+      createdAt: '2026-10-05T00:00:00.000Z',
+      genres: ['Adventure'],
+      categories: ['Animation'],
+      availability: { discoverable: true, stream: true, download: true, premium: false },
+    },
+  ], 'Animation');
+
+  assert.deepEqual(animationItems.map(({ title }) => title), ['Animated Adventure']);
+});
+
 test('notification unread counts reflect new reads without mutating the original array', () => {
   const notifications = [
     { id: 'a', read: false },

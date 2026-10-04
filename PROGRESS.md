@@ -22,12 +22,14 @@ Updated: 2026-10-04
 
 ## Execution Boundaries
 
-- Work is on local branch `part-a-merged`.
+- Work is on local branch `main`.
 - Do not push, run `supabase db push`, force-update refs, or merge branches.
 - Apply migrations only as new files when needed; never execute them against a database.
 
 ## Latest Validation
 
+- Added Animation to the Home category tabs and shared admin category picker list; categories remain free-form text in the database. Added `20261015000000_animation_category.sql` to seed the readable category list; migration has not been applied.
+- Animation validation: `npm test` passed (99/99), `npm run typecheck` passed, and `npm run lint` passed with two existing duplicate-import warnings in `src/services/ProfileRepository.ts`.
 - `npm install`: passed; npm reported existing Expo peer-dependency and install-script warnings.
 - `npm run typecheck`: passed.
 - `npm run lint`: passed.

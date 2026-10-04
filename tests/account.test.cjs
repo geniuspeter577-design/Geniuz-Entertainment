@@ -191,6 +191,11 @@ test('date-of-birth migration stores private dates and limits completion to the 
   assert.match(migration, /where id = auth\.uid\(\)[\s\S]*date_of_birth is null/i);
 });
 
+test('Animation migration adds the category without restricting free-form categories', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261015000000_animation_category.sql', 'utf8');
+  assert.match(migration, /insert into public\.content_categories \(name\)[\s\S]*values \('Animation'\)[\s\S]*on conflict \(name\) do nothing/i);
+});
+
 test('SecureStore adapter chunks large UTF-8 sessions, replaces old chunks, and removes the whole value', async () => {
   const values = new Map();
   const store = {

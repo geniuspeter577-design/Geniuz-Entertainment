@@ -101,6 +101,7 @@ export default function HomeScreen() {
     () => [
       { key: 'Trending', label: 'Trending' },
       { key: 'Anime', label: 'Anime' },
+      { key: 'Animation', label: 'Animation' },
       { key: 'Kids', label: 'Kids' },
       { key: 'Shorts', label: 'Shorts' },
       { key: 'TV', label: 'TV' },
