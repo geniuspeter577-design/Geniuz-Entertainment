@@ -15,10 +15,12 @@ type PosterCardProps = {
   onPress: () => void;
   compact?: boolean;
   grid?: boolean;
+  fillContainer?: boolean;
+  rank?: number;
   progress?: number;
 };
 
-export function PosterCard({ item, onPress, compact = false, grid = false, progress }: PosterCardProps) {
+export function PosterCard({ item, onPress, compact = false, grid = false, fillContainer = false, rank, progress }: PosterCardProps) {
   const { records, download, cancel } = useDownloads();
   const downloadRecord = records.find((record) => record.item.id === item.id);
   const isDownloading = downloadRecord?.status === 'downloading';
@@ -27,18 +29,19 @@ export function PosterCard({ item, onPress, compact = false, grid = false, progr
   const hasFailed = downloadRecord?.status === 'failed' || downloadRecord?.status === 'canceled';
 
   return (
-    <View style={[styles.card, compact && styles.compactCard, grid && styles.gridCard]}>
+    <View style={[styles.card, compact && styles.compactCard, grid && styles.gridCard, fillContainer && styles.fillContainerCard]}>
       <Pressable
         onPress={onPress}
         style={styles.cardPressable}
         accessibilityRole="button"
-        accessibilityLabel={`View ${item.title}`}
+        accessibilityLabel={typeof rank === 'number' ? `${rank}. View ${item.title}` : `View ${item.title}`}
       >
         <TitleImage
           uri={item.posterUrl}
           style={[styles.image, compact && styles.compactImage]}
         />
-        <View style={styles.badgeRow}>
+        {typeof rank === 'number' ? <Text style={styles.rankBadge}>{rank}</Text> : null}
+        <View style={[styles.badgeRow, typeof rank === 'number' && styles.rankedBadgeRow]}>
           {item.availability.premium ? <Text style={styles.badge}>Premium</Text> : null}
           {item.isNewRelease ? <Text style={[styles.badge, styles.newBadge]}>New</Text> : null}
         </View>
@@ -133,6 +136,10 @@ const styles = StyleSheet.create({
     width: '31%',
     marginRight: 0,
   },
+  fillContainerCard: {
+    width: '100%',
+    marginRight: 0,
+  },
   cardPressable: {
     flex: 1,
   },
@@ -150,6 +157,27 @@ const styles = StyleSheet.create({
     right: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
+  },
+  rankedBadgeRow: {
+    top: 44,
+  },
+  rankBadge: {
+    position: 'absolute',
+    top: 10,
+    left: 10,
+    minWidth: 28,
+    height: 28,
+    paddingHorizontal: 7,
+    borderRadius: 14,
+    overflow: 'hidden',
+    backgroundColor: 'rgba(15, 17, 22, 0.84)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.18)',
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: '800',
+    textAlign: 'center',
+    textAlignVertical: 'center',
   },
   downloadButton: {
     position: 'absolute',

@@ -14,6 +14,7 @@ type ContentRailProps = {
   isLoading: boolean;
   error?: string;
   retry: () => void;
+  onSeeAll: () => void;
   compact?: boolean;
   emptyMessage: string;
 };
@@ -24,12 +25,13 @@ export function ContentRail({
   isLoading,
   error,
   retry,
+  onSeeAll,
   compact,
   emptyMessage,
 }: ContentRailProps) {
   return (
     <>
-      <SectionHeader title={title} />
+      <SectionHeader title={title} onSeeAll={onSeeAll} />
       {isLoading ? <ContentNotice message={`Loading ${title.toLowerCase()}…`} /> : null}
       {error ? (
         <ContentNotice

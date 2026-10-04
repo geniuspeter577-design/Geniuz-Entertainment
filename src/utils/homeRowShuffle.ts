@@ -1,10 +1,10 @@
-export type HomeCategoryRow<T> = {
+export type HomeCategoryRow<T, Metadata extends object = Record<never, never>> = {
   key: string;
   title: string;
   items: T[];
   emptyMessage: string;
   isLoading: boolean;
-};
+} & Metadata;
 
 function createRandomGenerator(seed: number) {
   let state = seed >>> 0;
@@ -27,10 +27,10 @@ export function shuffleWithSeed<T>(items: readonly T[], seed: number): T[] {
   return shuffled;
 }
 
-export function shuffleHomeCategoryRows<T>(
-  rows: readonly HomeCategoryRow<T>[],
+export function shuffleHomeCategoryRows<T, Metadata extends object>(
+  rows: readonly HomeCategoryRow<T, Metadata>[],
   seed: number,
-): HomeCategoryRow<T>[] {
+): HomeCategoryRow<T, Metadata>[] {
   const randomizedItems = rows.map((row, index) => ({
     ...row,
     items: shuffleWithSeed(row.items, (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0),

@@ -176,6 +176,8 @@ export default function HomeScreen() {
           {
             key: 'latest',
             title: 'Latest',
+            listKind: 'trending',
+            listValue: undefined,
             items: publishedItems,
             emptyMessage: 'Nothing here yet',
             isLoading: catalogQuery.isLoading,
@@ -184,6 +186,8 @@ export default function HomeScreen() {
             ? [{
                 key: 'movies',
                 title: 'Movies',
+                listKind: 'movies',
+                listValue: undefined,
                 items: sortPublishedNewest(movies),
                 emptyMessage: 'Nothing here yet',
                 isLoading: false,
@@ -193,6 +197,8 @@ export default function HomeScreen() {
             ? [{
                 key: 'series',
                 title: 'Series',
+                listKind: 'series',
+                listValue: undefined,
                 items: sortPublishedNewest(series),
                 emptyMessage: 'Nothing here yet',
                 isLoading: false,
@@ -202,6 +208,8 @@ export default function HomeScreen() {
             .map((genre) => ({
               key: `genre:${genre}`,
               title: genre,
+              listKind: 'genre',
+              listValue: genre,
               items: publishedItems.filter((item) =>
                 item.genres.some((itemGenre) => itemGenre.toLocaleLowerCase() === genre.toLocaleLowerCase()),
               ),
@@ -214,6 +222,12 @@ export default function HomeScreen() {
         ? [{
             key: `category:${selectedCategory}`,
             title: selectedCategory,
+            listKind: selectedCategory === 'TV'
+              ? 'series'
+              : selectedCategory === 'Shorts'
+                ? 'shorts'
+                : 'category',
+            listValue: selectedCategory,
             items: activeCategoryItems,
             emptyMessage: 'Nothing here yet',
             isLoading: catalogQuery.isLoading,
@@ -397,7 +411,13 @@ export default function HomeScreen() {
 
         {recent.length ? (
           <>
-            <SectionHeader title="Continue watching" />
+            <SectionHeader
+              title="Continue watching"
+              onSeeAll={() => router.push({
+                pathname: '/home-list',
+                params: { kind: 'continue-watching', title: 'Continue watching' },
+              })}
+            />
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
               {recent.map((entry) => (
                 <Pressable
@@ -434,7 +454,7 @@ export default function HomeScreen() {
         ) : null}
 
         {publishedItems.length ? (
-          categoryRows.map(({ key, title, items, isLoading, emptyMessage }) => (
+          categoryRows.map(({ key, title, items, isLoading, emptyMessage, listKind, listValue }) => (
             <ContentRail
               key={key}
               title={title}
@@ -442,6 +462,14 @@ export default function HomeScreen() {
               isLoading={isLoading}
               retry={refreshCatalog}
               emptyMessage={emptyMessage}
+              onSeeAll={() => router.push({
+                pathname: '/home-list',
+                params: {
+                  kind: listKind,
+                  ...(listValue ? { value: listValue } : {}),
+                  title,
+                },
+              })}
             />
           ))
         ) : null}

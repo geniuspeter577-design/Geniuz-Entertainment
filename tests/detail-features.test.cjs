@@ -65,6 +65,12 @@ test('keyboard scroll target keeps a focused input above the visible keyboard ed
   assert.equal(getKeyboardScrollTarget({ ...viewport, inputTop: 450, inputHeight: 60 }), 146);
   assert.equal(getKeyboardScrollTarget({
     ...viewport,
+    keyboardTop: 430,
+    inputTop: 360,
+    inputHeight: 60,
+  }), 126);
+  assert.equal(getKeyboardScrollTarget({
+    ...viewport,
     keyboardTop: undefined,
     inputTop: 650,
     inputHeight: 40,

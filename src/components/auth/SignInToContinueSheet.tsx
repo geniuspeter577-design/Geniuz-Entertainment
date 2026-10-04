@@ -126,7 +126,7 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
   };
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sign in" onPress={onClose} style={StyleSheet.absoluteFill} />
         <SafeAreaView pointerEvents="box-none" style={styles.safeArea}>

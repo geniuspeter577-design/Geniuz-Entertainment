@@ -5,6 +5,7 @@ const {
   getCategoryItems,
   getCategoryTabs,
 } = require('../.test-build/src/utils/publishedCatalog.js');
+const { getRankedHomeListItems } = require('../.test-build/src/utils/homeList.js');
 const {
   getUnreadNotificationCount,
 } = require('../.test-build/src/services/NotificationsStore.js');
@@ -90,6 +91,25 @@ test('Animation titles are filtered by the Animation category', () => {
   ], 'Animation');
 
   assert.deepEqual(animationItems.map(({ title }) => title), ['Animated Adventure']);
+});
+
+test('Home lists sort newest first and keep Trending ranks continuous across pages', () => {
+  const ranked = getRankedHomeListItems(categoryItems, true);
+  assert.deepEqual(ranked.map(({ item }) => item.title), [
+    'Horror Night',
+    'Later Drama',
+    'Action Night',
+    'Action Rush',
+    'Early Drama',
+  ]);
+  assert.deepEqual(ranked.map(({ rank }) => rank), [1, 2, 3, 4, 5]);
+
+  const nextPage = getRankedHomeListItems([categoryItems[0], categoryItems[3]], true, 5);
+  assert.deepEqual(nextPage.map(({ rank }) => rank), [6, 7]);
+  assert.deepEqual(
+    getRankedHomeListItems(categoryItems, false).map(({ rank }) => rank),
+    [undefined, undefined, undefined, undefined, undefined],
+  );
 });
 
 test('notification unread counts reflect new reads without mutating the original array', () => {

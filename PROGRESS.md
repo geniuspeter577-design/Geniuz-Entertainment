@@ -28,6 +28,10 @@ Updated: 2026-10-04
 
 ## Latest Validation
 
+- Keyboard handling: Android uses native resize without a second Android `KeyboardAvoidingView` height adjustment; the shared wrapper scrolls the focused field into view, follows multiline growth, and restores the pre-keyboard offset. Reviewed Discover search, admin sign-in/upload/edit modal, sign-in/sign-up sheet, password recovery, profile editing, and email-confirmation date-of-birth. No comments input exists in the current screens.
+- Home `See all`: all Home rails now open the shared paginated `/home-list` screen; catalog pages contain 24 titles and use the existing poster/detail components. Trending is the Home `Latest` row, so it uses newest `created_at` first and assigns ranks from that order, not a popularity score.
+- Validation: `npm test` passed (100/100), `npm run typecheck` passed, and `EXPO_NO_DOTENV=1 npm run lint` passed with two existing duplicate-import warnings in `src/services/ProfileRepository.ts`. Resolved Expo config confirms Android `resize` and non-translucent status bar.
+- Manual check remaining: verify keyboard interactions on an Android device. The Android native window settings require a development or standalone build; Expo Go uses its own native manifest, while the shared wrapper changes run in Expo Go.
 - Added Animation to the Home category tabs and shared admin category picker list; categories remain free-form text in the database. Added `20261015000000_animation_category.sql` to seed the readable category list; migration has not been applied.
 - Animation validation: `npm test` passed (99/99), `npm run typecheck` passed, and `npm run lint` passed with two existing duplicate-import warnings in `src/services/ProfileRepository.ts`.
 - `npm install`: passed; npm reported existing Expo peer-dependency and install-script warnings.

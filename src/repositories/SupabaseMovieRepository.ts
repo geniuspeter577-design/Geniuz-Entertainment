@@ -108,6 +108,15 @@ type PublishMovieOptions = {
   onDraftCreated?: (draftId: string | undefined) => void;
 };
 
+export type PublishedTitlesFilter =
+  | { kind: 'trending' | 'movies' | 'series' | 'shorts' }
+  | { kind: 'category' | 'genre'; value: string };
+
+export type PublishedTitlesPage = {
+  items: ContentItem[];
+  hasMore: boolean;
+};
+
 const tusUrlStorage = {
   async findAllUploads() {
     const keys = (await AsyncStorage.getAllKeys()).filter((key) => key.startsWith(TUS_STORAGE_PREFIX));
@@ -310,6 +319,57 @@ export class SupabaseMovieRepository {
     return [...movies, ...series, ...shorts].sort((first, second) =>
       (second.createdAt ?? '').localeCompare(first.createdAt ?? ''),
     );
+  }
+
+  async getPublishedTitlesPage(
+    filter: PublishedTitlesFilter,
+    offset: number,
+    pageSize: number,
+  ): Promise<PublishedTitlesPage> {
+    const start = Math.max(0, Math.floor(offset));
+    const size = Math.max(1, Math.min(50, Math.floor(pageSize)));
+    let query = this.client
+      .from('movies')
+      .select(`${MOVIE_COLUMNS},created_at`)
+      .eq('published', true)
+      .in('content_type', ['movie', 'series', 'short']);
+
+    if (filter.kind === 'movies') {
+      query = query.eq('content_type', 'movie').or('video_path.not.is.null,storage_key.not.is.null');
+    } else if (filter.kind === 'series') {
+      query = query.eq('content_type', 'series');
+    } else if (filter.kind === 'shorts') {
+      query = query.eq('content_type', 'short').or('video_path.not.is.null,storage_key.not.is.null');
+    } else if (filter.kind === 'category') {
+      query = query.contains('categories', [filter.value]);
+    } else if (filter.kind === 'genre') {
+      query = query.contains('genres', [filter.value]);
+    }
+
+    if (filter.kind === 'trending' || filter.kind === 'category' || filter.kind === 'genre') {
+      query = query.or(
+        'content_type.eq.series,and(content_type.eq.movie,video_path.not.is.null),and(content_type.eq.movie,storage_key.not.is.null),and(content_type.eq.short,video_path.not.is.null),and(content_type.eq.short,storage_key.not.is.null)',
+      );
+    }
+
+    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
+      .range(start, start + size);
+
+    if (error) {
+      logSupabaseError('[SupabaseMovieRepository] Could not load a published title page.', error, {
+        table: 'movies',
+        columns: `${MOVIE_COLUMNS},created_at`,
+      });
+      throw new Error('Could not load published titles.', { cause: error });
+    }
+
+    const records = (data ?? []) as MovieRecord[];
+    return {
+      items: records.slice(0, size).map(toContentItem),
+      hasMore: records.length > size,
+    };
   }
 
   async searchPublished(query: string, genre?: string, year?: string) {

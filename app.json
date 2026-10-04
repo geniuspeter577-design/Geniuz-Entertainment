@@ -38,12 +38,16 @@
     },
     "android": {
       "package": "com.geniuz.entertainment",
+      "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
         "backgroundColor": "#0E1014",
         "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
         "monochromeImage": "./assets/branding/adaptive-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
+    },
+    "androidStatusBar": {
+      "translucent": false
     },
     "web": {
       "bundler": "metro",

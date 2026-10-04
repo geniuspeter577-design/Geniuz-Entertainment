@@ -1,9 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../../src/components/KeyboardAwareScrollView';
 import { useAuth } from '../../src/state/AuthContext';
 import { supabase } from '../../src/services/supabase';
 import { theme } from '../../src/theme';
@@ -86,7 +87,7 @@ export default function EmailConfirmationScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <Text style={styles.title}>Email confirmation</Text>
         {isChecking ? <ContentNotice message="Checking your confirmation link…" /> : null}
         {error ? <ContentNotice message={error} tone="error" /> : null}
@@ -96,7 +97,7 @@ export default function EmailConfirmationScreen() {
         {!isChecking && !error && needsDateOfBirth ? (
           <View style={styles.form}>
             <Text style={styles.helper}>Enter your date of birth to finish setting up your Google account.</Text>
-            <TextInput
+            <KeyboardAwareTextInput
               accessibilityLabel="Date of birth"
               value={dateOfBirth}
               onChangeText={setDateOfBirth}
@@ -127,7 +128,7 @@ export default function EmailConfirmationScreen() {
             <Text style={styles.buttonText}>{needsDateOfBirth ? 'Complete your profile first' : hasSession ? 'Go to profile' : 'Sign in'}</Text>
           </Pressable>
         ) : null}
-      </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
