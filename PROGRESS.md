@@ -28,6 +28,10 @@ Updated: 2026-10-04
 
 ## Latest Validation
 
+- Auth storage: Supabase's base `sb-<project-ref>-auth-token` and PKCE `-code-verifier` keys are valid; the old `:secure-chunk:<n>` suffix generated invalid SecureStore keys for large auth sessions. SecureStore calls now sanitize every key while leaving already-valid keys unchanged; existing inline SecureStore sessions and the legacy AsyncStorage migration path remain readable.
+- PKCE: added SDK 57-compatible `expo-crypto` and a WebCrypto `subtle.digest` shim backed by native SHA-256, retaining secure random generation and never downgrading challenge method to `plain`.
+- Auth validation: `npm test` passed (101/101); sanitizer tests confirm valid keys are unchanged, invalid characters are replaced, no key is empty, and every chunk operation uses allowed characters.
+- Auth validation: `npm run typecheck` passed; `EXPO_NO_DOTENV=1 npm run lint` passed with two existing duplicate-import warnings in untouched `src/services/ProfileRepository.ts`. Android phone verification of sign-up, sign-in, sign-out, and restored session is still needed.
 - Keyboard handling: Android uses native resize without a second Android `KeyboardAvoidingView` height adjustment; the shared wrapper scrolls the focused field into view, follows multiline growth, and restores the pre-keyboard offset. Reviewed Discover search, admin sign-in/upload/edit modal, sign-in/sign-up sheet, password recovery, profile editing, and email-confirmation date-of-birth. No comments input exists in the current screens.
 - Home `See all`: all Home rails now open the shared paginated `/home-list` screen; catalog pages contain 24 titles and use the existing poster/detail components. Trending is the Home `Latest` row, so it uses newest `created_at` first and assigns ranks from that order, not a popularity score.
 - Validation: `npm test` passed (100/100), `npm run typecheck` passed, and `EXPO_NO_DOTENV=1 npm run lint` passed with two existing duplicate-import warnings in `src/services/ProfileRepository.ts`. Resolved Expo config confirms Android `resize` and non-translucent status bar.

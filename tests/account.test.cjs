@@ -6,7 +6,11 @@ const { createAccount, getAuthState, getFriendlyAuthError, logAuthErrorContext, 
 const { isValidProfileCreation } = require('../.test-build/src/utils/accountProfile.js');
 const { getUsernameError, isValidDateOfBirth, isValidUsername, normalizeUsername } = require('../.test-build/src/utils/accountProfile.js');
 const { isAccountProfile } = require('../.test-build/src/models/profile.js');
-const { createChunkedSecureStorage, splitSecureValue } = require('../.test-build/src/utils/secureStorage.js');
+const {
+  createChunkedSecureStorage,
+  sanitizeSecureStoreKey,
+  splitSecureValue,
+} = require('../.test-build/src/utils/secureStorage.js');
 
 function createAuth(overrides = {}) {
   return {
@@ -198,23 +202,37 @@ test('Animation migration adds the category without restricting free-form catego
 
 test('SecureStore adapter chunks large UTF-8 sessions, replaces old chunks, and removes the whole value', async () => {
   const values = new Map();
+  const secureStoreKeys = [];
+  const validateKey = (key) => {
+    assert.match(key, /^[A-Za-z0-9._-]+$/);
+    secureStoreKeys.push(key);
+  };
   const store = {
-    getItemAsync: async (key) => values.get(key) ?? null,
-    setItemAsync: async (key, value) => values.set(key, value),
-    deleteItemAsync: async (key) => values.delete(key),
+    getItemAsync: async (key) => { validateKey(key); return values.get(key) ?? null; },
+    setItemAsync: async (key, value) => { validateKey(key); values.set(key, value); },
+    deleteItemAsync: async (key) => { validateKey(key); values.delete(key); },
   };
   const secureStorage = createChunkedSecureStorage(store, 48);
   const session = `${'session-token-'.repeat(40)}${'🔐'.repeat(40)}`;
   const chunks = splitSecureValue(session, 48);
   assert.ok(chunks.length > 1);
   assert.ok(chunks.every((chunk) => Buffer.byteLength(chunk, 'utf8') <= 48));
-  await secureStorage.setItem('auth-session', session);
-  assert.equal(await secureStorage.getItem('auth-session'), session);
-  await secureStorage.setItem('auth-session', 'short');
-  assert.equal(await secureStorage.getItem('auth-session'), 'short');
+  await secureStorage.setItem('sb-project/auth:token', session);
+  assert.equal(await secureStorage.getItem('sb-project/auth:token'), session);
+  await secureStorage.setItem('sb-project/auth:token', 'short');
+  assert.equal(await secureStorage.getItem('sb-project/auth:token'), 'short');
+  assert.ok([...values.keys()].every((key) => /^[A-Za-z0-9._-]+$/.test(key)));
   assert.equal([...values.keys()].some((key) => key.includes(':secure-chunk:')), false);
-  await secureStorage.removeItem('auth-session');
-  assert.equal(await secureStorage.getItem('auth-session'), null);
+  await secureStorage.removeItem('sb-project/auth:token');
+  assert.equal(await secureStorage.getItem('sb-project/auth:token'), null);
+  assert.ok(secureStoreKeys.every((key) => /^[A-Za-z0-9._-]+$/.test(key)));
+});
+
+test('SecureStore key sanitizing preserves valid keys and replaces invalid characters', () => {
+  assert.equal(sanitizeSecureStoreKey('sb-project.auth_token-1'), 'sb-project.auth_token-1');
+  assert.equal(sanitizeSecureStoreKey('sb:project/auth@ token'), 'sb_project_auth__token');
+  assert.equal(sanitizeSecureStoreKey(''), 'secure-store-key');
+  assert.match(sanitizeSecureStoreKey(':/@'), /^[A-Za-z0-9._-]+$/);
 });
 
 test('profile migration creates user-owned profiles on signup and grants no public insert policy', () => {

@@ -9,6 +9,11 @@ const CHUNK_KEY_SUFFIX = ':secure-chunk:';
 const MAX_CHUNK_BYTES = 1800;
 const MAX_CHUNKS = 1024;
 
+export function sanitizeSecureStoreKey(key: string) {
+  const sanitized = key.replace(/[^A-Za-z0-9._-]/g, '_');
+  return sanitized || 'secure-store-key';
+}
+
 function getUtf8Length(value: string) {
   let bytes = 0;
   for (const character of value) {
@@ -50,9 +55,15 @@ function chunkCount(value: string | null) {
 }
 
 export function createChunkedSecureStorage(store: SecureKeyValueStore, maxBytes = MAX_CHUNK_BYTES) {
+  const secureStore: SecureKeyValueStore = {
+    getItemAsync: (key) => store.getItemAsync(sanitizeSecureStoreKey(key)),
+    setItemAsync: (key, value) => store.setItemAsync(sanitizeSecureStoreKey(key), value),
+    deleteItemAsync: (key) => store.deleteItemAsync(sanitizeSecureStoreKey(key)),
+  };
+
   return {
     async getItem(key: string) {
-      const stored = await store.getItemAsync(key);
+      const stored = await secureStore.getItemAsync(key);
       const count = chunkCount(stored);
       if (count === 0) {
         return stored;
@@ -62,44 +73,44 @@ export function createChunkedSecureStorage(store: SecureKeyValueStore, maxBytes 
       }
       const parts = await Promise.all(
         Array.from({ length: count }, (_, index) =>
-          store.getItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`),
+          secureStore.getItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`),
         ),
       );
       return parts.every((part): part is string => part !== null) ? parts.join('') : null;
     },
     async setItem(key: string, value: string) {
-      const priorCount = chunkCount(await store.getItemAsync(key));
+      const priorCount = chunkCount(await secureStore.getItemAsync(key));
       const chunks = splitSecureValue(value, maxBytes);
       const storeInline = chunks.length === 1 && getUtf8Length(value) <= maxBytes;
       if (storeInline) {
-        await store.setItemAsync(key, value);
+        await secureStore.setItemAsync(key, value);
       } else {
         if (chunks.length > MAX_CHUNKS) {
           throw new RangeError('Secure storage value exceeds the supported size.');
         }
         await Promise.all(
           chunks.map((chunk, index) =>
-            store.setItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`, chunk),
+            secureStore.setItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`, chunk),
           ),
         );
-        await store.setItemAsync(key, `${CHUNK_MARKER}${chunks.length}`);
+        await secureStore.setItemAsync(key, `${CHUNK_MARKER}${chunks.length}`);
       }
       const nextChunkCount = storeInline ? 0 : chunks.length;
       if (priorCount > nextChunkCount) {
         await Promise.all(
           Array.from({ length: priorCount - nextChunkCount }, (_, offset) =>
-            store.deleteItemAsync(`${key}${CHUNK_KEY_SUFFIX}${nextChunkCount + offset}`),
+            secureStore.deleteItemAsync(`${key}${CHUNK_KEY_SUFFIX}${nextChunkCount + offset}`),
           ),
         );
       }
     },
     async removeItem(key: string) {
-      const count = chunkCount(await store.getItemAsync(key));
-      await store.deleteItemAsync(key);
+      const count = chunkCount(await secureStore.getItemAsync(key));
+      await secureStore.deleteItemAsync(key);
       if (count > 0) {
         await Promise.all(
           Array.from({ length: count }, (_, index) =>
-            store.deleteItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`),
+            secureStore.deleteItemAsync(`${key}${CHUNK_KEY_SUFFIX}${index}`),
           ),
         );
       }

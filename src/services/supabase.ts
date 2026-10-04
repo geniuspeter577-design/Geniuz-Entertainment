@@ -1,4 +1,5 @@
 import 'react-native-url-polyfill/auto';
+import './expoWebCrypto';
 
 import { createClient } from '@supabase/supabase-js';
 
