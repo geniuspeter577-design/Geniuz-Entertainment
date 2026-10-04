@@ -83,6 +83,48 @@ type AdminSeasonChoice = {
   published: boolean;
 };
 
+type UnusedMediaFile = {
+  key: string;
+  sizeBytes: number;
+  lastModified: string;
+};
+
+type UnusedMediaScan = {
+  scanId: string;
+  files: UnusedMediaFile[];
+  totalSizeBytes: number;
+  minimumAgeHours: number;
+};
+
+function parseUnusedMediaScan(value: unknown): UnusedMediaScan | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+
+  const candidate = value as Record<string, unknown>;
+  if (typeof candidate.scanId !== 'string' || !Array.isArray(candidate.files) || typeof candidate.totalSizeBytes !== 'number' || typeof candidate.minimumAgeHours !== 'number') {
+    return undefined;
+  }
+
+  const files = candidate.files.flatMap((item) => {
+    if (typeof item !== 'object' || item === null) {
+      return [];
+    }
+    const record = item as Record<string, unknown>;
+    if (typeof record.key !== 'string' || typeof record.sizeBytes !== 'number' || typeof record.lastModified !== 'string') {
+      return [];
+    }
+    return [{ key: record.key, sizeBytes: record.sizeBytes, lastModified: record.lastModified }];
+  });
+
+  return {
+    scanId: candidate.scanId,
+    files,
+    totalSizeBytes: candidate.totalSizeBytes,
+    minimumAgeHours: candidate.minimumAgeHours,
+  };
+}
+
 const titleCleanupStore = new TitleCleanupStore(AsyncStorage);
 
 async function readVideoPart(
@@ -264,6 +306,11 @@ export default function AdminScreen() {
   const [seriesError, setSeriesError] = useState<string>();
   const [pendingCleanups, setPendingCleanups] = useState<PendingTitleCleanup[]>([]);
   const [cleanupError, setCleanupError] = useState<string>();
+  const [unusedMediaScan, setUnusedMediaScan] = useState<UnusedMediaScan | null>(null);
+  const [unusedMediaError, setUnusedMediaError] = useState<string>();
+  const [unusedMediaDeleteSummary, setUnusedMediaDeleteSummary] = useState<{ deleted: number; failures: number; skipped: number } | null>(null);
+  const [isScanningUnusedMedia, setIsScanningUnusedMedia] = useState(false);
+  const [isDeletingUnusedMedia, setIsDeletingUnusedMedia] = useState(false);
   const [retryingCleanupId, setRetryingCleanupId] = useState<string>();
   const [pendingMovieSave, setPendingMovieSave] = useState<{
     movie: NewMovie;
@@ -368,6 +415,116 @@ export default function AdminScreen() {
     }
     setMoviesLoading(false);
   }, [isOnline]);
+
+  const runUnusedMediaScan = async () => {
+    if (!supabase) {
+      setUnusedMediaError('Supabase is not configured.');
+      return;
+    }
+    setIsScanningUnusedMedia(true);
+    setUnusedMediaError(undefined);
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session?.access_token) {
+        throw new Error('Admin sign-in is required.');
+      }
+      if (!isAdminMetadata(data.session.user.app_metadata)) {
+        throw new Error('Admin access is required.');
+      }
+      const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim().replace(/\/+$/, '');
+      if (!apiBaseUrl) {
+        throw new Error('The backend URL is not configured.');
+      }
+
+      const response = await fetch(`${apiBaseUrl}/admin/unused-files`, {
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+
+      if (!response.ok) {
+        throw new Error(response.status === 401 || response.status === 403
+          ? 'Admin session expired. Sign in again and retry.'
+          : 'The unused file scan could not be loaded.');
+      }
+
+      const nextScan = parseUnusedMediaScan(await response.json());
+      if (!nextScan) {
+        throw new Error('The unused file response was invalid.');
+      }
+
+      setUnusedMediaScan(nextScan);
+      setUnusedMediaDeleteSummary(null);
+    } catch (error) {
+      setUnusedMediaScan(null);
+      setUnusedMediaError(error instanceof Error ? error.message : 'The unused file scan could not be loaded.');
+    } finally {
+      setIsScanningUnusedMedia(false);
+    }
+  };
+
+  const deleteUnusedMedia = async () => {
+    const client = supabase;
+    if (!client || !unusedMediaScan) {
+      return;
+    }
+
+    const fileCount = unusedMediaScan.files.length;
+    Alert.alert(
+      'Delete unused files?',
+      `This will delete ${fileCount} Backblaze object${fileCount === 1 ? '' : 's'} listed by the scan. Only files older than ${unusedMediaScan.minimumAgeHours} hours and not connected to any title will be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setIsDeletingUnusedMedia(true);
+            setUnusedMediaError(undefined);
+            try {
+              const { data, error: sessionError } = await client.auth.getSession();
+              if (sessionError || !data.session?.access_token) {
+                throw new Error('Admin sign-in is required.');
+              }
+              if (!isAdminMetadata(data.session.user.app_metadata)) {
+                throw new Error('Admin access is required.');
+              }
+              const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim().replace(/\/+$/, '');
+              if (!apiBaseUrl) {
+                throw new Error('The backend URL is not configured.');
+              }
+
+              const response = await fetch(`${apiBaseUrl}/admin/unused-files/delete`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  Authorization: `Bearer ${data.session.access_token}`,
+                },
+                body: JSON.stringify({ scanId: unusedMediaScan.scanId }),
+              });
+
+              if (!response.ok) {
+                throw new Error(response.status === 401 || response.status === 403
+                  ? 'Admin session expired. Sign in again and retry.'
+                  : response.status === 410
+                    ? 'The file list expired. Run a fresh scan before deleting.'
+                    : 'Deletion failed. Retry with a fresh scan.');
+              }
+
+              const result = await response.json();
+              const deleted = Array.isArray(result?.deleted) ? result.deleted.length : 0;
+              const failures = Array.isArray(result?.failures) ? result.failures.length : 0;
+              const skipped = typeof result?.skipped === 'number' ? result.skipped : 0;
+              setUnusedMediaDeleteSummary({ deleted, failures, skipped });
+              setUnusedMediaScan(null);
+            } catch (error) {
+              setUnusedMediaError(error instanceof Error ? error.message : 'Unused files could not be deleted.');
+            } finally {
+              setIsDeletingUnusedMedia(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   useEffect(() => {
     if (!supabase || !isOnline) {
@@ -2275,6 +2432,52 @@ export default function AdminScreen() {
                 </Pressable>
               </View>
             ))}
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Backblaze cleanup</Text>
+              <Text style={styles.helper}>
+                Finds media older than {unusedMediaScan?.minimumAgeHours ?? '24'} hours that is no longer referenced by any title.
+              </Text>
+              {unusedMediaError ? <ContentNotice message={unusedMediaError} tone="error" /> : null}
+              {unusedMediaDeleteSummary ? (
+                <Text style={styles.successText}>
+                  Deleted {unusedMediaDeleteSummary.deleted} file{unusedMediaDeleteSummary.deleted === 1 ? '' : 's'}.
+                  {unusedMediaDeleteSummary.failures ? ` ${unusedMediaDeleteSummary.failures} failed.` : ''}
+                  {unusedMediaDeleteSummary.skipped ? ` ${unusedMediaDeleteSummary.skipped} were left alone.` : ''}
+                </Text>
+              ) : null}
+              {unusedMediaScan ? (
+                <View style={styles.cleanupRow}>
+                  <View style={styles.grow}>
+                    <Text style={styles.movieTitle}>{unusedMediaScan.files.length} unused files</Text>
+                    <Text style={styles.helper}>{formatFileSize(unusedMediaScan.totalSizeBytes)} total</Text>
+                    {unusedMediaScan.files.slice(0, 10).map((file) => (
+                      <Text key={file.key} style={styles.helper}>{file.key}</Text>
+                    ))}
+                    {unusedMediaScan.files.length > 10 ? (
+                      <Text style={styles.helper}>…and {unusedMediaScan.files.length - 10} more</Text>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+              <View style={styles.bulkActionsRow}>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={isScanningUnusedMedia}
+                  onPress={() => void runUnusedMediaScan()}
+                  style={[styles.secondaryButton, isScanningUnusedMedia && styles.disabledButton]}
+                >
+                  <Text style={styles.secondaryButtonText}>{isScanningUnusedMedia ? 'Finding…' : 'Find unused files'}</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={!unusedMediaScan || isDeletingUnusedMedia}
+                  onPress={() => void deleteUnusedMedia()}
+                  style={[styles.primaryButton, (!unusedMediaScan || isDeletingUnusedMedia) && styles.disabledButton]}
+                >
+                  <Text style={styles.primaryButtonText}>{isDeletingUnusedMedia ? 'Deleting…' : 'Delete unused files'}</Text>
+                </Pressable>
+              </View>
+            </View>
             {!moviesLoading && !moviesError && movies.length === 0 ? (
               <Text style={styles.helper}>No uploaded movies yet.</Text>
             ) : null}

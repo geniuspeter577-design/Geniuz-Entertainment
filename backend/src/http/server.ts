@@ -1,8 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { randomUUID } from 'node:crypto';
 
 import type { Config } from '../config/config';
 import type { ContentPage } from '../models/content';
 import { B2StorageService } from '../storage/B2StorageService';
+import {
+  deleteListedUnusedMediaFiles,
+  scanUnusedMediaFiles,
+  type MediaObject,
+} from '../storage/unusedMediaCleanup';
 import {
   validateCompletedParts,
   validateUploadInput,
@@ -20,6 +26,18 @@ const CORS_HEADERS = ['authorization', 'content-type', 'apikey', 'x-client-info'
 const publicRateLimit = new Map<string, { count: number; windowStart: number }>();
 const PUBLIC_RATE_LIMIT_PER_MINUTE = 120;
 const PLAY_URL_RATE_LIMIT_PER_MINUTE = 30;
+const UNUSED_MEDIA_SCAN_TTL_MS = 30 * 60 * 1000;
+
+type StorageFactory = (config: Config) => B2StorageService;
+type UnusedMediaScan = {
+  userId: string;
+  files: MediaObject[];
+  expiresAt: number;
+};
+type ApiServerOptions = {
+  storageFactory?: StorageFactory;
+  now?: () => number;
+};
 
 let b2Storage: B2StorageService | undefined;
 
@@ -201,6 +219,9 @@ async function handleRequest(
   response: ServerResponse,
   config: Config,
   content: ContentService,
+  getStorage: StorageFactory,
+  unusedMediaScans: Map<string, UnusedMediaScan>,
+  now: () => number,
 ) {
   const originAllowed = withCors(request, response, config);
 
@@ -257,7 +278,7 @@ async function handleRequest(
 
     let storage: B2StorageService | undefined;
     try {
-      storage = getB2Storage(config);
+      storage = getStorage(config);
       await storage.checkBucket();
       checks.bucket = 'ok';
     } catch {
@@ -297,9 +318,66 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/admin/unused-files' || pathname === '/admin/unused-files/delete') {
+    const { client, userId } = await authenticateAdmin(config, request.headers.authorization);
+    for (const [scanId, scan] of unusedMediaScans) {
+      if (scan.expiresAt <= now()) {
+        unusedMediaScans.delete(scanId);
+      }
+    }
+
+    if (pathname === '/admin/unused-files') {
+      if (request.method !== 'GET') {
+        throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+      }
+      const files = await scanUnusedMediaFiles(
+        getStorage(config),
+        client,
+        config.unusedMediaMinAgeHours,
+        now(),
+      );
+      const scanId = randomUUID();
+      unusedMediaScans.set(scanId, {
+        userId,
+        files,
+        expiresAt: now() + UNUSED_MEDIA_SCAN_TTL_MS,
+      });
+      writeJson(response, 200, {
+        scanId,
+        files,
+        totalSizeBytes: files.reduce((total, file) => total + file.sizeBytes, 0),
+        minimumAgeHours: config.unusedMediaMinAgeHours,
+      });
+      return;
+    }
+
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const scanId = requiredString(await readJson(request), 'scanId', 64);
+    const scan = unusedMediaScans.get(scanId);
+    if (!scan || scan.expiresAt <= now()) {
+      unusedMediaScans.delete(scanId);
+      throw new HttpError(410, 'UNUSED_FILE_SCAN_EXPIRED', 'Find unused files again before deleting them.');
+    }
+    if (scan.userId !== userId) {
+      throw new HttpError(403, 'ADMIN_REQUIRED', 'This scan belongs to a different admin session.');
+    }
+    unusedMediaScans.delete(scanId);
+    const result = await deleteListedUnusedMediaFiles(
+      getStorage(config),
+      client,
+      scan.files,
+      config.unusedMediaMinAgeHours,
+      now(),
+    );
+    writeJson(response, 200, result);
+    return;
+  }
+
   if (pathname.startsWith('/uploads/')) {
     await authenticateAdmin(config, request.headers.authorization);
-    const storage = getB2Storage(config);
+    const storage = getStorage(config);
 
     if (pathname === '/uploads/init') {
       if (request.method !== 'POST') {
@@ -403,7 +481,7 @@ async function handleRequest(
     if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
       throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This movie is missing its video file.');
     }
-    const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
+    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
     return;
   }
@@ -446,7 +524,7 @@ async function handleRequest(
     if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
       throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This episode is missing its video file.');
     }
-    const playbackUrl = await getB2Storage(config).createPlayUrl(data.storage_key);
+    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key);
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
     return;
   }
@@ -485,7 +563,7 @@ async function handleRequest(
     if (typeof data.trailer_storage_key !== 'string' || !data.trailer_storage_key.trim()) {
       throw new HttpError(404, 'TRAILER_NOT_FOUND', 'This title does not have a trailer.');
     }
-    const trailerUrl = await getB2Storage(config).createTrailerPlayUrl(data.trailer_storage_key);
+    const trailerUrl = await getStorage(config).createTrailerPlayUrl(data.trailer_storage_key);
     writeJson(response, 200, { url: trailerUrl, expiresIn: 900 });
     return;
   }
@@ -579,9 +657,12 @@ async function handleRequest(
   writeJson(response, 200, pageResponse(result));
 }
 
-export function createApiServer(config: Config, content: ContentService): Server {
+export function createApiServer(config: Config, content: ContentService, options: ApiServerOptions = {}): Server {
+  const getStorage = options.storageFactory ?? getB2Storage;
+  const unusedMediaScans = new Map<string, UnusedMediaScan>();
+  const now = options.now ?? Date.now;
   return createServer((request, response) => {
-    void handleRequest(request, response, config, content).catch((error: unknown) => {
+    void handleRequest(request, response, config, content, getStorage, unusedMediaScans, now).catch((error: unknown) => {
       const httpError =
         error instanceof HttpError
           ? error

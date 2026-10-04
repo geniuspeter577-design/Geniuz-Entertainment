@@ -16,6 +16,7 @@ export type Config = {
   anilistApiUrl: string;
   corsOrigins: string[];
   cacheTtlSeconds: number;
+  unusedMediaMinAgeHours: number;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
   s3Endpoint?: string;
@@ -52,6 +53,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     throw new Error('PORT must be between 1 and 65535.');
   }
   const cacheTtlSeconds = positiveInteger(environment.CATALOG_CACHE_TTL_SECONDS, 300);
+  const unusedMediaMinAgeHours = positiveInteger(environment.UNUSED_MEDIA_MIN_AGE_HOURS, 24);
   const tmdbBaseUrl = environment.TMDB_BASE_URL?.trim() || 'https://api.themoviedb.org/3';
 
   let parsedTmdbBaseUrl: URL;
@@ -83,6 +85,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
       .map((origin) => origin.trim())
       .filter(Boolean),
     cacheTtlSeconds,
+    unusedMediaMinAgeHours,
     supabaseUrl: environment.SUPABASE_URL?.trim() || undefined,
     supabasePublishableKey:
       environment.SUPABASE_PUBLISHABLE_KEY?.trim() || undefined,

@@ -13,6 +13,72 @@ const {
   validateUploadInput,
 } = require('../.test-build/backend/backend/src/storage/uploadValidation.js');
 const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+const {
+  collectReferencedMediaKeys,
+  deleteListedUnusedMediaFiles,
+  findUnusedMediaFiles,
+  scanUnusedMediaFiles,
+} = require('../.test-build/backend/backend/src/storage/unusedMediaCleanup.js');
+
+function makeReferenceClient(recordsByTable = {}) {
+  return {
+    from(table) {
+      let start = 0;
+      let end = -1;
+      const query = {
+        select() { return query; },
+        order() { return query; },
+        range(first, last) {
+          start = first;
+          end = last;
+          return Promise.resolve({
+            data: (recordsByTable[table] ?? []).slice(start, end + 1),
+            error: null,
+          });
+        },
+      };
+      return query;
+    },
+  };
+}
+
+test('unused-media scan keeps movie, draft, image, trailer, episode, and subtitle references', () => {
+  const references = collectReferencedMediaKeys([
+    { published: true, storage_key: 'movies/published-video.mp4' },
+    { published: false, video_path: 'movies/draft-video.mp4', trailer_storage_key: 'trailers/draft-trailer.mp4' },
+    { poster_url: 'https://cdn.example.test/file/bucket/movies/draft-poster.webp' },
+    { cover_url: 'movies/draft-cover.webp' },
+    { storage_key: 'episodes/episode-video.mp4', subtitle_tracks: [{ key: 'subtitles/episode-en.vtt' }] },
+  ]);
+
+  assert.deepEqual(
+    [...references].sort(),
+    [
+      'episodes/episode-video.mp4',
+      'movies/draft-cover.webp',
+      'movies/draft-poster.webp',
+      'movies/draft-video.mp4',
+      'movies/published-video.mp4',
+      'subtitles/episode-en.vtt',
+      'trailers/draft-trailer.mp4',
+    ],
+  );
+});
+
+test('unused-media scan excludes referenced, recent, and out-of-scope files', () => {
+  const now = Date.parse('2026-10-04T12:00:00.000Z');
+  const objects = [
+    { key: 'movies/used.mp4', sizeBytes: 200, lastModified: '2026-10-01T00:00:00.000Z' },
+    { key: 'movies/orphan.mp4', sizeBytes: 100, lastModified: '2026-10-01T00:00:00.000Z' },
+    { key: 'episodes/recent.mp4', sizeBytes: 300, lastModified: '2026-10-04T11:30:00.000Z' },
+    { key: 'avatars/user.jpg', sizeBytes: 400, lastModified: '2026-09-01T00:00:00.000Z' },
+  ];
+
+  assert.deepEqual(
+    findUnusedMediaFiles(objects, new Set(['movies/used.mp4']), now, 24).map(({ key }) => key),
+    ['movies/orphan.mp4'],
+  );
+});
 
 test('B2 playback verifies the object and signs a two-hour GET URL with Range-compatible headers', async () => {
   const storage = new B2StorageService({

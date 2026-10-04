@@ -5,6 +5,7 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   ListPartsCommand,
   DeleteObjectCommand,
   S3Client,
@@ -17,10 +18,13 @@ import { VIDEO_UPLOAD_PART_SIZE_BYTES } from '../constants/video';
 import type { Config } from '../config/config';
 import { HttpError } from '../http/errors';
 import { generateObjectKey, validatePartNumbers, type UploadInput } from './uploadValidation';
+import { isManagedMediaKey, type MediaObject } from './unusedMediaCleanup';
 
 const MAX_MULTIPART_PARTS = 64;
 const PLAY_URL_EXPIRY_SECONDS = 2 * 60 * 60;
 const TRAILER_URL_EXPIRY_SECONDS = 15 * 60;
+const MEDIA_PREFIXES = ['movies/', 'episodes/', 'trailers/', 'subtitles/'] as const;
+const MAX_LIST_KEYS = 1000;
 
 export class B2StorageService {
   private readonly client: S3Client;
@@ -142,6 +146,42 @@ export class B2StorageService {
     await this.client.send(new HeadBucketCommand({ Bucket: this.config.s3Bucket }));
   }
 
+  async listMediaObjects(): Promise<MediaObject[]> {
+    const objects: MediaObject[] = [];
+    for (const prefix of MEDIA_PREFIXES) {
+      let continuationToken: string | undefined;
+      do {
+        const response = await this.client.send(new ListObjectsV2Command({
+          Bucket: this.config.s3Bucket,
+          Prefix: prefix,
+          MaxKeys: MAX_LIST_KEYS,
+          ...(continuationToken ? { ContinuationToken: continuationToken } : {}),
+        }));
+        for (const object of response.Contents ?? []) {
+          if (
+            typeof object.Key === 'string' &&
+            isManagedMediaKey(object.Key) &&
+            typeof object.Size === 'number' &&
+            object.LastModified instanceof Date &&
+            Number.isFinite(object.LastModified.getTime())
+          ) {
+            objects.push({
+              key: object.Key,
+              sizeBytes: object.Size,
+              lastModified: object.LastModified.toISOString(),
+            });
+          }
+        }
+        const nextToken = response.NextContinuationToken;
+        if (response.IsTruncated && (!nextToken || nextToken === continuationToken)) {
+          throw new HttpError(502, 'B2_LIST_INCOMPLETE', 'Backblaze did not return a valid next-page token.');
+        }
+        continuationToken = response.IsTruncated ? nextToken : undefined;
+      } while (continuationToken);
+    }
+    return objects;
+  }
+
   async createPlaybackProbeUrl(key: string) {
     if (!key.trim()) {
       throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This movie is missing its video file.');
@@ -169,7 +209,7 @@ export class B2StorageService {
   }
 
   async deleteObject(key: string) {
-    if (!/^(?:movies|episodes|trailers)\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
+    if (!isManagedMediaKey(key)) {
       throw new HttpError(400, 'INVALID_OBJECT_KEY', 'The stored object key is invalid.');
     }
     try {

@@ -79,5 +79,5 @@ export async function authenticateAdmin(config: Config, authorization: string | 
   }
 
   requireAdminRole(data.user.app_metadata);
-  return { accessToken, client };
+  return { accessToken, client, userId: data.user.id };
 }

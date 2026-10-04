@@ -44,3 +44,5 @@ Updated: 2026-10-04
 - `npm test`: passed, 94/94.
 - `npm run backend:build`: passed.
 - Keyboard geometry has unit coverage; device-level keyboard and animation behavior still needs a real-device check.
+- Backblaze cleanup task D: the backend now exposes admin-only `/admin/unused-files` and `/admin/unused-files/delete` routes with a TTL-bound `scanId`, safe filtering for recent files, referenced title assets, drafts, and non-media prefixes, and per-file continue-on-error deletion. The admin console now includes “Find unused files” and “Delete unused files” buttons that require admin auth, scan the current Backblaze bucket, and ask for confirmation before deleting only the returned orphan set.
+- Final validation: `npm run typecheck && npm run lint && npm test -- --runInBand` passed; lint emitted only the existing duplicate-import warnings in `src/services/ProfileRepository.ts`, and the full Node test suite passed at 103/103 with 0 failures.
