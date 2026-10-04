@@ -3,22 +3,29 @@ import type { ContentItem } from '../models/content';
 export type PublishedCatalog<T extends ContentItem = ContentItem> = {
   movies: T[];
   series: T[];
+  shorts: T[];
   hasFailures: boolean;
 };
 
 export async function loadPublishedCatalog<T extends ContentItem>(
   loadMovies: () => Promise<T[]>,
   loadSeries: () => Promise<T[]>,
+  loadShorts: () => Promise<T[]> = async () => [],
 ): Promise<PublishedCatalog<T>> {
-  const [moviesResult, seriesResult] = await Promise.allSettled([
+  const [moviesResult, seriesResult, shortsResult] = await Promise.allSettled([
     loadMovies(),
     loadSeries(),
+    loadShorts(),
   ]);
 
   return {
     movies: moviesResult.status === 'fulfilled' ? moviesResult.value : [],
     series: seriesResult.status === 'fulfilled' ? seriesResult.value : [],
-    hasFailures: moviesResult.status === 'rejected' || seriesResult.status === 'rejected',
+    shorts: shortsResult.status === 'fulfilled' ? shortsResult.value : [],
+    hasFailures:
+      moviesResult.status === 'rejected' ||
+      seriesResult.status === 'rejected' ||
+      shortsResult.status === 'rejected',
   };
 }
 

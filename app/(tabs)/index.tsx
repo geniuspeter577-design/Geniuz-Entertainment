@@ -5,12 +5,12 @@ import {
   Image,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { ContentRail } from '../../src/components/ContentRail';
@@ -27,7 +27,6 @@ import { loadNotifications, getUnreadNotificationCount } from '../../src/service
 import { formatRuntime } from '../../src/utils/contentPresentation';
 import {
   getCategoryItems,
-  getCategoryTabs,
   isDemoCatalogEnabled,
   loadPublishedCatalog,
   sortPublishedNewest,
@@ -53,18 +52,25 @@ export default function HomeScreen() {
         }
         return supabaseMovieRepository.getPublishedSeries();
       },
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedShorts();
+      },
     );
 
     if (
       isDemoCatalogEnabled &&
       !catalog.hasFailures &&
-      catalog.movies.length + catalog.series.length === 0
+      catalog.movies.length + catalog.series.length + catalog.shorts.length === 0
     ) {
       const demos = await demoRepository.getPopular();
       return {
         data: {
           movies: demos.filter((item) => item.type === 'movie'),
-          series: demos.filter((item) => item.type !== 'movie'),
+          series: demos.filter((item) => item.type === 'series'),
+          shorts: [],
           hasFailures: false,
           showingDemo: true,
         },
@@ -77,27 +83,34 @@ export default function HomeScreen() {
   const { continueWatching, isInWatchlist, toggleWatchlist } = useLibrary();
   const movies = catalogQuery.data?.movies ?? [];
   const series = catalogQuery.data?.series ?? [];
-  const publishedItems = sortPublishedNewest([...movies, ...series]);
+  const shorts = catalogQuery.data?.shorts ?? [];
+  const publishedItems = sortPublishedNewest([...movies, ...series, ...shorts]);
   const heroItems = publishedItems.slice(0, 5);
   const categoryTabs = useMemo(
     () => [
-      { key: 'trending', label: 'Trending' },
-      { key: 'all', label: 'All' },
-      ...getCategoryTabs(publishedItems).map(({ category }) => ({ key: category, label: category })),
+      { key: 'Trending', label: 'Trending' },
+      { key: 'Anime', label: 'Anime' },
+      { key: 'Kids', label: 'Kids' },
+      { key: 'Shorts', label: 'Shorts' },
+      { key: 'TV', label: 'TV' },
+      { key: 'Nollywood', label: 'Nollywood' },
+      { key: 'Football', label: 'Football' },
     ],
-    [publishedItems],
+    [],
   );
-  const [selectedCategory, setSelectedCategory] = useState('trending');
+  const [selectedCategory, setSelectedCategory] = useState('Trending');
   const tabsScrollRef = useRef<ScrollView | null>(null);
-  const activeCategoryItems = selectedCategory === 'trending'
+  const activeCategoryItems = selectedCategory === 'Trending'
     ? publishedItems
-    : selectedCategory === 'all'
-      ? publishedItems
-      : getCategoryItems(publishedItems, selectedCategory);
-  const activeHeroItems = selectedCategory === 'trending'
+    : selectedCategory === 'TV'
+      ? series
+      : selectedCategory === 'Shorts'
+        ? shorts
+        : getCategoryItems(publishedItems, selectedCategory);
+  const activeHeroItems = selectedCategory === 'Trending'
     ? heroItems
-    : selectedCategory === 'all'
-      ? heroItems
+    : selectedCategory === 'Shorts'
+      ? []
       : sortPublishedNewest(activeCategoryItems).slice(0, 5);
 
   useEffect(() => {
@@ -238,8 +251,13 @@ export default function HomeScreen() {
                   key={key}
                   accessibilityRole="tab"
                   accessibilityState={{ selected: isSelected }}
-                  accessibilityLabel={key === 'trending' ? 'Trending category' : key === 'all' ? 'All category' : `${label} category`}
-                  onPress={() => setSelectedCategory(key)}
+                  accessibilityLabel={`${label} category`}
+                  onPress={() => {
+                    setSelectedCategory(key);
+                    if (key === 'Shorts') {
+                      router.push('/shorts');
+                    }
+                  }}
                   style={[styles.categoryTab, isSelected && styles.selectedCategoryTab]}
                 >
                   <Text style={[styles.categoryTabText, isSelected && styles.selectedCategoryTabText]}>{label}</Text>
@@ -259,7 +277,7 @@ export default function HomeScreen() {
         ) : null}
         {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
         {noTitles ? <Text style={styles.emptyText}>No titles yet</Text> : null}
-        {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'trending' && selectedCategory !== 'all' && activeCategoryItems.length === 0 ? (
+        {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'Trending' && activeCategoryItems.length === 0 ? (
           <Text style={styles.emptyText}>No titles in this category yet</Text>
         ) : null}
 
@@ -303,7 +321,7 @@ export default function HomeScreen() {
 
         {publishedItems.length ? (
           (() => {
-            if (selectedCategory === 'trending') {
+            if (selectedCategory === 'Trending') {
               return (
                 <>
                   <ContentRail
@@ -342,18 +360,6 @@ export default function HomeScreen() {
                     />
                   ))}
                 </>
-              );
-            }
-
-            if (selectedCategory === 'all') {
-              return (
-                <ContentRail
-                  title="All titles"
-                  items={publishedItems}
-                  isLoading={catalogQuery.isLoading}
-                  retry={retryCatalog}
-                  emptyMessage="No titles yet"
-                />
               );
             }
 

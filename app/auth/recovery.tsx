@@ -1,10 +1,13 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { supabase } from '../../src/services/supabase';
 import { theme } from '../../src/theme';
+import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../../src/components/KeyboardAwareScrollView';
+import { getFriendlyAuthError } from '../../src/utils/accountAuth';
 
 export default function PasswordRecoveryScreen() {
   const { code: routeCode } = useLocalSearchParams<{ code?: string | string[] }>();
@@ -56,7 +59,7 @@ export default function PasswordRecoveryScreen() {
     setError(undefined);
     setMessage(undefined);
     if (password.length < 8) {
-      setError('Choose a password with at least 8 characters.');
+      setError('Use a password with at least 8 characters.');
       return;
     }
     if (password !== confirmPassword) {
@@ -76,8 +79,11 @@ export default function PasswordRecoveryScreen() {
       setMessage('Password updated. You can now use your new password.');
       setPassword('');
       setConfirmPassword('');
-    } catch {
-      setError('Your password could not be updated. The reset link may have expired; request a new one and retry.');
+    } catch (updateError) {
+      const friendlyError = getFriendlyAuthError(updateError);
+      setError(friendlyError === 'Your account request could not be completed. Check your details and try again.'
+        ? 'Your password could not be updated. The reset link may have expired; request a new one and retry.'
+        : friendlyError);
     } finally {
       setIsSaving(false);
     }
@@ -85,7 +91,7 @@ export default function PasswordRecoveryScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.content}>
+      <KeyboardAwareScrollView contentContainerStyle={styles.content}>
         <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
           <Text style={styles.backText}>Back</Text>
         </Pressable>
@@ -94,7 +100,7 @@ export default function PasswordRecoveryScreen() {
         {message ? <ContentNotice message={message} tone="warning" /> : null}
         {isReady ? (
           <View style={styles.form}>
-            <TextInput
+            <KeyboardAwareTextInput
               accessibilityLabel="New password"
               value={password}
               onChangeText={setPassword}
@@ -105,7 +111,8 @@ export default function PasswordRecoveryScreen() {
               placeholderTextColor={theme.secondaryText}
               style={styles.input}
             />
-            <TextInput
+            <Text style={styles.passwordHint}>Use at least 8 characters.</Text>
+            <KeyboardAwareTextInput
               accessibilityLabel="Confirm new password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
@@ -121,7 +128,7 @@ export default function PasswordRecoveryScreen() {
             </Pressable>
           </View>
         ) : null}
-      </View>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -133,6 +140,7 @@ const styles = StyleSheet.create({
   backText: { color: theme.accent, fontSize: 15, fontWeight: '700' },
   title: { color: theme.text, fontSize: 25, fontWeight: '800' },
   form: { gap: 12 },
+  passwordHint: { color: theme.secondaryText, fontSize: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 14 },
   button: { minHeight: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: theme.accent },
   disabled: { opacity: 0.55 },

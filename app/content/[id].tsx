@@ -7,13 +7,13 @@ import {
   Platform,
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   Share,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Paths } from 'expo-file-system';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
@@ -67,7 +67,7 @@ export default function ContentDetailsScreen() {
           source: 'local' as const,
         });
       }
-      return /^(?:geniuz:movie:|geniuz:series:)/.test(id) && supabaseMovieRepository
+      return /^(?:geniuz:movie:|geniuz:series:|geniuz:short:)/.test(id) && supabaseMovieRepository
         ? supabaseMovieRepository.getById(id).then((data) => ({ data, source: 'supabase' as const }))
         : contentService.getById(id, fallbackItem);
     },

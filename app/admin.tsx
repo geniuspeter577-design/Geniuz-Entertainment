@@ -11,16 +11,15 @@ import {
   Pressable,
   Platform,
   RefreshControl,
-  SafeAreaView,
-  ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   type TextInputProps,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../src/components/ContentNotice';
+import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../src/components/KeyboardAwareScrollView';
 import { CategoryPicker } from '../src/components/CategoryPicker';
 import { useNetwork } from '../src/state/NetworkContext';
 import { TitleImage } from '../src/components/TitleImage';
@@ -50,6 +49,7 @@ import {
 } from '../src/utils/titleDeletion';
 import { TitleCleanupStore } from '../src/services/TitleCleanupStore';
 import { getAdminRouteState, isAdminMetadata } from '../src/utils/adminAccess';
+import { getFriendlyAuthError } from '../src/utils/accountAuth';
 
 type AdminMovie = ContentItem & {
   published: boolean;
@@ -145,7 +145,7 @@ function AdminTextField({
   return (
     <View style={styles.field}>
       <Text style={styles.fieldLabel}>{label}</Text>
-      <TextInput
+      <KeyboardAwareTextInput
         accessibilityLabel={label}
         value={value}
         onChangeText={onChangeText}
@@ -232,6 +232,7 @@ export default function AdminScreen() {
   const [authError, setAuthError] = useState<string>();
   const [isSigningIn, setIsSigningIn] = useState(false);
   const [title, setTitle] = useState('');
+  const [contentKind, setContentKind] = useState<'movie' | 'short'>('movie');
   const [description, setDescription] = useState('');
   const [year, setYear] = useState('');
   const [genres, setGenres] = useState('');
@@ -429,13 +430,13 @@ export default function AdminScreen() {
         password,
       });
       if (error) {
-        setAuthError('Sign-in failed. Check your email and password, then try again.');
+        setAuthError(getFriendlyAuthError(error));
       } else if (data.user.app_metadata?.role === 'admin') {
         await loadMovies();
       }
     } catch (error) {
       console.error('[AdminScreen] Admin sign-in failed.', error);
-      setAuthError('Could not sign in. Check your connection and try again.');
+      setAuthError(getFriendlyAuthError(error));
     } finally {
       setIsSigningIn(false);
     }
@@ -674,6 +675,7 @@ export default function AdminScreen() {
         onProgress: setProgress,
       });
       const movieDraft: NewMovie = {
+          contentKind,
           title,
           description,
           ...(parsedYear === undefined ? {} : { releaseYear: parsedYear }),
@@ -710,10 +712,11 @@ export default function AdminScreen() {
       );
       setPendingMovieSave(undefined);
 
+      const uploadedKind = contentKind === 'short' ? 'Short video' : 'Movie';
       setFormMessage(
         publishImmediately
-          ? 'Movie uploaded and published. It is now available in the app.'
-          : 'Movie uploaded as a draft. Publish it from the catalog below when it is ready.',
+          ? `${uploadedKind} uploaded and published. It is now available in the app.`
+          : `${uploadedKind} uploaded as a draft. Publish it from the catalog below when it is ready.`,
       );
       setSelectedFile(null);
       setSelectedTrailer(null);
@@ -722,7 +725,7 @@ export default function AdminScreen() {
       setDescription('');
       setYear('');
       setGenres('');
-      setCategories([]);
+      setCategories(contentKind === 'short' ? ['Shorts'] : []);
       setRuntime('');
       setContentRating('');
       setPosterUrl('');
@@ -764,6 +767,7 @@ export default function AdminScreen() {
     }
   }, [
     confirmedRights,
+    contentKind,
     contentRating,
     description,
     genres,
@@ -1603,14 +1607,14 @@ export default function AdminScreen() {
   if (!authLoading && routeState === 'sign-in') {
     return (
       <SafeAreaView style={styles.safeArea}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <KeyboardAwareScrollView contentContainerStyle={styles.content}>
           <Pressable accessibilityRole="button" onPress={() => router.back()} style={styles.backButton}>
             <Text style={styles.backText}>‹  Back</Text>
           </Pressable>
           <Text style={styles.header}>Admin sign in</Text>
           <View style={styles.card}>
             <Text style={styles.helper}>Use the administrator account configured in Supabase.</Text>
-            <TextInput
+            <KeyboardAwareTextInput
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
@@ -1621,7 +1625,7 @@ export default function AdminScreen() {
               textContentType="emailAddress"
               style={styles.input}
             />
-            <TextInput
+            <KeyboardAwareTextInput
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
@@ -1642,7 +1646,7 @@ export default function AdminScreen() {
               <Text style={styles.primaryButtonText}>{isSigningIn ? 'Signing in…' : 'Sign in'}</Text>
             </Pressable>
           </View>
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </SafeAreaView>
     );
   }
@@ -1661,9 +1665,8 @@ export default function AdminScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={moviesLoading}
@@ -1695,7 +1698,7 @@ export default function AdminScreen() {
             <Text style={styles.helper}>
               Admin accounts are created in the Supabase dashboard. Public sign-up is disabled.
             </Text>
-            <TextInput
+            <KeyboardAwareTextInput
               value={email}
               onChangeText={setEmail}
               placeholder="Email"
@@ -1706,7 +1709,7 @@ export default function AdminScreen() {
               textContentType="emailAddress"
               style={styles.input}
             />
-            <TextInput
+            <KeyboardAwareTextInput
               value={password}
               onChangeText={setPassword}
               placeholder="Password"
@@ -1751,7 +1754,7 @@ export default function AdminScreen() {
             <View style={styles.card}>
               <View style={styles.sectionHeader}>
                 <View style={styles.grow}>
-                  <Text style={styles.sectionTitle}>Upload a movie</Text>
+                  <Text style={styles.sectionTitle}>Upload a {contentKind === 'short' ? 'short video' : 'movie'}</Text>
                   <Text style={styles.helper}>
                     Videos upload directly to private Backblaze storage in 16 MiB parts.
                   </Text>
@@ -1763,6 +1766,30 @@ export default function AdminScreen() {
                 >
                   <Text style={styles.linkText}>Sign out</Text>
                 </Pressable>
+              </View>
+
+              <View style={styles.contentKindRow}>
+                {(['movie', 'short'] as const).map((kind) => (
+                  <Pressable
+                    key={kind}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: contentKind === kind }}
+                    disabled={isUploading}
+                    onPress={() => {
+                      setContentKind(kind);
+                      if (kind === 'short') {
+                        setCategories((current) => current.includes('Shorts') ? current : [...current, 'Shorts']);
+                      } else {
+                        setCategories((current) => current.filter((category) => category !== 'Shorts'));
+                      }
+                    }}
+                    style={[styles.contentKindButton, contentKind === kind && styles.contentKindButtonSelected]}
+                  >
+                    <Text style={[styles.contentKindText, contentKind === kind && styles.contentKindTextSelected]}>
+                      {kind === 'short' ? 'Short video' : 'Movie'}
+                    </Text>
+                  </Pressable>
+                ))}
               </View>
 
               {inputFields.map((field) => {
@@ -1798,7 +1825,7 @@ export default function AdminScreen() {
                 return (
                   <View key={field.key} style={styles.field}>
                     <Text style={styles.fieldLabel}>{field.label}</Text>
-                    <TextInput
+                    <KeyboardAwareTextInput
                       value={value}
                       onChangeText={onChangeText}
                       placeholder={field.placeholder}
@@ -2298,6 +2325,7 @@ export default function AdminScreen() {
                     </Text>
                   </View>
                 </View>
+
                 <View style={[styles.statusPill, movie.published ? styles.published : styles.draft]}>
                   <Text style={styles.statusText}>{movie.published ? 'Live' : 'Draft'}</Text>
                 </View>
@@ -2354,7 +2382,7 @@ export default function AdminScreen() {
               }}
             >
               <View style={styles.editBackdrop}>
-                <ScrollView contentContainerStyle={styles.editPanel} keyboardShouldPersistTaps="handled">
+                <KeyboardAwareScrollView contentContainerStyle={styles.editPanel}>
                   <View style={styles.catalogHeader}>
                     <Text style={styles.sectionTitle}>Edit title</Text>
                     <Pressable
@@ -2475,12 +2503,12 @@ export default function AdminScreen() {
                   >
                     <Text style={styles.primaryButtonText}>{editSaving ? 'Saving…' : 'Save changes'}</Text>
                   </Pressable>
-                </ScrollView>
+                </KeyboardAwareScrollView>
               </View>
             </Modal>
           </>
         )}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }
@@ -2534,6 +2562,11 @@ const styles = StyleSheet.create({
     gap: 12,
     marginBottom: 12,
   },
+  contentKindRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  contentKindButton: { minHeight: 42, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, borderRadius: 999, borderWidth: 1, borderColor: theme.border },
+  contentKindButtonSelected: { backgroundColor: theme.accent, borderColor: theme.accent },
+  contentKindText: { color: theme.secondaryText, fontWeight: '700', fontSize: 13 },
+  contentKindTextSelected: { color: theme.background },
   sectionTitle: {
     color: theme.text,
     fontSize: 20,

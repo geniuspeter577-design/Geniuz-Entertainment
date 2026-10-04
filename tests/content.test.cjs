@@ -145,7 +145,7 @@ test('content service keeps known normalized results available after the API goe
 
   assert.equal(result.data?.title, 'Cached title');
   assert.equal(result.source, 'tmdb');
-  assert.match(result.warning, /temporarily unavailable/i);
+  assert.match(result.warning, /Some titles could not be loaded/i);
 });
 
 test('content service treats non-mock live catalog items as live results', async () => {
@@ -197,7 +197,7 @@ test('development fallback is demo-only while production failures return no samp
   assert.match(developmentResult.warning, /Demo catalog/);
   assert.equal(productionResult.source, 'tmdb');
   assert.deepEqual(productionResult.data, []);
-  assert.match(productionResult.warning, /temporarily unavailable/i);
+  assert.match(productionResult.warning, /waking up/i);
 
   const productionDetailsService = new ContentService(
     { getById: async () => { throw new ApiError('Provider credentials are missing', 503); } },
@@ -230,7 +230,7 @@ test('a failed catalog request does not hide results from another request', asyn
   const [trending, popular] = await Promise.all([service.getTrending(), service.getPopular()]);
 
   assert.deepEqual(trending.data, []);
-  assert.match(trending.warning, /temporarily unavailable/i);
+  assert.match(trending.warning, /waking up/i);
   assert.deepEqual(popular.data, [liveItem]);
 });
 
@@ -251,7 +251,22 @@ test('published movies and series load independently when either query fails', a
   );
   assert.deepEqual(catalog.movies, [movie]);
   assert.deepEqual(catalog.series, []);
+  assert.deepEqual(catalog.shorts, []);
   assert.equal(catalog.hasFailures, true);
+});
+
+test('published Shorts load independently and remain empty when no short videos exist', async () => {
+  const short = {
+    id: 'geniuz:short:1',
+    source: 'geniuz',
+    title: 'Short',
+    type: 'short',
+    genres: [],
+    availability: { discoverable: true, stream: true, download: false, premium: false },
+  };
+  const catalog = await loadPublishedCatalog(async () => [], async () => [], async () => [short]);
+  assert.deepEqual(catalog.shorts, [short]);
+  assert.equal(catalog.hasFailures, false);
 });
 
 test('published catalog search matches title, genre, and year, newest first', () => {
@@ -291,4 +306,5 @@ test('catalog errors map to short friendly messages without exposing provider de
     getFriendlyCatalogErrorMessage({ code: 'PGRST204', message: 'private column diagnostics' }),
     'Some titles could not be loaded. Please retry.',
   );
+  assert.match(getFriendlyCatalogErrorMessage(new ApiError('Gateway unavailable', 503)), /waking up/i);
 });

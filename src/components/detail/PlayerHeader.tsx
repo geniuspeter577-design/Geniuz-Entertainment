@@ -162,8 +162,9 @@ export function PlayerHeader({
       {isFeatureEnabled('qualityOptions') ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => undefined}
-          style={styles.qualityPill}
+          accessibilityState={{ disabled: true }}
+          disabled
+          style={[styles.qualityPill, styles.disabledQuality]}
         >
           <Text style={styles.qualityText}>Standard quality · Go HD ›</Text>
         </Pressable>
@@ -244,6 +245,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     paddingHorizontal: 14,
   },
+  disabledQuality: { opacity: 0.75 },
   qualityText: { color: theme.text, fontSize: 14, fontWeight: '700' },
   overlay: {
     position: 'absolute',

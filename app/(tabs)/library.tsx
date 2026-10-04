@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import React, { useCallback } from 'react';
-import { Image, Pressable, RefreshControl, SafeAreaView, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { OfflineState } from '../../src/components/OfflineState';
@@ -34,11 +35,17 @@ export default function LibraryScreen() {
           }
           return supabaseMovieRepository.getPublishedSeries();
         },
+        () => {
+          if (!supabaseMovieRepository) {
+            throw new Error('Supabase catalog is not configured.');
+          }
+          return supabaseMovieRepository.getPublishedShorts();
+        },
       ).then(async (catalog) => ({
         data: {
           ...catalog,
           demos:
-            isDemoCatalogEnabled && !catalog.hasFailures && !catalog.movies.length && !catalog.series.length
+            isDemoCatalogEnabled && !catalog.hasFailures && !catalog.movies.length && !catalog.series.length && !catalog.shorts.length
               ? await demoRepository.getPopular()
               : [],
         },
@@ -50,6 +57,7 @@ export default function LibraryScreen() {
   const publishedIds = new Set([
     ...(catalogQuery.data?.movies ?? []).map(({ id }) => id),
     ...(catalogQuery.data?.series ?? []).map(({ id }) => id),
+    ...(catalogQuery.data?.shorts ?? []).map(({ id }) => id),
   ]);
   const demoIds = new Set((catalogQuery.data?.demos ?? []).map(({ id }) => id));
   const visibleWatchlist = watchlist.filter(
@@ -112,7 +120,7 @@ export default function LibraryScreen() {
         ) : null}
         {catalogQuery.error || catalogQuery.data?.hasFailures ? (
           <ContentNotice
-            message="Some titles could not be loaded. Please retry."
+            message={catalogQuery.error ?? 'Some titles could not be loaded. Please retry.'}
             tone="error"
             actionLabel="Retry"
             onAction={retryAll}

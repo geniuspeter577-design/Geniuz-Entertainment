@@ -2,6 +2,16 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { AccountProfile } from '../models/profile';
 import { isAccountProfile } from '../models/profile';
+import { normalizeUsername, isValidUsername } from '../utils/accountProfile';
+
+const PROFILE_COLUMNS = 'id,display_name,avatar_color,public_id,created_at,username,bio,avatar_url';
+
+export type AccountProfileUpdate = {
+  display_name: string;
+  username: string;
+  bio: string;
+  avatar_url: string | null;
+};
 
 export class ProfileRepository {
   constructor(private readonly client: SupabaseClient) {}
@@ -9,7 +19,7 @@ export class ProfileRepository {
   async getForUser(userId: string): Promise<AccountProfile | null> {
     const { data, error } = await this.client
       .from('profiles')
-      .select('id,display_name,avatar_color,public_id,created_at')
+      .select(PROFILE_COLUMNS)
       .eq('id', userId)
       .maybeSingle();
     if (error) {
@@ -29,11 +39,49 @@ export class ProfileRepository {
     if (!normalizedName || normalizedName.length > 80) {
       throw new Error('Display name must be between 1 and 80 characters.');
     }
+    return this.updateProfile(userId, {
+      display_name: normalizedName,
+    });
+  }
+
+  async isUsernameAvailable(username: string): Promise<boolean> {
+    const normalizedUsername = username.trim().toLocaleLowerCase();
+    if (!/^[a-z][a-z0-9_]{2,23}$/.test(normalizedUsername)) {
+      return false;
+    }
+    const { data, error } = await this.client.rpc('is_username_available', {
+      requested_username: normalizedUsername,
+    });
+    if (error) {
+      throw new Error('Username availability could not be checked. Try again.', { cause: error });
+    }
+    return data === true;
+  }
+
+  async updateProfile(userId: string, update: Partial<AccountProfileUpdate>): Promise<AccountProfile> {
+    const normalizedUpdate = { ...update };
+    if (typeof update.username === 'string') {
+      const username = normalizeUsername(update.username);
+      if (!isValidUsername(username)) {
+        throw new Error('Use 3–24 lowercase letters, numbers, or underscores; start with a letter.');
+      }
+      normalizedUpdate.username = username;
+    }
+    if (typeof update.bio === 'string' && update.bio.length > 160) {
+      throw new Error('Bio must be 160 characters or fewer.');
+    }
+    if (typeof update.display_name === 'string') {
+      const displayName = update.display_name.trim();
+      if (!displayName || displayName.length > 80) {
+        throw new Error('Display name must be between 1 and 80 characters.');
+      }
+      normalizedUpdate.display_name = displayName;
+    }
     const { data, error } = await this.client
       .from('profiles')
-      .update({ display_name: normalizedName })
+      .update(normalizedUpdate)
       .eq('id', userId)
-      .select('id,display_name,avatar_color,public_id,created_at')
+      .select(PROFILE_COLUMNS)
       .maybeSingle();
     if (error) {
       throw error;
@@ -42,5 +90,17 @@ export class ProfileRepository {
       throw new Error('The account profile could not be updated.');
     }
     return data;
+  }
+
+  async requestAccountDeletion(userId: string, reason: string): Promise<void> {
+    const { error } = await this.client.from('account_deletion_requests').insert({
+      user_id: userId,
+      reason: reason.trim() || null,
+    });
+    if (error) {
+      throw new Error('Your account deletion request could not be sent. Please try again.', {
+        cause: error,
+      });
+    }
   }
 }

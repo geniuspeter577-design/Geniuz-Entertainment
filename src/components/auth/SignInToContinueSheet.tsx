@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Ionicons } from '@expo/vector-icons';
-import { Modal, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../KeyboardAwareScrollView';
 
 import { useAuth } from '../../state/AuthContext';
 import { theme } from '../../theme';
@@ -64,8 +66,12 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={styles.backdrop}>
         <Pressable accessibilityRole="button" accessibilityLabel="Close sign in" onPress={onClose} style={StyleSheet.absoluteFill} />
-        <SafeAreaView style={styles.safeArea}>
-          <View style={styles.sheet}>
+        <SafeAreaView pointerEvents="box-none" style={styles.safeArea}>
+          <KeyboardAwareScrollView
+            contentContainerStyle={styles.sheet}
+            keyboardAvoidingViewStyle={styles.sheetKeyboardContainer}
+            style={styles.sheetScrollView}
+          >
             <View style={styles.header}>
               <View style={styles.titleWrap}>
                 <Text style={styles.title}>Sign in to continue</Text>
@@ -76,7 +82,7 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
               </Pressable>
             </View>
             {mode === 'create-account' ? (
-              <TextInput
+              <KeyboardAwareTextInput
                 accessibilityLabel="Display name"
                 value={displayName}
                 onChangeText={setDisplayName}
@@ -87,7 +93,7 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
                 style={styles.input}
               />
             ) : null}
-            <TextInput
+            <KeyboardAwareTextInput
               accessibilityLabel="Email address"
               value={email}
               onChangeText={setEmail}
@@ -99,17 +105,22 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
               style={styles.input}
             />
             {mode !== 'reset-password' ? (
-              <TextInput
-                accessibilityLabel="Password"
-                value={password}
-                onChangeText={setPassword}
-                autoCapitalize="none"
-                autoComplete={mode === 'create-account' ? 'new-password' : 'password'}
-                secureTextEntry
-                placeholder="Password"
-                placeholderTextColor={theme.secondaryText}
-                style={styles.input}
-              />
+              <>
+                <KeyboardAwareTextInput
+                  accessibilityLabel="Password"
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoComplete={mode === 'create-account' ? 'new-password' : 'password'}
+                  secureTextEntry
+                  placeholder="Password"
+                  placeholderTextColor={theme.secondaryText}
+                  style={styles.input}
+                />
+                {mode === 'create-account' ? (
+                  <Text style={styles.passwordHint}>Use at least 8 characters.</Text>
+                ) : null}
+              </>
             ) : null}
             {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
             {message ? <Text accessibilityRole="alert" style={styles.message}>{message}</Text> : null}
@@ -137,7 +148,7 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
                 <Text style={styles.linkText}>Back to sign in</Text>
               </Pressable>
             )}
-          </View>
+          </KeyboardAwareScrollView>
         </SafeAreaView>
       </View>
     </Modal>
@@ -146,12 +157,15 @@ export function SignInToContinueSheet({ visible, initialMode, onClose }: Props) 
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: theme.scrim },
-  safeArea: { justifyContent: 'flex-end' },
+  safeArea: { flex: 1, justifyContent: 'flex-end' },
+  sheetKeyboardContainer: { justifyContent: 'flex-end' },
+  sheetScrollView: { flex: 0, maxHeight: '90%' },
   sheet: { gap: 12, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18, backgroundColor: theme.background, borderTopLeftRadius: 16, borderTopRightRadius: 16 },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 4 },
   titleWrap: { flex: 1 },
   title: { color: theme.text, fontSize: 20, fontWeight: '800' },
   subtitle: { color: theme.secondaryText, fontSize: 13, lineHeight: 18, marginTop: 5 },
+  passwordHint: { color: theme.secondaryText, fontSize: 12 },
   closeButton: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', borderRadius: 22, backgroundColor: theme.surface },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.surface, color: theme.text, paddingHorizontal: 14 },
   error: { color: theme.error, fontSize: 13, lineHeight: 18 },

@@ -3,15 +3,15 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Pressable,
   RefreshControl,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../../src/components/KeyboardAwareScrollView';
 import { OfflineState } from '../../src/components/OfflineState';
 import { PosterCard } from '../../src/components/PosterCard';
 import { SectionHeader } from '../../src/components/SectionHeader';
@@ -54,18 +54,25 @@ export default function SearchScreen() {
         }
         return supabaseMovieRepository.getPublishedSeries();
       },
+      () => {
+        if (!supabaseMovieRepository) {
+          throw new Error('Supabase catalog is not configured.');
+        }
+        return supabaseMovieRepository.getPublishedShorts();
+      },
     );
     if (
       isDemoCatalogEnabled &&
       !catalog.hasFailures &&
-      catalog.movies.length + catalog.series.length === 0
+      catalog.movies.length + catalog.series.length + catalog.shorts.length === 0
     ) {
       const demos = await demoRepository.getPopular();
       return {
         data: {
           ...catalog,
           movies: demos.filter((item) => item.type === 'movie'),
-          series: demos.filter((item) => item.type !== 'movie'),
+          series: demos.filter((item) => item.type === 'series'),
+          shorts: [],
           showingDemo: true,
         },
         source: 'mock' as const,
@@ -78,6 +85,7 @@ export default function SearchScreen() {
     () => sortPublishedNewest([
       ...(catalogQuery.data?.movies ?? []),
       ...(catalogQuery.data?.series ?? []),
+      ...(catalogQuery.data?.shorts ?? []),
     ]),
     [catalogQuery.data],
   );
@@ -106,7 +114,7 @@ export default function SearchScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView
+      <KeyboardAwareScrollView
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
         refreshControl={
@@ -121,7 +129,7 @@ export default function SearchScreen() {
         <Text style={styles.header}>Discover</Text>
 
         <View style={styles.searchContainer}>
-          <TextInput
+          <KeyboardAwareTextInput
             value={query}
             onChangeText={setQuery}
             placeholder="Search title, genre, or year"
@@ -156,7 +164,7 @@ export default function SearchScreen() {
 
         {hasError ? (
           <ContentNotice
-            message="Some titles could not be loaded. Please retry."
+            message={catalogQuery.error ?? 'Some titles could not be loaded. Please retry.'}
             tone="error"
             actionLabel="Retry"
             onAction={retry}
@@ -183,7 +191,7 @@ export default function SearchScreen() {
             />
           ))}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </SafeAreaView>
   );
 }

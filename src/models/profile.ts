@@ -4,6 +4,9 @@ export type AccountProfile = {
   avatar_color: string;
   public_id: string;
   created_at: string;
+  username: string | null;
+  bio: string | null;
+  avatar_url: string | null;
 };
 
 export function isAccountProfile(value: unknown, userId?: string): value is AccountProfile {
@@ -18,6 +21,9 @@ export function isAccountProfile(value: unknown, userId?: string): value is Acco
     typeof profile.avatar_color === 'string' &&
     typeof profile.public_id === 'string' &&
     /^\d{8}$/.test(profile.public_id) &&
-    typeof profile.created_at === 'string'
+    typeof profile.created_at === 'string' &&
+    (typeof profile.username === 'string' || profile.username === null) &&
+    (typeof profile.bio === 'string' || profile.bio === null) &&
+    (typeof profile.avatar_url === 'string' || profile.avatar_url === null)
   );
 }

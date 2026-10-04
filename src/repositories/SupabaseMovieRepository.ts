@@ -32,7 +32,7 @@ type MovieRecord = {
   allow_download: boolean;
   storage_provider: 'supabase' | 'b2' | null;
   storage_key: string | null;
-  content_type: 'movie' | 'series' | null;
+  content_type: 'movie' | 'series' | 'short' | null;
   trailer_storage_key?: string | null;
   trailer_size_bytes?: number | null;
   trailer_duration_seconds?: number | null;
@@ -49,6 +49,7 @@ type StoredTusUpload = {
 };
 
 export type NewMovie = {
+  contentKind?: 'movie' | 'short';
   title: string;
   description: string;
   releaseYear?: number;
@@ -134,12 +135,12 @@ function toContentItem(movie: MovieRecord): ContentItem {
   const mediaPath = movie.storage_provider === 'b2' ? movie.storage_key : movie.video_path;
   const hasVideo = typeof mediaPath === 'string' && Boolean(mediaPath.trim());
   return {
-    id: `geniuz:${isSeries ? 'series' : 'movie'}:${movie.id}`,
+    id: `geniuz:${isSeries ? 'series' : movie.content_type === 'short' ? 'short' : 'movie'}:${movie.id}`,
     source: 'geniuz',
     sourceId: movie.id,
     title: movie.title,
     ...(movie.created_at ? { createdAt: movie.created_at } : {}),
-    type: isSeries ? 'series' : 'movie',
+    type: isSeries ? 'series' : movie.content_type === 'short' ? 'short' : 'movie',
     ...(movie.release_year === null ? {} : { year: movie.release_year }),
     genres: movie.genres ?? [],
     categories: movie.categories ?? [],
@@ -267,20 +268,46 @@ export class SupabaseMovieRepository {
     return (data as MovieRecord[]).map(toContentItem);
   }
 
+  async getPublishedShorts() {
+    const { data, error } = await this.client
+      .from('movies')
+      .select(`${MOVIE_COLUMNS},created_at`)
+      .eq('published', true)
+      .eq('content_type', 'short')
+      .or('video_path.not.is.null,storage_key.not.is.null')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      logSupabaseError('[SupabaseMovieRepository] Could not load published shorts.', error, {
+        table: 'movies',
+        columns: `${MOVIE_COLUMNS},created_at`,
+      });
+      throw new Error('Could not load published shorts.', { cause: error });
+    }
+
+    return (data as MovieRecord[]).map(toContentItem);
+  }
+
   async getPublished() {
-    const [moviesResult, seriesResult] = await Promise.allSettled([
+    const [moviesResult, seriesResult, shortsResult] = await Promise.allSettled([
       this.getPublishedMovies(),
       this.getPublishedSeries(),
+      this.getPublishedShorts(),
     ]);
     const movies = moviesResult.status === 'fulfilled' ? moviesResult.value : [];
     const series = seriesResult.status === 'fulfilled' ? seriesResult.value : [];
-    if (moviesResult.status === 'rejected' && seriesResult.status === 'rejected') {
+    const shorts = shortsResult.status === 'fulfilled' ? shortsResult.value : [];
+    if (
+      moviesResult.status === 'rejected' &&
+      seriesResult.status === 'rejected' &&
+      shortsResult.status === 'rejected'
+    ) {
       throw new AggregateError(
-        [moviesResult.reason, seriesResult.reason],
-        'Could not load published movies or series.',
+        [moviesResult.reason, seriesResult.reason, shortsResult.reason],
+        'Could not load published titles.',
       );
     }
-    return [...movies, ...series].sort((first, second) =>
+    return [...movies, ...series, ...shorts].sort((first, second) =>
       (second.createdAt ?? '').localeCompare(first.createdAt ?? ''),
     );
   }
@@ -304,7 +331,7 @@ export class SupabaseMovieRepository {
   }
 
   async getById(id: string) {
-    const match = /^geniuz:(?:movie|series):(.+)$/.exec(id);
+    const match = /^geniuz:(?:movie|series|short):(.+)$/.exec(id);
     if (!match) {
       return null;
     }
@@ -367,7 +394,7 @@ export class SupabaseMovieRepository {
         trailer_content_type: title.trailerContentType ?? null,
         published: title.published,
       })
-      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+      .eq('id', id.replace(/^geniuz:(?:movie|series|short):/, ''));
     if (error) {
       throw new Error('Could not update this title.', { cause: error });
     }
@@ -377,7 +404,7 @@ export class SupabaseMovieRepository {
     const { error } = await this.client
       .from('movies')
       .update({ allow_download: allowDownload })
-      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''));
+      .eq('id', id.replace(/^geniuz:(?:movie|series|short):/, ''));
     if (error) {
       throw new Error('Could not update the download setting.', { cause: error });
     }
@@ -387,7 +414,7 @@ export class SupabaseMovieRepository {
     const { data, error } = await this.client
       .from('movies')
       .select('storage_provider,storage_key,video_path,trailer_storage_key,poster_url,cover_url,content_type')
-      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''))
+      .eq('id', id.replace(/^geniuz:(?:movie|series|short):/, ''))
       .single();
     if (error) {
       throw new Error('Could not load this title’s stored files.', { cause: error });
@@ -433,7 +460,7 @@ export class SupabaseMovieRepository {
     const { data, error } = await this.client
       .from('movies')
       .delete()
-      .eq('id', id.replace(/^geniuz:(?:movie|series):/, ''))
+      .eq('id', id.replace(/^geniuz:(?:movie|series|short):/, ''))
       .select('id')
       .maybeSingle();
     if (error) {
@@ -656,7 +683,7 @@ export class SupabaseMovieRepository {
         mime_type: movie.mimeType,
         file_size_bytes: movie.fileSizeBytes,
         allow_download: movie.allowDownload,
-        content_type: 'movie',
+        content_type: movie.contentKind ?? 'movie',
         storage_provider: 'b2',
         storage_key: storageKey,
         video_path: null,
@@ -957,7 +984,7 @@ export class SupabaseMovieRepository {
     if (movie.storageProvider !== 'b2') {
       return this.getSignedPlaybackUrl(movie.mediaPath);
     }
-    return this.getApiPlaybackUrl('movies', movie.id.replace(/^geniuz:(?:movie|series):/, ''));
+    return this.getApiPlaybackUrl('movies', movie.id.replace(/^geniuz:(?:movie|series|short):/, ''));
   }
 
   async getTrailerPlaybackUrl(item: Pick<ContentItem, 'id' | 'trailerStorageKey'>) {
@@ -965,7 +992,7 @@ export class SupabaseMovieRepository {
       throw new PlaybackError('This title does not have an available trailer.', 'TRAILER_NOT_FOUND', 404);
     }
     const resource = item.id.startsWith('geniuz:series:') ? 'series' : 'movies';
-    return this.getApiPlaybackUrl(resource, item.id.replace(/^geniuz:(?:movie|series):/, ''), 'trailer');
+    return this.getApiPlaybackUrl(resource, item.id.replace(/^geniuz:(?:movie|series|short):/, ''), 'trailer');
   }
 
   private async getApiPlaybackUrl(
@@ -1047,7 +1074,7 @@ export class SupabaseMovieRepository {
     const { error } = await this.client
       .from('movies')
       .update({ published })
-      .eq('id', movieId.replace(/^geniuz:(?:movie|series):/, ''));
+      .eq('id', movieId.replace(/^geniuz:(?:movie|series|short):/, ''));
 
     if (error) {
       throw new Error('Could not update movie publishing status.', { cause: error });

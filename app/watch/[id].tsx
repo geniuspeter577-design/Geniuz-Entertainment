@@ -5,7 +5,8 @@ import { useVideoPlayer } from 'expo-video';
 import * as Brightness from 'expo-brightness';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { OfflineState } from '../../src/components/OfflineState';
@@ -324,7 +325,10 @@ export default function WatchScreen() {
       const isEpisode = id.startsWith('geniuz:episode:');
       if (
         !supabaseMovieRepository ||
-        (!isEpisode && !id.startsWith('geniuz:movie:') && !id.startsWith('geniuz:series:'))
+        (!isEpisode &&
+          !id.startsWith('geniuz:movie:') &&
+          !id.startsWith('geniuz:series:') &&
+          !id.startsWith('geniuz:short:'))
       ) {
         setError('This title is not available for streaming.');
         setIsLoading(false);

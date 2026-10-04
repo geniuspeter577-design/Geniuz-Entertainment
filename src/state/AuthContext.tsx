@@ -3,7 +3,7 @@ import * as Linking from 'expo-linking';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 import type { AccountProfile } from '../models/profile';
-import { ProfileRepository } from '../services/ProfileRepository';
+import { ProfileRepository, type AccountProfileUpdate } from '../services/ProfileRepository';
 import { supabase } from '../services/supabase';
 import {
   createAccount,
@@ -26,6 +26,8 @@ type AuthContextValue = {
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
+  updateProfile: (profile: Partial<AccountProfileUpdate>) => Promise<void>;
+  refreshProfile: () => Promise<void>;
   openSignInSheet: (mode?: SignInSheetMode) => void;
   closeSignInSheet: () => void;
 };
@@ -143,6 +145,23 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     setProfileError(undefined);
   }, [session]);
 
+  const updateProfile = useCallback(async (updates: Partial<AccountProfileUpdate>) => {
+    if (!session || !profileRepository) {
+      throw new Error('Sign in to update your profile.');
+    }
+    const updated = await profileRepository.updateProfile(session.user.id, updates);
+    setProfile(updated);
+    setProfileError(undefined);
+  }, [session]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!session) {
+      setProfile(null);
+      return;
+    }
+    await loadProfile(session.user.id);
+  }, [loadProfile, session]);
+
   const openSignInSheet = useCallback((mode: SignInSheetMode = 'sign-in') => {
     setSignInSheetMode(mode);
   }, []);
@@ -159,9 +178,11 @@ export function AuthProvider({ children }: React.PropsWithChildren) {
     signOut,
     resetPassword,
     updateDisplayName,
+    updateProfile,
+    refreshProfile,
     openSignInSheet,
     closeSignInSheet,
-  }), [session, profile, isLoading, profileError, signUp, signIn, signOut, resetPassword, updateDisplayName, openSignInSheet, closeSignInSheet]);
+  }), [session, profile, isLoading, profileError, signUp, signIn, signOut, resetPassword, updateDisplayName, updateProfile, refreshProfile, openSignInSheet, closeSignInSheet]);
 
   return (
     <AuthContext.Provider value={value}>

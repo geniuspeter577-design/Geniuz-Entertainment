@@ -4,6 +4,7 @@ const { test } = require('node:test');
 
 const { createAccount, getAuthState, getFriendlyAuthError, runAccountFeatureGate, sendPasswordReset, signInToAccount, signOutOfAccount } = require('../.test-build/src/utils/accountAuth.js');
 const { isValidProfileCreation } = require('../.test-build/src/utils/accountProfile.js');
+const { getUsernameError, isValidUsername, normalizeUsername } = require('../.test-build/src/utils/accountProfile.js');
 const { isAccountProfile } = require('../.test-build/src/models/profile.js');
 const { createChunkedSecureStorage, splitSecureValue } = require('../.test-build/src/utils/secureStorage.js');
 
@@ -76,6 +77,24 @@ test('account errors explain invalid credentials, unconfirmed email, network, an
   assert.match(getFriendlyAuthError({ code: 'email_not_confirmed' }), /confirm your email/i);
   assert.match(getFriendlyAuthError(new TypeError('Network request failed')), /internet connection/i);
   assert.match(getFriendlyAuthError({ code: 'user_already_exists' }), /already exists/i);
+  assert.match(getFriendlyAuthError({ code: 'weak_password' }), /at least 8 characters/i);
+  assert.match(getFriendlyAuthError({ code: 'email_address_invalid' }), /valid email/i);
+  assert.match(getFriendlyAuthError({ status: 429 }), /too many attempts/i);
+});
+
+test('signup rejects malformed email and weak passwords before calling Supabase', async () => {
+  let calls = 0;
+  const auth = createAuth({ signUp: async () => { calls += 1; return { data: { session: null }, error: null }; } });
+  await assert.rejects(createAccount(auth, 'invalid', 'long-enough-password', 'Name'), /valid email/i);
+  await assert.rejects(createAccount(auth, 'person@example.test', 'short', 'Name'), /at least 8 characters/i);
+  assert.equal(calls, 0);
+});
+
+test('usernames normalize and enforce the documented profile format', () => {
+  assert.equal(normalizeUsername('  @Geniuz_User  '), 'geniuz_user');
+  assert.equal(isValidUsername('geniuz_user'), true);
+  assert.equal(isValidUsername('1bad'), false);
+  assert.match(getUsernameError('1bad'), /start with a letter/i);
 });
 
 test('profile creation and returned profile validation require the auth ID and short numeric public ID', () => {
@@ -93,9 +112,23 @@ test('profile creation and returned profile validation require the auth ID and s
     avatar_color: '#72F06A',
     public_id: input.publicId,
     created_at: '2026-10-03T00:00:00Z',
+    username: null,
+    bio: '',
+    avatar_url: null,
   };
   assert.equal(isAccountProfile(profile, input.userId), true);
   assert.equal(isAccountProfile({ ...profile, id: 'another-user' }, input.userId), false);
+});
+
+test('new profile migration protects avatar ownership and adds short categories without fake titles', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261012000000_profile_editing_and_shorts.sql', 'utf8');
+  assert.match(migration, /values \('avatars', 'avatars', true, 2097152/i);
+  assert.match(migration, /name = auth\.uid\(\)::text \|\| '\/avatar\.jpg'/i);
+  assert.match(migration, /is_username_available/i);
+  assert.match(migration, /create table if not exists public\.account_deletion_requests/i);
+  assert.match(migration, /check \(content_type in \('movie', 'series', 'short'\)\)/i);
+  assert.match(migration, /values \('Anime'\), \('Kids'\), \('Shorts'\), \('TV'\), \('Nollywood'\), \('Football'\)/i);
+  assert.doesNotMatch(migration, /insert into public\.movies/i);
 });
 
 test('SecureStore adapter chunks large UTF-8 sessions, replaces old chunks, and removes the whole value', async () => {

@@ -13,9 +13,17 @@
       "expo-font",
       "expo-video",
       [
+        "expo-image-picker",
+        {
+          "photosPermission": "Geniuz+ uses your selected photo for your profile picture.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
         "expo-splash-screen",
         {
-          "image": "./assets/branding/splash-icon.png",
+          "image": "./assets/branding/adaptive-icon-foreground.png",
           "resizeMode": "contain",
           "backgroundColor": "#0E1014",
           "imageWidth": 280

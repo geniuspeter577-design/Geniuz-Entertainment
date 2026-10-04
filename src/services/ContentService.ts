@@ -8,7 +8,6 @@ import { MockContentRepository } from '../repositories/MockContentRepository';
 import { getFriendlyCatalogErrorMessage } from '../utils/contentError';
 import { isDemoCatalogEnabled } from '../utils/publishedCatalog';
 
-const FALLBACK_WARNING = 'The live catalog is unavailable. Showing the Demo catalog.';
 const LIVE_FAILURE_WARNING = 'The catalog is temporarily unavailable. Please retry.';
 const MISSING_CONFIGURATION_WARNING = 'The catalog service is not configured. Please try again later.';
 
@@ -107,14 +106,16 @@ export class ContentService {
         return {
           data: null,
           source: 'tmdb',
-          warning: LIVE_FAILURE_WARNING,
+          warning: getFriendlyCatalogErrorMessage(error),
         };
       }
       return {
         data: resolvedItem,
         source: this.resolveResultSource(resolvedItem),
         warning:
-          resolvedItem?.source === 'mock' ? FALLBACK_WARNING : LIVE_FAILURE_WARNING,
+          resolvedItem?.source === 'mock'
+            ? `${getFriendlyCatalogErrorMessage(error)} Showing the Demo catalog.`
+            : getFriendlyCatalogErrorMessage(error),
       };
     }
   }
@@ -151,7 +152,7 @@ export class ContentService {
         return {
           data: [],
           source: 'tmdb',
-          warning: LIVE_FAILURE_WARNING,
+          warning: getFriendlyCatalogErrorMessage(error),
         };
       }
       const data = await fallback();
@@ -159,7 +160,7 @@ export class ContentService {
       return {
         data,
         source: 'mock',
-        warning: FALLBACK_WARNING,
+        warning: `${getFriendlyCatalogErrorMessage(error)} Showing the Demo catalog.`,
       };
     }
   }

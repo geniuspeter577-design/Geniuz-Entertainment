@@ -4,12 +4,12 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { isFeatureEnabled } from '../../config/features';
 import type { ContentItem } from '../../models/content';
@@ -127,8 +127,9 @@ export function DownloadSheet({
                       <Pressable
                         key={quality}
                         accessibilityRole="button"
-                        onPress={() => undefined}
-                        style={styles.qualityChip}
+                        accessibilityState={{ disabled: true }}
+                        disabled
+                        style={[styles.qualityChip, styles.disabledButton]}
                       >
                         <Ionicons name="ribbon" size={13} color={theme.gold} />
                         <Text style={styles.qualityText}>{quality} · Coming soon</Text>
@@ -161,8 +162,9 @@ export function DownloadSheet({
               {isFeatureEnabled('vipUpsell') ? (
                 <Pressable
                   accessibilityRole="button"
-                  onPress={() => undefined}
-                  style={styles.vipButton}
+                  accessibilityState={{ disabled: true }}
+                  disabled
+                  style={[styles.vipButton, styles.disabledButton]}
                 >
                   <Ionicons name="ribbon" size={17} color={theme.gold} />
                   <Text style={styles.vipText}>VIP features · Coming soon</Text>
