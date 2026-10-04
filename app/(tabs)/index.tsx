@@ -18,6 +18,7 @@ import { HomeHeroCarousel } from '../../src/components/HomeHeroCarousel';
 import { OfflineState } from '../../src/components/OfflineState';
 import { SectionHeader } from '../../src/components/SectionHeader';
 import { useContentQuery } from '../../src/hooks/useContentQuery';
+import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { MockContentRepository } from '../../src/repositories/MockContentRepository';
 import { useLibrary } from '../../src/state/LibraryContext';
@@ -31,13 +32,16 @@ import {
   loadPublishedCatalog,
   sortPublishedNewest,
 } from '../../src/utils/publishedCatalog';
+import { createHomeShuffleSeed, shuffleHomeCategoryRows } from '../../src/utils/homeRowShuffle';
 
 const demoRepository = new MockContentRepository();
+const EMPTY_CONTENT_ITEMS: ContentItem[] = [];
 
 export default function HomeScreen() {
   const { isOnline, retryConnection } = useNetwork();
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [shuffleSeed, setShuffleSeed] = useState(createHomeShuffleSeed);
   const loadCatalog = useCallback(async () => {
     const catalog = await loadPublishedCatalog(
       () => {
@@ -81,11 +85,14 @@ export default function HomeScreen() {
   }, []);
   const catalogQuery = useContentQuery('home-supabase-catalog', loadCatalog, isOnline);
   const { continueWatching, isInWatchlist, toggleWatchlist } = useLibrary();
-  const movies = catalogQuery.data?.movies ?? [];
-  const series = catalogQuery.data?.series ?? [];
-  const shorts = catalogQuery.data?.shorts ?? [];
-  const publishedItems = sortPublishedNewest([...movies, ...series, ...shorts]);
-  const heroItems = publishedItems.slice(0, 5);
+  const movies = catalogQuery.data?.movies ?? EMPTY_CONTENT_ITEMS;
+  const series = catalogQuery.data?.series ?? EMPTY_CONTENT_ITEMS;
+  const shorts = catalogQuery.data?.shorts ?? EMPTY_CONTENT_ITEMS;
+  const publishedItems = useMemo(
+    () => sortPublishedNewest([...movies, ...series, ...shorts]),
+    [movies, series, shorts],
+  );
+  const heroItems = useMemo(() => publishedItems.slice(0, 5), [publishedItems]);
   const categoryTabs = useMemo(
     () => [
       { key: 'Trending', label: 'Trending' },
@@ -100,18 +107,26 @@ export default function HomeScreen() {
   );
   const [selectedCategory, setSelectedCategory] = useState('Trending');
   const tabsScrollRef = useRef<ScrollView | null>(null);
-  const activeCategoryItems = selectedCategory === 'Trending'
-    ? publishedItems
-    : selectedCategory === 'TV'
-      ? series
-      : selectedCategory === 'Shorts'
-        ? shorts
-        : getCategoryItems(publishedItems, selectedCategory);
-  const activeHeroItems = selectedCategory === 'Trending'
-    ? heroItems
-    : selectedCategory === 'Shorts'
-      ? []
-      : sortPublishedNewest(activeCategoryItems).slice(0, 5);
+  const activeCategoryItems = useMemo(
+    () =>
+      selectedCategory === 'Trending'
+        ? publishedItems
+        : selectedCategory === 'TV'
+          ? series
+          : selectedCategory === 'Shorts'
+            ? shorts
+            : getCategoryItems(publishedItems, selectedCategory),
+    [publishedItems, selectedCategory, series, shorts],
+  );
+  const activeHeroItems = useMemo(
+    () =>
+      selectedCategory === 'Trending'
+        ? heroItems
+        : selectedCategory === 'Shorts'
+          ? []
+          : sortPublishedNewest(activeCategoryItems).slice(0, 5),
+    [activeCategoryItems, heroItems, selectedCategory],
+  );
 
   useEffect(() => {
     const selectedIndex = categoryTabs.findIndex(({ key }) => key === selectedCategory);
@@ -128,16 +143,70 @@ export default function HomeScreen() {
   const recent = continueWatching.filter(
     ({ item }) => listedIds.has(item.id) || (catalogQuery.data?.showingDemo && item.source === 'mock'),
   );
-  const genres = [...new Set(publishedItems.flatMap((item) => item.genres))];
-  const genresWithItems = genres
-    .map((genre) => ({
-      genre,
-      items: publishedItems.filter((item) =>
-        item.genres.some((itemGenre) => itemGenre.toLocaleLowerCase() === genre.toLocaleLowerCase()),
-      ),
-    }))
-    .filter(({ items }) => items.length > 0);
+  const categoryRows = useMemo(() => {
+    const rows = selectedCategory === 'Trending'
+      ? [
+          {
+            key: 'latest',
+            title: 'Latest',
+            items: publishedItems,
+            emptyMessage: 'No titles yet',
+            isLoading: catalogQuery.isLoading,
+          },
+          ...(movies.length
+            ? [{
+                key: 'movies',
+                title: 'Movies',
+                items: sortPublishedNewest(movies),
+                emptyMessage: 'No movies yet',
+                isLoading: false,
+              }]
+            : []),
+          ...(series.length
+            ? [{
+                key: 'series',
+                title: 'Series',
+                items: sortPublishedNewest(series),
+                emptyMessage: 'No series yet',
+                isLoading: false,
+              }]
+            : []),
+          ...[...new Set(publishedItems.flatMap((item) => item.genres))]
+            .map((genre) => ({
+              key: `genre:${genre}`,
+              title: genre,
+              items: publishedItems.filter((item) =>
+                item.genres.some((itemGenre) => itemGenre.toLocaleLowerCase() === genre.toLocaleLowerCase()),
+              ),
+              emptyMessage: `No ${genre} titles yet`,
+              isLoading: false,
+            }))
+            .filter(({ items }) => items.length > 0),
+        ]
+      : activeCategoryItems.length
+        ? [{
+            key: `category:${selectedCategory}`,
+            title: selectedCategory,
+            items: activeCategoryItems,
+            emptyMessage: `No ${selectedCategory} titles yet`,
+            isLoading: catalogQuery.isLoading,
+          }]
+        : [];
+    return shuffleHomeCategoryRows(rows, shuffleSeed);
+  }, [
+    activeCategoryItems,
+    catalogQuery.isLoading,
+    movies,
+    publishedItems,
+    selectedCategory,
+    series,
+    shuffleSeed,
+  ]);
   const retryCatalog = catalogQuery.retry;
+  const refreshCatalog = useCallback(() => {
+    setShuffleSeed(createHomeShuffleSeed(shuffleSeed));
+    retryCatalog();
+  }, [retryCatalog, shuffleSeed]);
 
   useEffect(() => {
     let active = true;
@@ -163,6 +232,7 @@ export default function HomeScreen() {
               refreshing={isCheckingConnection}
               onRefresh={() => {
                 setIsCheckingConnection(true);
+                refreshCatalog();
                 void retryConnection().finally(() => setIsCheckingConnection(false));
               }}
               tintColor={theme.accent}
@@ -178,7 +248,10 @@ export default function HomeScreen() {
             />
             <Text style={styles.brand}>Geniuz+</Text>
           </View>
-          <OfflineState onRetry={() => void retryConnection()} />
+          <OfflineState onRetry={() => {
+            refreshCatalog();
+            void retryConnection();
+          }} />
         </ScrollView>
       </SafeAreaView>
     );
@@ -197,7 +270,7 @@ export default function HomeScreen() {
         refreshControl={
           <RefreshControl
             refreshing={catalogQuery.isRefreshing}
-            onRefresh={retryCatalog}
+            onRefresh={refreshCatalog}
             tintColor={theme.accent}
             colors={[theme.accent]}
           />
@@ -228,7 +301,7 @@ export default function HomeScreen() {
             message={catalogError}
             tone="error"
             actionLabel="Retry"
-            onAction={retryCatalog}
+            onAction={refreshCatalog}
             autoHideMs={5000}
           />
         ) : null}
@@ -320,59 +393,16 @@ export default function HomeScreen() {
         ) : null}
 
         {publishedItems.length ? (
-          (() => {
-            if (selectedCategory === 'Trending') {
-              return (
-                <>
-                  <ContentRail
-                    title="Latest"
-                    items={publishedItems}
-                    isLoading={catalogQuery.isLoading}
-                    retry={retryCatalog}
-                    emptyMessage="No titles yet"
-                  />
-                  {movies.length ? (
-                    <ContentRail
-                      title="Movies"
-                      items={sortPublishedNewest(movies)}
-                      isLoading={false}
-                      retry={retryCatalog}
-                      emptyMessage="No movies yet"
-                    />
-                  ) : null}
-                  {series.length ? (
-                    <ContentRail
-                      title="Series"
-                      items={sortPublishedNewest(series)}
-                      isLoading={false}
-                      retry={retryCatalog}
-                      emptyMessage="No series yet"
-                    />
-                  ) : null}
-                  {genresWithItems.map(({ genre, items }) => (
-                    <ContentRail
-                      key={genre}
-                      title={genre}
-                      items={items}
-                      isLoading={false}
-                      retry={retryCatalog}
-                      emptyMessage={`No ${genre} titles yet`}
-                    />
-                  ))}
-                </>
-              );
-            }
-
-            return activeCategoryItems.length ? (
-              <ContentRail
-                title={selectedCategory}
-                items={activeCategoryItems}
-                isLoading={catalogQuery.isLoading}
-                retry={retryCatalog}
-                emptyMessage={`No ${selectedCategory} titles yet`}
-              />
-            ) : null;
-          })()
+          categoryRows.map(({ key, title, items, isLoading, emptyMessage }) => (
+            <ContentRail
+              key={key}
+              title={title}
+              items={items}
+              isLoading={isLoading}
+              retry={refreshCatalog}
+              emptyMessage={emptyMessage}
+            />
+          ))
         ) : null}
       </ScrollView>
     </SafeAreaView>

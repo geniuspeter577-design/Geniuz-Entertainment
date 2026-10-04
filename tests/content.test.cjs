@@ -10,6 +10,37 @@ const {
   searchPublishedCatalog,
   sortPublishedNewest,
 } = require('../.test-build/src/utils/publishedCatalog.js');
+const { shuffleHomeCategoryRows } = require('../.test-build/src/utils/homeRowShuffle.js');
+
+test('home row shuffle is seeded, reshuffles with a new seed, and preserves all titles', () => {
+  const rows = [
+    { key: 'latest', title: 'Latest', emptyMessage: 'No titles', isLoading: false, items: ['a', 'b', 'c', 'd'] },
+    { key: 'movies', title: 'Movies', emptyMessage: 'No movies', isLoading: false, items: ['e', 'f', 'g', 'h'] },
+    { key: 'comedy', title: 'Comedy', emptyMessage: 'No comedy', isLoading: false, items: ['i', 'j', 'k', 'l'] },
+    { key: 'family', title: 'Family', emptyMessage: 'No family', isLoading: false, items: ['m', 'n', 'o', 'p'] },
+  ];
+  const firstShuffle = shuffleHomeCategoryRows(rows, 1201);
+  const sameSeedShuffle = shuffleHomeCategoryRows(rows, 1201);
+  const newSeedShuffle = shuffleHomeCategoryRows(rows, 9842);
+
+  assert.deepEqual(sameSeedShuffle, firstShuffle);
+  assert.notDeepEqual(
+    newSeedShuffle.map(({ key }) => key),
+    firstShuffle.map(({ key }) => key),
+  );
+  for (const row of rows) {
+    assert.notDeepEqual(
+      newSeedShuffle.find(({ key }) => key === row.key)?.items,
+      firstShuffle.find(({ key }) => key === row.key)?.items,
+    );
+  }
+  assert.deepEqual(
+    firstShuffle.flatMap(({ items }) => items).sort(),
+    rows.flatMap(({ items }) => items).sort(),
+  );
+  assert.equal(new Set(firstShuffle.flatMap(({ items }) => items)).size, 16);
+  assert.equal(new Set(firstShuffle.map(({ key }) => key)).size, rows.length);
+});
 
 test('mock repository supports search, genre filtering, and explicit missing details', async () => {
   const repository = new MockContentRepository();
