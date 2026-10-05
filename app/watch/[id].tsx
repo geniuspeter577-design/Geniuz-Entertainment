@@ -1,39 +1,28 @@
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useVideoPlayer } from 'expo-video';
-import * as Brightness from 'expo-brightness';
-import * as ScreenOrientation from 'expo-screen-orientation';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
-import { OfflineState } from '../../src/components/OfflineState';
-import { logger } from '../../src/utils/logger';
-import { getPlaybackErrorDetails, PlaybackError } from '../../src/utils/playbackError';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
-import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
+import { logger } from '../../src/utils/logger';
+import { getFriendlyPlaybackError, getPlaybackErrorDetails, isExpiredPlaybackLinkError, PlaybackError } from '../../src/utils/playbackError';
 import {
-  getDragTarget,
   getSeekTarget,
+  PLAYER_CONTROLS_AUTO_HIDE_MS,
   runPlayerActionIfActive,
-  setPlayerVolume,
-  togglePlayerOrientation,
+  setPlayerCurrentTime,
+  setPlayerTimeUpdateInterval,
+  shouldAutoHidePlayerControls,
 } from '../../src/utils/playerControls';
 import { backOrReplace } from '../../src/utils/navigation';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
-
-const PLAYER_GESTURE_HINT_KEY = 'geniuz:player-gesture-hint-dismissed';
-
-type PlayerGestureFeedback =
-  | { kind: 'seek'; label: string }
-  | { kind: 'level'; side: 'left' | 'right'; value: number };
 
 export default function WatchScreen() {
   const { id: routeId, trailer: routeTrailer } = useLocalSearchParams<{ id: string; trailer?: string }>();
@@ -42,50 +31,40 @@ export default function WatchScreen() {
   const player = useVideoPlayer(null);
   const downloads = useDownloads();
   const { isOnline } = useNetwork();
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
   const localDownload = downloads.records.find(
     (record) => record.item.id === id && record.status === 'downloaded',
   );
   const [movie, setMovie] = useState<ContentItem>();
+  const [seriesTitle, setSeriesTitle] = useState<string>();
   const [playbackUrl, setPlaybackUrl] = useState<string>();
   const [isOfflinePlayback, setIsOfflinePlayback] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [playerStatus, setPlayerStatus] = useState(player.status);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [currentTime, setCurrentTime] = useState(0);
   const [error, setError] = useState<string>();
   const [retryAttempt, setRetryAttempt] = useState(0);
-  const [playbackEnded, setPlaybackEnded] = useState(false);
-  const [isLandscape, setIsLandscape] = useState(false);
-  const [gestureFeedback, setGestureFeedback] = useState<PlayerGestureFeedback>();
-  const [showGestureHint, setShowGestureHint] = useState(false);
-  const originalOrientationLock = useRef<ScreenOrientation.OrientationLock | undefined>(undefined);
-  const originalBrightness = useRef<number | undefined>(undefined);
-  const feedbackTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [showControls, setShowControls] = useState(true);
+  const [isSeeking, setIsSeeking] = useState(false);
   const playerReleasedRef = useRef(false);
-  const brightnessRef = useRef(0.5);
-  const [nextEpisodeState, setNextEpisodeState] = useState<{
-    currentId: string;
-    episode?: ContentItem;
-  }>();
+  const expiredLinkRetryRef = useRef(false);
+  const failureHandledRef = useRef(false);
+
   const downloadRecord = downloads.records.find((record) => record.item.id === id);
   const isDownloading = downloadRecord?.status === 'downloading';
   const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
-  const downloadedEpisodes = downloads.records
-    .map((record) => record.item)
-    .filter(
-      (item): item is ContentItem & { episodeNumber: number; seasonNumber: number } =>
-        item.parentSeriesId === movie?.parentSeriesId &&
-        typeof item.episodeNumber === 'number' &&
-        typeof item.seasonNumber === 'number',
-    );
-  const offlineNextEpisode =
-    movie && isOfflinePlayback
-      ? nextEpisodeInSeries(downloadedEpisodes, movie.id)
-      : undefined;
-  const nextEpisode =
-    isOfflinePlayback
-      ? offlineNextEpisode
-      : nextEpisodeState?.currentId === movie?.id
-      ? nextEpisodeState?.episode
-        : undefined;
+  const duration = Number.isFinite(player.duration) ? player.duration : 0;
+  const bufferedPosition = Number.isFinite(player.bufferedPosition) ? player.bufferedPosition : 0;
+  const isBuffering = isLoading || playerStatus === 'loading';
+  const playerTitle =
+    isTrailer
+      ? `Trailer · ${movie?.title ?? ''}`
+      : movie?.parentSeriesId && movie.episodeNumber
+        ? `${seriesTitle ?? movie.title} S${String(movie.seasonNumber ?? 1).padStart(2, '0')} E${String(movie.episodeNumber).padStart(2, '0')}`
+        : movie?.title ?? 'Now playing';
 
   useEffect(() => {
     playerReleasedRef.current = false;
@@ -95,154 +74,99 @@ export default function WatchScreen() {
   }, [player]);
 
   useEffect(() => {
-    if (Platform.OS === 'web') {
-      return;
-    }
-    let active = true;
-    void ScreenOrientation.getOrientationLockAsync()
-      .then((lock) => {
-        if (active) {
-          originalOrientationLock.current = lock;
-        }
-      })
-      .catch(() => {
-        logger.warn('[WatchScreen] Could not read the original screen orientation.');
-      });
-    return () => {
-      active = false;
-      const previousLock = originalOrientationLock.current;
-      if (previousLock !== undefined) {
-        void ScreenOrientation.lockAsync(previousLock).catch((orientationError: unknown) => {
-          logger.warn('[WatchScreen] Screen orientation restore failed.', 'n/a', 'ORIENTATION_RESTORE_FAILED');
-        });
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
-      return;
-    }
-    let active = true;
-    void Brightness.getBrightnessAsync()
-      .then((value) => {
-        if (active) {
-          originalBrightness.current = value;
-          brightnessRef.current = value;
-        }
-      })
-      .catch((brightnessError: unknown) => {
-        logger.warn('[WatchScreen] Display brightness read failed.', 'n/a', 'BRIGHTNESS_READ_FAILED');
-      });
-    return () => {
-      active = false;
-      const previousBrightness = originalBrightness.current;
-      if (previousBrightness !== undefined) {
-        void Brightness.setBrightnessAsync(previousBrightness).catch(() => {
-          logger.warn('[WatchScreen] Could not restore the original display brightness.');
-        });
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-    void AsyncStorage.getItem(PLAYER_GESTURE_HINT_KEY)
-      .then((dismissed) => {
-        if (active && dismissed !== 'true') {
-          setShowGestureHint(true);
-        }
-      })
-      .catch(() => {
-        if (active) {
-          setShowGestureHint(true);
-        }
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  useEffect(
-    () => () => {
-      if (feedbackTimeout.current) {
-        clearTimeout(feedbackTimeout.current);
-      }
-    },
-    [],
-  );
-
-  const showFeedback = useCallback((feedback: PlayerGestureFeedback) => {
-    if (feedbackTimeout.current) {
-      clearTimeout(feedbackTimeout.current);
-    }
-    setGestureFeedback(feedback);
-    feedbackTimeout.current = setTimeout(() => setGestureFeedback(undefined), 1100);
-  }, []);
-
-  const getGestureValue = useCallback(
-    (side: 'left' | 'right') =>
-      side === 'left' || playerReleasedRef.current ? brightnessRef.current : player.volume,
-    [player],
-  );
-
-  const handleVerticalDrag = useCallback(
-    (side: 'left' | 'right', startValue: number, deltaY: number, height: number) => {
-      const value = getDragTarget(startValue, deltaY, height);
-      if (side === 'left') {
-        if (Platform.OS !== 'android' && Platform.OS !== 'ios') {
-          return;
-        }
-        brightnessRef.current = value;
-        void Brightness.setBrightnessAsync(value).catch(() => {
-          logger.warn('[WatchScreen] Could not change the display brightness.');
-        });
-      } else {
-        runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerVolume(player, value));
-      }
-      showFeedback({ kind: 'level', side, value });
-    },
-    [player, showFeedback],
-  );
-
-  const handleSeekBy = useCallback(
-    (side: 'left' | 'right') => {
-      const delta = side === 'right' ? 10 : -10;
-      runPlayerActionIfActive(playerReleasedRef.current, () => {
-        player.seekBy(
-          getSeekTarget(player.currentTime, player.duration, delta) - player.currentTime,
-        );
-      });
-      showFeedback({ kind: 'seek', label: `${delta > 0 ? '+' : ''}${delta}s` });
-    },
-    [player, showFeedback],
-  );
-
-  const rotatePlayer = async () => {
-    const landscape = togglePlayerOrientation(isLandscape);
-    if (Platform.OS === 'web') {
-      Alert.alert('Rotation unavailable', 'Screen rotation controls are available in the mobile app.');
-      return;
-    }
-    try {
-      await ScreenOrientation.lockAsync(
-        landscape
-          ? ScreenOrientation.OrientationLock.LANDSCAPE
-          : ScreenOrientation.OrientationLock.PORTRAIT_UP,
-      );
-      setIsLandscape(landscape);
-    } catch {
-      logger.warn('[WatchScreen] Could not change screen orientation.');
-      Alert.alert('Rotation unavailable', 'Could not rotate the screen on this device.');
-    }
-  };
-
-  const dismissGestureHint = () => {
-    setShowGestureHint(false);
-    void AsyncStorage.setItem(PLAYER_GESTURE_HINT_KEY, 'true').catch(() => {
-      Alert.alert('Could not save setting', 'The player gesture tip may appear again next time.');
+    setPlayerTimeUpdateInterval(player, 0.25);
+    const timeSubscription = player.addListener('timeUpdate', ({ currentTime: time }) => {
+      setCurrentTime(time);
     });
-  };
+    const playingSubscription = player.addListener('playingChange', ({ isPlaying: playing }) => {
+      setIsPlaying(playing);
+    });
+    return () => {
+      timeSubscription.remove();
+      playingSubscription.remove();
+    };
+  }, [player]);
+
+  useEffect(() => {
+    if (!showControls || !shouldAutoHidePlayerControls(isPlaying, isSeeking)) {
+      return;
+    }
+    const timeout = setTimeout(() => setShowControls(false), PLAYER_CONTROLS_AUTO_HIDE_MS);
+    return () => clearTimeout(timeout);
+  }, [isPlaying, isSeeking, showControls]);
+
+  const refreshExpiredLink = useCallback(async () => {
+    if (!movie || isOfflinePlayback || !isOnline || !supabaseMovieRepository) {
+      setError(getFriendlyPlaybackError(isOnline));
+      setIsLoading(false);
+      return;
+    }
+
+    setIsLoading(true);
+    setError(undefined);
+    setPlaybackUrl(undefined);
+    try {
+      const freshUrl = isTrailer
+        ? await supabaseMovieRepository.getTrailerPlaybackUrl(movie)
+        : movie.id.startsWith('geniuz:episode:')
+          ? await supabaseMovieRepository.getEpisodePlaybackUrl(movie)
+          : await supabaseMovieRepository.getPlaybackUrl(movie);
+      if (!playerReleasedRef.current) {
+        setPlaybackUrl(freshUrl);
+      }
+    } catch (refreshError) {
+      const { status, code } = getPlaybackErrorDetails(refreshError);
+      loggerPlaybackWarning(status, code, 'SIGNED_URL_REFRESH_FAILED');
+      if (!playerReleasedRef.current) {
+        setError(
+          isOnline
+            ? 'The playback link expired and could not be refreshed. Check your connection and tap Retry.'
+            : getFriendlyPlaybackError(false),
+        );
+        setIsLoading(false);
+      }
+    }
+  }, [isOfflinePlayback, isOnline, isTrailer, movie]);
+
+  const handlePlayerFailure = useCallback((playerError?: { message: string }) => {
+    if (failureHandledRef.current || playerReleasedRef.current) {
+      return;
+    }
+    failureHandledRef.current = true;
+    setIsLoading(false);
+    setShowControls(true);
+
+    if (
+      isExpiredPlaybackLinkError(playerError) &&
+      !expiredLinkRetryRef.current &&
+      !isOfflinePlayback &&
+      isOnline &&
+      movie
+    ) {
+      expiredLinkRetryRef.current = true;
+      setError(undefined);
+      void refreshExpiredLink();
+      return;
+    }
+
+    setError(
+      isExpiredPlaybackLinkError(playerError) && expiredLinkRetryRef.current && isOnline
+        ? 'The playback link expired and could not be refreshed. Check your connection and tap Retry.'
+        : getFriendlyPlaybackError(isOnline, playerError),
+    );
+  }, [isOfflinePlayback, isOnline, movie, refreshExpiredLink]);
+
+  useEffect(() => {
+    const subscription = player.addListener('statusChange', ({ status, error: playerError }) => {
+      setPlayerStatus(status);
+      if (status === 'readyToPlay') {
+        setIsLoading(false);
+      } else if (status === 'error') {
+        handlePlayerFailure(playerError);
+      }
+    });
+    return () => subscription.remove();
+  }, [handlePlayerFailure, player]);
 
   useEffect(() => {
     let active = true;
@@ -256,8 +180,12 @@ export default function WatchScreen() {
       setError(undefined);
       setPlaybackUrl(undefined);
       setMovie(undefined);
+      setSeriesTitle(undefined);
       setIsOfflinePlayback(false);
-      setPlaybackEnded(false);
+      setCurrentTime(0);
+      setShowControls(true);
+      expiredLinkRetryRef.current = false;
+      failureHandledRef.current = false;
 
       if (localDownload && !isTrailer) {
         const extension =
@@ -270,8 +198,7 @@ export default function WatchScreen() {
               : 'other',
           )
         ) {
-          const format = extension ? extension.toUpperCase() : 'UNKNOWN';
-          setError(`This device may not support ${format} video files. Try an MP4 file.`);
+          setError('This video format is not supported on this device. Try an MP4 version.');
           setIsLoading(false);
           return;
         }
@@ -283,21 +210,22 @@ export default function WatchScreen() {
       }
 
       if (!isOnline) {
-        setError('You are offline. Only downloaded titles can be played.');
+        setError(getFriendlyPlaybackError(false));
         setIsLoading(false);
         return;
       }
 
-      if (isTrailer) {
-        if (!supabaseMovieRepository) {
-          setError('Trailers are unavailable without a connection.');
-          setIsLoading(false);
-          return;
-        }
-        try {
+      if (!supabaseMovieRepository) {
+        setError('Video playback is unavailable right now. Please try again later.');
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        if (isTrailer) {
           const title = await supabaseMovieRepository.getById(id);
           if (!title?.trailerStorageKey?.trim()) {
-            throw new PlaybackError('This title does not have an available trailer.', 'TRAILER_NOT_FOUND', 404);
+            throw new PlaybackError('Trailer unavailable.', 'TRAILER_NOT_FOUND', 404);
           }
           const url = await supabaseMovieRepository.getTrailerPlaybackUrl(title);
           if (active) {
@@ -305,56 +233,32 @@ export default function WatchScreen() {
             setPlaybackUrl(url);
             setIsOfflinePlayback(false);
           }
-        } catch (trailerError) {
-          if (active) {
-            const { status, code } = getPlaybackErrorDetails(trailerError);
-            setError(
-              trailerError instanceof Error
-                ? trailerError.message
-                : 'Could not prepare this trailer. Please retry.',
-            );
-            logger.warn('[WatchScreen] Trailer preparation failed.', status ?? 'n/a', code ?? 'TRAILER_PREPARATION_FAILED');
-          }
-        } finally {
-          if (active) {
-            setIsLoading(false);
-          }
+          return;
         }
-        return;
-      }
 
-      const isEpisode = id.startsWith('geniuz:episode:');
-      if (
-        !supabaseMovieRepository ||
-        (!isEpisode &&
+        const isEpisode = id.startsWith('geniuz:episode:');
+        if (
+          !isEpisode &&
           !id.startsWith('geniuz:movie:') &&
           !id.startsWith('geniuz:series:') &&
-          !id.startsWith('geniuz:short:'))
-      ) {
-        setError('This title is not available for streaming.');
-        setIsLoading(false);
-        return;
-      }
-
-      try {
-        const movie = isEpisode
+          !id.startsWith('geniuz:short:')
+        ) {
+          throw new PlaybackError('Title unavailable.', 'TITLE_UNAVAILABLE', 404);
+        }
+        const item = isEpisode
           ? await supabaseMovieRepository.getEpisodeById(id)
           : await supabaseMovieRepository.getById(id);
-        if (!movie) {
-          throw new PlaybackError(
-            'This title is unavailable. Check that it is published and has a video file.',
-            'TITLE_UNAVAILABLE',
-            404,
-          );
+        if (!item) {
+          throw new PlaybackError('Title unavailable.', 'TITLE_UNAVAILABLE', 404);
         }
-        if (!movie.availability.stream) {
-          throw new PlaybackError('This title is not published for streaming.', 'TITLE_NOT_PUBLISHED', 403);
+        if (!item.availability.stream) {
+          throw new PlaybackError('Title unavailable.', 'TITLE_NOT_PUBLISHED', 403);
         }
-        if (!movie.mediaPath?.trim()) {
-          throw new PlaybackError('This title is missing its video file.', 'PLAYBACK_FILE_MISSING', 404);
+        if (!item.mediaPath?.trim()) {
+          throw new PlaybackError('Video unavailable.', 'PLAYBACK_FILE_MISSING', 404);
         }
 
-        const extension = movie.fileExtension ?? getFileExtension(movie.mediaPath);
+        const extension = item.fileExtension ?? getFileExtension(item.mediaPath);
         if (
           !isVideoFormatLikelySupported(
             extension,
@@ -363,32 +267,35 @@ export default function WatchScreen() {
               : 'other',
           )
         ) {
-          const format = extension ? extension.toUpperCase() : 'UNKNOWN';
-          throw new PlaybackError(
-            `This device may not support ${format} video files. Try an MP4 file.`,
-            'UNSUPPORTED_VIDEO_FORMAT',
-          );
+          throw new PlaybackError('Unsupported video format.', 'UNSUPPORTED_VIDEO_FORMAT');
         }
 
         const url = isEpisode
-          ? await supabaseMovieRepository.getEpisodePlaybackUrl(movie)
-          : await supabaseMovieRepository.getPlaybackUrl(movie);
+          ? await supabaseMovieRepository.getEpisodePlaybackUrl(item)
+          : await supabaseMovieRepository.getPlaybackUrl(item);
         if (active) {
-          setMovie(movie);
+          setMovie(item);
           setIsOfflinePlayback(false);
           setPlaybackUrl(url);
+          if (item.parentSeriesId) {
+            void supabaseMovieRepository
+              .getById(`geniuz:series:${item.parentSeriesId}`)
+              .then((series) => {
+                if (active && series) {
+                  setSeriesTitle(series.title);
+                }
+              })
+              .catch(() => {
+                logger.warn('[WatchScreen] Could not load the series title.');
+              });
+          }
         }
       } catch (loadError) {
         const { status, code } = getPlaybackErrorDetails(loadError);
+        loggerPlaybackWarning(status, code, 'PLAYBACK_PREPARATION_FAILED');
         if (active) {
-          const message =
-            loadError instanceof Error
-              ? loadError.message
-              : 'Could not prepare this movie for playback. Please try again.';
-          const devSuffix = __DEV__ && (status || code) ? ` [HTTP ${status ?? 'n/a'} • ${code ?? 'unknown'}]` : '';
-          setError(`${message}${devSuffix}`);
+          setError(getFriendlyPreparationError(code, isOnline));
         }
-        logger.warn('[WatchScreen] Playback preparation failed.', status ?? 'n/a', code ?? 'PLAYBACK_ERROR');
       } finally {
         if (active) {
           setIsLoading(false);
@@ -408,84 +315,68 @@ export default function WatchScreen() {
     }
 
     let active = true;
+    failureHandledRef.current = false;
     void player
       .replaceAsync(playbackUrl)
       .then(() => {
         if (active && !playerReleasedRef.current) {
-          runPlayerActionIfActive(playerReleasedRef.current, () => player.play());
+          player.play();
         }
       })
       .catch((loadError: unknown) => {
         if (active) {
           const { status, code } = getPlaybackErrorDetails(loadError);
-          setError('Could not load the video file. It may be missing or unavailable. Check your connection and retry.');
-          logger.warn('[WatchScreen] Video load failed.', status ?? 'n/a', code ?? 'PLAYER_LOAD_FAILED');
-          setIsLoading(false);
+          loggerPlaybackWarning(status, code, 'PLAYER_LOAD_FAILED');
+          handlePlayerFailure(loadError instanceof Error ? { message: loadError.message } : undefined);
         }
       });
 
     return () => {
       active = false;
-      runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
-    };
-  }, [player, playbackUrl]);
-
-  useEffect(() => {
-    const subscription = player.addListener('statusChange', ({ status }) => {
-      if (status === 'error' && !playerReleasedRef.current) {
-        logger.warn('[WatchScreen] Video playback failed.', 'n/a', 'PLAYER_ERROR');
-        setError('Could not play this video file. It may be missing or use an unsupported codec. Check your connection and retry.');
-        setIsLoading(false);
-        runPlayerActionIfActive(playerReleasedRef.current, () => player.pause());
+      if (!playerReleasedRef.current) {
+        player.pause();
       }
-    });
-    return () => subscription.remove();
-  }, [player]);
-
-  useEffect(() => {
-    const subscription = player.addListener('playToEnd', () => setPlaybackEnded(true));
-    return () => subscription.remove();
-  }, [player]);
-
-  useEffect(() => {
-    if (!movie?.parentSeriesId || !movie.episodeNumber || isOfflinePlayback) {
-      return;
-    }
-
-    let active = true;
-    void supabaseMovieRepository
-      ?.getSeasons(movie.parentSeriesId)
-      .then((seasons) => {
-        if (active) {
-          setNextEpisodeState({
-            currentId: movie.id,
-            episode: nextEpisodeInSeries(
-              seasons.flatMap((season) => season.episodes),
-              movie.id,
-            ),
-          });
-        }
-      })
-      .catch(() => {
-        logger.warn('[WatchScreen] Could not load the next episode.');
-      });
-    return () => {
-      active = false;
     };
-  }, [isOfflinePlayback, movie?.id, movie?.parentSeriesId, movie?.episodeNumber]);
+  }, [handlePlayerFailure, player, playbackUrl]);
 
   const retryPlayback = () => {
+    expiredLinkRetryRef.current = false;
+    failureHandledRef.current = false;
     setError(undefined);
     setIsLoading(true);
     setPlaybackUrl(undefined);
     setRetryAttempt((attempt) => attempt + 1);
   };
 
+  const seekTo = (seconds: number) => {
+    if (playerReleasedRef.current) {
+      return;
+    }
+    runPlayerActionIfActive(playerReleasedRef.current, () => setPlayerCurrentTime(player, seconds));
+    setCurrentTime(seconds);
+  };
+
+  const seekBy = (seconds: number) => {
+    seekTo(getSeekTarget(player.currentTime, duration, seconds));
+  };
+
+  const togglePlayback = () => {
+    if (playerReleasedRef.current || error) {
+      return;
+    }
+    setShowControls(true);
+    if (player.playing) {
+      player.pause();
+    } else {
+      player.play();
+    }
+  };
+
   return (
-    <SafeAreaView style={[styles.safeArea, isLandscape && styles.fullscreenSafeArea]}>
+    <SafeAreaView style={styles.safeArea}>
       <Stack.Screen
         options={{
-          orientation: isLandscape ? 'landscape' : 'portrait',
+          orientation: 'all',
           statusBarHidden: isLandscape,
           navigationBarHidden: isLandscape,
         }}
@@ -493,67 +384,45 @@ export default function WatchScreen() {
       <PlayerHeader
         player={player}
         playbackUrl={playbackUrl}
+        title={playerTitle}
         isLoading={isLoading}
+        isBuffering={isBuffering}
+        isPlaying={isPlaying}
+        currentTime={currentTime}
+        duration={duration}
+        bufferedPosition={bufferedPosition}
         error={error}
+        showControls={showControls}
+        isLandscape={isLandscape}
+        onBack={() => backOrReplace('/')}
+        onToggleControls={() => setShowControls((visible) => !visible)}
+        onPlayPause={togglePlayback}
+        onSeekBy={seekBy}
+        onSeekTo={seekTo}
+        onSeekingChange={setIsSeeking}
         onRetry={retryPlayback}
-        isFullscreen={isLandscape}
-        gestureFeedback={gestureFeedback}
-        getGestureValue={getGestureValue}
-        onVerticalDrag={handleVerticalDrag}
-        onSeekBy={handleSeekBy}
       />
-      {showGestureHint ? (
-        <View style={[styles.gestureHint, isLandscape && styles.fullscreenGestureHint]}>
-          <Text style={styles.gestureHintText}>
-            Double-tap left/right to skip 10 seconds. Swipe vertically on the left for brightness and right for volume.
-          </Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss player gesture tip"
-            onPress={dismissGestureHint}
-            style={styles.dismissHintButton}
-          >
-            <Text style={styles.dismissHintText}>Got it</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {!isLandscape && !isOnline && !isOfflinePlayback ? (
-        <OfflineState
-          onRetry={() => void retryPlayback()}
-          message="You are offline. Download this title while connected to watch it here."
-        />
-      ) : null}
-      <View style={[styles.header, isLandscape && styles.fullscreenHeader]}>
-        {!isLandscape ? (
-          <View style={styles.headerTitle}>
-            <Text style={styles.title}>{isTrailer ? `Trailer · ${movie?.title ?? ''}` : 'Now playing'}</Text>
-          </View>
-        ) : null}
-        <View style={styles.headerActions}>
-          <Pressable accessibilityRole="button" onPress={() => backOrReplace('/')} style={styles.backButton}>
-            <Text style={styles.backText}>‹  Back</Text>
-          </Pressable>
-          <RotateButton isLandscape={isLandscape} onPress={() => void rotatePlayer()} />
-        </View>
-      </View>
       {!isLandscape && !isTrailer && movie?.availability.download ? (
         <Pressable
           accessibilityRole="button"
+          accessibilityLabel={
+            isDownloaded
+              ? `${movie.title} downloaded`
+              : isDownloading
+                ? `Cancel ${movie.title} download`
+                : isQueued
+                  ? `Cancel queued download for ${movie.title}`
+                  : `Download ${movie.title}`
+          }
           disabled={Boolean(isDownloaded)}
           onPress={() => {
             if (isDownloading || isQueued) {
-              void downloads.cancel(movie.id).catch((downloadError: unknown) =>
-                Alert.alert(
-                  'Download error',
-                  downloadError instanceof Error ? downloadError.message : 'Could not cancel this download.',
-                ),
+              void downloads.cancel(movie.id).catch(() =>
+                Alert.alert('Download error', 'Could not cancel this download. Please try again.'),
               );
             } else {
-              void downloads.download(movie).catch((downloadError: unknown) =>
-                Alert.alert(
-                  'Download error',
-                  downloadError instanceof Error ? downloadError.message : 'The download failed. Please retry.',
-                ),
+              void downloads.download(movie).catch(() =>
+                Alert.alert('Download error', 'The download failed. Please check your connection and retry.'),
               );
             }
           }}
@@ -566,18 +435,8 @@ export default function WatchScreen() {
                 ? `Cancel download (${downloadRecord.progress}%)`
                 : isQueued
                   ? 'Cancel queued download'
-                : 'Download'}
+                  : 'Download'}
           </Text>
-        </Pressable>
-      ) : null}
-      {!isLandscape && playbackEnded && nextEpisode ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.replace({ pathname: '/watch/[id]', params: { id: nextEpisode.id } })}
-          style={styles.nextEpisodeButton}
-        >
-          <Text style={styles.nextEpisodeText}>Next episode</Text>
-          <Text style={styles.nextEpisodeTitle} numberOfLines={1}>{nextEpisode.title}</Text>
         </Pressable>
       ) : null}
       {!isLandscape && downloads.error ? <ContentNotice message={downloads.error} tone="error" /> : null}
@@ -592,22 +451,24 @@ export default function WatchScreen() {
   );
 }
 
-function RotateButton({ isLandscape, onPress }: { isLandscape: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel="Rotate screen"
-      onPress={onPress}
-      style={styles.rotateButton}
-    >
-      <Ionicons
-        name={isLandscape ? 'phone-portrait-outline' : 'phone-landscape-outline'}
-        size={20}
-        color={theme.accent}
-      />
-      <Text style={styles.rotateText}>Rotate screen</Text>
-    </Pressable>
-  );
+function getFriendlyPreparationError(code: string | undefined, isOnline: boolean) {
+  if (!isOnline) {
+    return getFriendlyPlaybackError(false);
+  }
+  if (code === 'UNSUPPORTED_VIDEO_FORMAT') {
+    return 'This video format is not supported on this device. Try an MP4 version.';
+  }
+  if (code === 'PLAYBACK_FILE_MISSING' || code === 'PLAYBACK_FILE_NOT_FOUND' || code === 'TITLE_UNAVAILABLE') {
+    return 'This video is not available right now.';
+  }
+  if (code === 'TRAILER_NOT_FOUND') {
+    return 'A trailer is not available for this title.';
+  }
+  return getFriendlyPlaybackError(true);
+}
+
+function loggerPlaybackWarning(status: number | undefined, code: string | undefined, fallbackCode: string) {
+  logger.warn('[WatchScreen] Playback request failed.', status ?? 'n/a', code ?? fallbackCode);
 }
 
 const styles = StyleSheet.create({
@@ -615,62 +476,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.background,
   },
-  fullscreenSafeArea: {
-    padding: 0,
-  },
-  header: {
-    paddingHorizontal: 18,
-    paddingTop: 14,
-    paddingBottom: 16,
-  },
-  headerTitle: {
-    marginBottom: 10,
-  },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
-  },
-  fullscreenHeader: {
-    position: 'absolute',
-    top: 8,
-    left: 0,
-    right: 0,
-    zIndex: 2,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 8,
-    paddingRight: 12,
-  },
-  backText: {
-    color: theme.accent,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  rotateButton: {
-    minWidth: 44,
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 7,
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 13,
-  },
-  rotateText: { color: theme.text, fontSize: 12, fontWeight: '700' },
-  title: {
-    color: theme.text,
-    fontSize: 24,
-    fontWeight: '800',
-    marginTop: 10,
-  },
   downloadButton: {
     alignSelf: 'flex-start',
+    minHeight: 44,
+    justifyContent: 'center',
     backgroundColor: theme.surface,
     borderColor: theme.border,
     borderRadius: 999,
@@ -678,29 +487,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
     marginTop: 14,
     paddingHorizontal: 18,
-    paddingVertical: 11,
   },
   downloadButtonText: {
     color: theme.text,
     fontSize: 13,
     fontWeight: '700',
   },
-  nextEpisodeButton: {
-    minHeight: 52,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    marginHorizontal: 18,
-    marginTop: 12,
-    backgroundColor: theme.surface,
-    borderWidth: 1,
-    borderColor: theme.accent,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-  },
-  nextEpisodeText: { color: theme.accent, fontSize: 14, fontWeight: '800' },
-  nextEpisodeTitle: { color: theme.text, fontSize: 14, flex: 1, textAlign: 'right' },
   disabledButton: {
     opacity: 0.55,
   },
@@ -711,35 +503,4 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingTop: 14,
   },
-  gestureHint: {
-    marginHorizontal: 18,
-    marginTop: 10,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 12,
-  },
-  fullscreenGestureHint: {
-    position: 'absolute',
-    left: 18,
-    right: 18,
-    bottom: 24,
-    zIndex: 2,
-    margin: 0,
-  },
-  gestureHintText: { color: theme.text, flex: 1, fontSize: 12, lineHeight: 18 },
-  dismissHintButton: {
-    minWidth: 56,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: theme.accent,
-    paddingHorizontal: 12,
-  },
-  dismissHintText: { color: theme.background, fontSize: 13, fontWeight: '800' },
 });

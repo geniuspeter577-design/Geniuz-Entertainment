@@ -34,6 +34,7 @@ export default function RootLayout() {
               <Stack
                 screenOptions={{
                   headerShown: false,
+                  orientation: 'portrait',
                   contentStyle: {
                     backgroundColor: theme.background,
                   },

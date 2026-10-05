@@ -11,205 +11,189 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 
-import { isFeatureEnabled } from '../../config/features';
 import { theme } from '../../theme';
-import { isPlayerGestureArea } from '../../utils/playerControls';
-
-type GestureSide = 'left' | 'right';
-type GestureFeedback =
-  | { kind: 'seek'; label: string }
-  | { kind: 'level'; side: GestureSide; value: number };
+import {
+  clampPlayerValue,
+  formatPlaybackTime,
+  getSeekBarTarget,
+} from '../../utils/playerControls';
 
 type PlayerHeaderProps = {
   player: ReturnType<typeof useVideoPlayer>;
   playbackUrl?: string;
+  title: string;
   isLoading: boolean;
+  isBuffering: boolean;
+  isPlaying: boolean;
+  currentTime: number;
+  duration: number;
+  bufferedPosition: number;
   error?: string;
+  showControls: boolean;
+  isLandscape: boolean;
+  onBack: () => void;
+  onToggleControls: () => void;
+  onPlayPause: () => void;
+  onSeekBy: (seconds: number) => void;
+  onSeekTo: (seconds: number) => void;
+  onSeekingChange: (isSeeking: boolean) => void;
   onRetry: () => void;
-  isFullscreen?: boolean;
-  gestureFeedback?: GestureFeedback;
-  getGestureValue: (side: GestureSide) => number;
-  onVerticalDrag: (side: GestureSide, startValue: number, deltaY: number, height: number) => void;
-  onSeekBy: (side: GestureSide) => void;
 };
 
 export function PlayerHeader({
   player,
   playbackUrl,
+  title,
   isLoading,
+  isBuffering,
+  isPlaying,
+  currentTime,
+  duration,
+  bufferedPosition,
   error,
-  onRetry,
-  isFullscreen = false,
-  gestureFeedback,
-  getGestureValue,
-  onVerticalDrag,
+  showControls,
+  isLandscape,
+  onBack,
+  onToggleControls,
+  onPlayPause,
   onSeekBy,
+  onSeekTo,
+  onSeekingChange,
+  onRetry,
 }: PlayerHeaderProps) {
-  const dimensionsRef = useRef({ width: 0, height: 0 });
-  const touchStartRef = useRef<{ x: number; y: number; pageX: number; pageY: number; side: GestureSide } | undefined>(undefined);
-  const dragStartRef = useRef<{ side: GestureSide; value: number } | undefined>(undefined);
-  const lastTapRef = useRef<{ side: GestureSide; time: number } | undefined>(undefined);
-  const draggingRef = useRef(false);
-  const wasDragRef = useRef(false);
-  const canUseGestures = Boolean(playbackUrl) && !isLoading && !error;
+  const seekBarWidth = useRef(0);
+  const progress = duration > 0 ? clampPlayerValue(currentTime / duration) : 0;
+  const bufferedProgress = duration > 0 ? clampPlayerValue(bufferedPosition / duration) : 0;
 
-  const recordTouchStart = (event: GestureResponderEvent) => {
-    const { locationX, locationY, pageX, pageY } = event.nativeEvent;
-    wasDragRef.current = false;
-    if (!canUseGestures) {
-      touchStartRef.current = undefined;
-      return;
-    }
-    touchStartRef.current = {
-      x: locationX,
-      y: locationY,
-      pageX,
-      pageY,
-      side: locationX < dimensionsRef.current.width / 2 ? 'left' : 'right',
-    };
+  const seekFromEvent = (event: GestureResponderEvent) => {
+    onSeekTo(getSeekBarTarget(event.nativeEvent.locationX, seekBarWidth.current, duration));
   };
-
-  const shouldCaptureVerticalDrag = (event: GestureResponderEvent) => {
-    const start = touchStartRef.current;
-    const { width, height } = dimensionsRef.current;
-    const { pageX, pageY } = event.nativeEvent;
-    const dx = pageX - (start?.pageX ?? pageX);
-    const dy = pageY - (start?.pageY ?? pageY);
-    return Boolean(
-      canUseGestures &&
-        start &&
-        isPlayerGestureArea(start.x, start.y, width, height) &&
-        Math.abs(dy) > 8 &&
-        Math.abs(dy) > Math.abs(dx) * 1.2,
-    );
-  };
-
-  const beginVerticalDrag = () => {
-    const start = touchStartRef.current;
-    if (start) {
-      dragStartRef.current = { side: start.side, value: getGestureValue(start.side) };
-      draggingRef.current = true;
-      wasDragRef.current = true;
-    }
-  };
-
-  const updateVerticalDrag = (event: GestureResponderEvent) => {
-    const drag = dragStartRef.current;
-    const { height } = dimensionsRef.current;
-    const deltaY = event.nativeEvent.pageY - (touchStartRef.current?.pageY ?? event.nativeEvent.pageY);
-    if (drag && height > 0) {
-      onVerticalDrag(drag.side, drag.value, deltaY, height);
-    }
-  };
-
-  const finishVerticalDrag = () => {
-    draggingRef.current = false;
-    dragStartRef.current = undefined;
-  };
-
-  const recordTouchEnd = () => {
-    const start = touchStartRef.current;
-    const { width, height } = dimensionsRef.current;
-    touchStartRef.current = undefined;
-    if (
-      !start ||
-      wasDragRef.current ||
-      draggingRef.current ||
-      !isPlayerGestureArea(start.x, start.y, width, height)
-    ) {
-      return;
-    }
-    const now = Date.now();
-    if (lastTapRef.current?.side === start.side && now - lastTapRef.current.time <= 300) {
-      lastTapRef.current = undefined;
-      onSeekBy(start.side);
-    } else {
-      lastTapRef.current = { side: start.side, time: now };
-    }
-  };
-
-  const handleLayout = (event: LayoutChangeEvent) => {
-    dimensionsRef.current = {
-      width: event.nativeEvent.layout.width,
-      height: event.nativeEvent.layout.height,
-    };
+  const handleSeekBarLayout = (event: LayoutChangeEvent) => {
+    seekBarWidth.current = event.nativeEvent.layout.width;
   };
 
   return (
-    <View
-      style={[styles.container, isFullscreen && styles.fullscreenContainer]}
-      onLayout={handleLayout}
-      onTouchStart={recordTouchStart}
-      onTouchEnd={recordTouchEnd}
-      onStartShouldSetResponder={() => false}
-      onMoveShouldSetResponder={shouldCaptureVerticalDrag}
-      onResponderGrant={beginVerticalDrag}
-      onResponderMove={updateVerticalDrag}
-      onResponderRelease={finishVerticalDrag}
-      onResponderTerminate={finishVerticalDrag}
-      onResponderTerminationRequest={() => false}
-    >
+    <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
       {playbackUrl ? (
         <VideoView
           player={player}
-          style={[styles.video, isFullscreen && styles.fullscreenVideo]}
-          nativeControls
+          style={styles.video}
+          nativeControls={false}
           fullscreenOptions={{ enable: false }}
           contentFit="contain"
           allowsPictureInPicture={false}
         />
       ) : null}
-      {isFeatureEnabled('qualityOptions') ? (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ disabled: true }}
-          disabled
-          style={[styles.qualityPill, styles.disabledQuality]}
-        >
-          <Text style={styles.qualityText}>Standard quality · Go HD ›</Text>
-        </Pressable>
-      ) : null}
-      {isLoading ? (
-        <View style={styles.overlay}>
-          <ActivityIndicator color={theme.accent} />
-          <Text style={styles.overlayText}>Preparing your video...</Text>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={showControls ? 'Hide playback controls' : 'Show playback controls'}
+        onPress={onToggleControls}
+        style={StyleSheet.absoluteFill}
+      />
+      {isBuffering ? (
+        <View pointerEvents="none" style={styles.bufferingBadge}>
+          <ActivityIndicator color={theme.accent} size="small" />
+          <Text style={styles.bufferingText}>{isLoading ? 'Loading' : 'Buffering'}</Text>
         </View>
       ) : null}
-      {error ? (
-        <View style={styles.overlay}>
-          <Ionicons name="alert-circle-outline" size={28} color={theme.text} />
-          <Text style={styles.errorText}>{error}</Text>
-          <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retryButton}>
-            <Text style={styles.retryText}>Retry</Text>
-          </Pressable>
-        </View>
-      ) : null}
-      {gestureFeedback?.kind === 'seek' ? (
-        <View pointerEvents="none" style={styles.seekFeedback} accessibilityLiveRegion="polite">
-          <Text style={styles.feedbackText}>{gestureFeedback.label}</Text>
-        </View>
-      ) : null}
-      {gestureFeedback?.kind === 'level' ? (
-        <View
-          pointerEvents="none"
-          style={[
-            styles.levelFeedback,
-            gestureFeedback.side === 'left' ? styles.levelFeedbackLeft : styles.levelFeedbackRight,
-          ]}
-          accessibilityLiveRegion="polite"
-        >
-          <Text style={styles.feedbackText}>
-            {gestureFeedback.side === 'left' ? 'Brightness' : 'Volume'}
-          </Text>
-          <View style={styles.levelTrack}>
-            <View
-              style={[
-                styles.levelFill,
-                { height: `${Math.round(gestureFeedback.value * 100)}%` },
-              ]}
-            />
+      {showControls ? (
+        <View style={styles.controls} pointerEvents="box-none">
+          <View style={styles.topBar}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+              onPress={onBack}
+              style={styles.backButton}
+              hitSlop={8}
+            >
+              <Ionicons name="chevron-back" size={26} color={theme.text} />
+            </Pressable>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
           </View>
-          <Text style={styles.feedbackText}>{Math.round(gestureFeedback.value * 100)}%</Text>
+
+          {error ? (
+            <View style={styles.errorPanel}>
+              <Ionicons name="alert-circle-outline" size={30} color={theme.text} />
+              <Text style={styles.errorText}>{error}</Text>
+              <Pressable accessibilityRole="button" onPress={onRetry} style={styles.retryButton}>
+                <Text style={styles.retryText}>Retry</Text>
+              </Pressable>
+            </View>
+          ) : (
+            <>
+              <View style={styles.centerControls} pointerEvents="box-none">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Back 10 seconds"
+                  onPress={() => onSeekBy(-10)}
+                  style={styles.skipButton}
+                  hitSlop={8}
+                >
+                  <Ionicons name="play-back" size={28} color={theme.text} />
+                  <Text style={styles.skipText}>10</Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                  onPress={onPlayPause}
+                  style={styles.playButton}
+                  hitSlop={8}
+                >
+                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={38} color={theme.background} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Forward 10 seconds"
+                  onPress={() => onSeekBy(10)}
+                  style={styles.skipButton}
+                  hitSlop={8}
+                >
+                  <Ionicons name="play-forward" size={28} color={theme.text} />
+                  <Text style={styles.skipText}>10</Text>
+                </Pressable>
+              </View>
+
+              <View style={styles.seekControls}>
+                <Text style={styles.timeText}>{formatPlaybackTime(currentTime)}</Text>
+                <View
+                  accessible
+                  accessibilityRole="adjustable"
+                  accessibilityLabel="Playback position"
+                  accessibilityValue={{
+                    min: 0,
+                    max: duration > 0 ? duration : 0,
+                    now: Math.min(currentTime, duration),
+                    text: `${formatPlaybackTime(currentTime)} of ${duration > 0 ? formatPlaybackTime(duration) : 'unknown duration'}`,
+                  }}
+                  accessibilityActions={[{ name: 'increment', label: 'Forward 10 seconds' }, { name: 'decrement', label: 'Back 10 seconds' }]}
+                  onAccessibilityAction={(event) => {
+                    onSeekBy(event.nativeEvent.actionName === 'increment' ? 10 : -10);
+                  }}
+                  onLayout={handleSeekBarLayout}
+                  onStartShouldSetResponder={() => duration > 0}
+                  onMoveShouldSetResponder={() => duration > 0}
+                  onResponderGrant={(event) => {
+                    onSeekingChange(true);
+                    seekFromEvent(event);
+                  }}
+                  onResponderMove={seekFromEvent}
+                  onResponderRelease={(event) => {
+                    seekFromEvent(event);
+                    onSeekingChange(false);
+                  }}
+                  onResponderTerminate={() => onSeekingChange(false)}
+                  style={styles.seekBarTouchTarget}
+                >
+                  <View pointerEvents="none" style={styles.seekTrack}>
+                    <View style={[styles.seekBuffered, { width: `${bufferedProgress * 100}%` }]} />
+                    <View style={[styles.seekProgress, { width: `${progress * 100}%` }]} />
+                    <View style={[styles.seekThumb, { left: `${progress * 100}%` }]} />
+                  </View>
+                </View>
+                <Text style={styles.timeText}>{duration > 0 ? formatPlaybackTime(duration) : '--:--'}</Text>
+              </View>
+            </>
+          )}
         </View>
       ) : null}
     </View>
@@ -222,92 +206,167 @@ const styles = StyleSheet.create({
     aspectRatio: 16 / 9,
     backgroundColor: theme.background,
     justifyContent: 'center',
+    overflow: 'hidden',
   },
-  video: { width: '100%', height: '100%' },
-  fullscreenContainer: {
+  landscapeContainer: {
     flex: 1,
     aspectRatio: undefined,
   },
-  fullscreenVideo: {
-    position: 'absolute',
-    width: '100%',
-    height: '100%',
+  video: {
+    ...StyleSheet.absoluteFill,
   },
-  qualityPill: {
-    position: 'absolute',
-    top: 12,
-    alignSelf: 'center',
-    minHeight: 40,
-    justifyContent: 'center',
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderWidth: 1,
-    borderRadius: 999,
-    paddingHorizontal: 14,
+  controls: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(14, 16, 20, 0.18)',
   },
-  disabledQuality: { opacity: 0.75 },
-  qualityText: { color: theme.text, fontSize: 14, fontWeight: '700' },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    backgroundColor: theme.scrim,
+  topBar: {
+    minHeight: 64,
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 28,
-    gap: 12,
-  },
-  overlayText: { color: theme.text, fontSize: 15, fontWeight: '600', textAlign: 'center' },
-  errorText: { color: theme.text, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-  retryButton: {
-    minWidth: 96,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.accent,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-  },
-  retryText: { color: theme.background, fontSize: 15, fontWeight: '800' },
-  seekFeedback: {
-    position: 'absolute',
-    top: '45%',
-    alignSelf: 'center',
-    backgroundColor: theme.scrim,
-    borderRadius: 18,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  levelFeedback: {
-    position: 'absolute',
-    top: '30%',
-    bottom: '30%',
-    alignItems: 'center',
-    justifyContent: 'center',
     gap: 8,
+    paddingHorizontal: 14,
+    backgroundColor: theme.scrim,
   },
-  levelFeedbackLeft: { left: 20 },
-  levelFeedbackRight: { right: 20 },
-  levelTrack: {
-    width: 5,
-    flex: 1,
-    maxHeight: 120,
+  backButton: {
+    width: 48,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 24,
     backgroundColor: theme.surface,
-    borderRadius: 999,
-    justifyContent: 'flex-end',
-    overflow: 'hidden',
   },
-  levelFill: {
-    width: '100%',
+  title: {
+    flex: 1,
+    color: theme.text,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  centerControls: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 24,
+    transform: [{ translateY: -34 }],
+  },
+  skipButton: {
+    width: 58,
+    height: 58,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 29,
+    backgroundColor: 'rgba(26, 29, 35, 0.9)',
+  },
+  skipText: {
+    position: 'absolute',
+    color: theme.text,
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 15,
+  },
+  playButton: {
+    width: 70,
+    height: 70,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 35,
     backgroundColor: theme.accent,
   },
-  feedbackText: {
+  seekControls: {
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    backgroundColor: theme.scrim,
+  },
+  timeText: {
+    minWidth: 42,
     color: theme.text,
     fontSize: 12,
-    fontWeight: '700',
-    textShadowColor: '#000000',
-    textShadowRadius: 4,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  seekBarTouchTarget: {
+    height: 44,
+    flex: 1,
+    justifyContent: 'center',
+  },
+  seekTrack: {
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: theme.surfaceSoft,
+    justifyContent: 'center',
+  },
+  seekBuffered: {
+    position: 'absolute',
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: theme.secondaryText,
+  },
+  seekProgress: {
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: theme.accent,
+  },
+  seekThumb: {
+    position: 'absolute',
+    top: -5,
+    width: 14,
+    height: 14,
+    marginLeft: -7,
+    borderRadius: 7,
+    backgroundColor: theme.accent,
+  },
+  bufferingBadge: {
+    position: 'absolute',
+    top: 72,
+    right: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 999,
+    backgroundColor: theme.scrim,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  bufferingText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  errorPanel: {
+    position: 'absolute',
+    top: '25%',
+    left: 24,
+    right: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  errorText: {
+    maxWidth: 440,
+    color: theme.text,
+    fontSize: 15,
+    lineHeight: 22,
+    textAlign: 'center',
+  },
+  retryButton: {
+    minWidth: 104,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 999,
+    backgroundColor: theme.accent,
+    paddingHorizontal: 20,
+  },
+  retryText: {
+    color: theme.background,
+    fontSize: 15,
+    fontWeight: '800',
   },
 });

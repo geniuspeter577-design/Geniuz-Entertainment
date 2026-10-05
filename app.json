@@ -3,7 +3,7 @@
     "name": "Geniuz+",
     "slug": "geniuz-entertainment",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "scheme": "geniuz",
     "userInterfaceStyle": "dark",
     "icon": "./assets/branding/icon.png",

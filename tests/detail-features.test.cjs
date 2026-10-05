@@ -16,13 +16,21 @@ const { getHomeHeroItems } = require('../.test-build/src/utils/homeHero.js');
 const { getKeyboardScrollTarget } = require('../.test-build/src/utils/keyboardScroll.js');
 const {
   getDragTarget,
+  getSeekBarTarget,
   isPlayerGestureArea,
   getSeekTarget,
+  formatPlaybackTime,
+  PLAYER_CONTROLS_AUTO_HIDE_MS,
   runPlayerActionIfActive,
+  shouldAutoHidePlayerControls,
   setPlayerMuted,
   setPlayerVolume,
   togglePlayerOrientation,
 } = require('../.test-build/src/utils/playerControls.js');
+const {
+  getFriendlyPlaybackError,
+  isExpiredPlaybackLinkError,
+} = require('../.test-build/src/utils/playbackError.js');
 const {
   shouldAutoplayTrailer,
   toggleTrailerMuted,
@@ -236,6 +244,41 @@ test('player controls clamp seeks and drag values and toggle orientation', () =>
   setPlayerMuted(player, true);
   assert.equal(player.volume, 1);
   assert.equal(player.muted, true);
+});
+
+test('playback time formatting supports minutes, hours, and invalid values', () => {
+  assert.equal(formatPlaybackTime(0), '0:00');
+  assert.equal(formatPlaybackTime(65.9), '1:05');
+  assert.equal(formatPlaybackTime(3600), '1:00:00');
+  assert.equal(formatPlaybackTime(3661), '1:01:01');
+  assert.equal(formatPlaybackTime(-1), '0:00');
+  assert.equal(formatPlaybackTime(Number.NaN), '0:00');
+});
+
+test('seek bar math clamps the thumb position and rejects invalid dimensions', () => {
+  assert.equal(getSeekBarTarget(0, 100, 60), 0);
+  assert.equal(getSeekBarTarget(25, 100, 60), 15);
+  assert.equal(getSeekBarTarget(100, 100, 60), 60);
+  assert.equal(getSeekBarTarget(120, 100, 60), 60);
+  assert.equal(getSeekBarTarget(-20, 100, 60), 0);
+  assert.equal(getSeekBarTarget(20, 0, 60), 0);
+  assert.equal(getSeekTarget(Number.NaN, 60, 10), 10);
+});
+
+test('player controls auto-hide only while playing and not seeking', () => {
+  assert.equal(PLAYER_CONTROLS_AUTO_HIDE_MS, 3000);
+  assert.equal(shouldAutoHidePlayerControls(true, false), true);
+  assert.equal(shouldAutoHidePlayerControls(false, false), false);
+  assert.equal(shouldAutoHidePlayerControls(true, true), false);
+  assert.equal(shouldAutoHidePlayerControls(false, true), false);
+});
+
+test('expired playback links are recognized without exposing technical errors', () => {
+  assert.equal(isExpiredPlaybackLinkError({ message: 'Request has expired' }), true);
+  assert.equal(isExpiredPlaybackLinkError({ status: 403, message: 'Forbidden' }), true);
+  assert.equal(isExpiredPlaybackLinkError({ message: 'Unsupported codec' }), false);
+  assert.match(getFriendlyPlaybackError(true, { message: 'Unsupported codec' }), /MP4/);
+  assert.match(getFriendlyPlaybackError(false, { message: 'network error' }), /offline/i);
 });
 
 test('released trailer players do not receive further commands', () => {
