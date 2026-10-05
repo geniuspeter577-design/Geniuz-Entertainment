@@ -29,6 +29,13 @@ test('home row shuffle is seeded, reshuffles with a new seed, and preserves all 
     firstShuffle.map(({ key }) => key),
   );
   for (const row of rows) {
+    if (row.key === 'latest') {
+      assert.deepEqual(
+        newSeedShuffle.find(({ key }) => key === row.key)?.items,
+        row.items,
+      );
+      continue;
+    }
     assert.notDeepEqual(
       newSeedShuffle.find(({ key }) => key === row.key)?.items,
       firstShuffle.find(({ key }) => key === row.key)?.items,

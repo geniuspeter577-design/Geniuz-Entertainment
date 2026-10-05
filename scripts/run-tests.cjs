@@ -31,6 +31,7 @@ const sources = [
   'src/utils/supabaseError.ts',
   'src/utils/contentError.ts',
   'src/utils/publishedCatalog.ts',
+  'src/constants/categories.ts',
   'src/utils/homeList.ts',
   'src/utils/homeRowShuffle.ts',
   'src/utils/titleDeletion.ts',

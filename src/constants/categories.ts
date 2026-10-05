@@ -14,6 +14,7 @@ export const TITLE_CATEGORIES = [
   'Romance',
   'Kids',
   'Football',
+  'Reels',
 ] as const;
 
 export type TitleCategory = (typeof TITLE_CATEGORIES)[number];

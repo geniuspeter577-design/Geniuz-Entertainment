@@ -4,9 +4,11 @@ import { Upload } from 'tus-js-client';
 import type { ContentItem, EpisodeItem, SeasonItem } from '../models/content';
 import { supabase } from '../services/supabase';
 import { PlaybackError } from '../utils/playbackError';
+import { loadAllPages } from '../utils/publishedCatalog';
 import { logSupabaseError } from '../utils/supabaseError';
 
 const MOVIE_BUCKET = 'movie-assets';
+const PUBLISHED_CATALOG_PAGE_SIZE = 500;
 const MOVIE_COLUMNS =
   'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type';
 const TITLE_IMAGE_BUCKET = 'title-images';
@@ -239,62 +241,46 @@ export class SupabaseMovieRepository {
   }
 
   async getPublishedMovies() {
-    const { data, error } = await this.client
-      .from('movies')
-      .select(`${MOVIE_COLUMNS},created_at`)
-      .eq('published', true)
-      .eq('content_type', 'movie')
-      .or('video_path.not.is.null,storage_key.not.is.null')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logSupabaseError('[SupabaseMovieRepository] Could not load published movies.', error, {
-        table: 'movies',
-        columns: `${MOVIE_COLUMNS},created_at`,
-      });
-      throw new Error('Could not load published movies.', { cause: error });
-    }
-
-    return (data as MovieRecord[]).map(toContentItem);
+    return this.getPublishedTitlesByType('movie');
   }
 
   async getPublishedSeries() {
-    const { data, error } = await this.client
-      .from('movies')
-      .select(`${MOVIE_COLUMNS},created_at`)
-      .eq('published', true)
-      .eq('content_type', 'series')
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      logSupabaseError('[SupabaseMovieRepository] Could not load published series.', error, {
-        table: 'movies',
-        columns: `${MOVIE_COLUMNS},created_at`,
-      });
-      throw new Error('Could not load published series.', { cause: error });
-    }
-
-    return (data as MovieRecord[]).map(toContentItem);
+    return this.getPublishedTitlesByType('series');
   }
 
   async getPublishedShorts() {
-    const { data, error } = await this.client
-      .from('movies')
-      .select(`${MOVIE_COLUMNS},created_at`)
-      .eq('published', true)
-      .eq('content_type', 'short')
-      .or('video_path.not.is.null,storage_key.not.is.null')
-      .order('created_at', { ascending: false });
+    return this.getPublishedTitlesByType('short');
+  }
 
-    if (error) {
-      logSupabaseError('[SupabaseMovieRepository] Could not load published shorts.', error, {
-        table: 'movies',
-        columns: `${MOVIE_COLUMNS},created_at`,
-      });
-      throw new Error('Could not load published shorts.', { cause: error });
-    }
+  private async getPublishedTitlesByType(contentType: 'movie' | 'series' | 'short') {
+    const contentLabel = contentType === 'short' ? 'shorts' : contentType === 'series' ? 'series' : 'movies';
 
-    return (data as MovieRecord[]).map(toContentItem);
+    const records = await loadAllPages(async (offset, pageSize) => {
+      let query = this.client
+        .from('movies')
+        .select(`${MOVIE_COLUMNS},created_at`)
+        .eq('published', true)
+        .eq('content_type', contentType);
+
+      if (contentType !== 'series') {
+        query = query.or('video_path.not.is.null,storage_key.not.is.null');
+      }
+
+      const { data, error } = await query
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(offset, offset + pageSize - 1);
+
+      if (error) {
+        logSupabaseError(`[SupabaseMovieRepository] Could not load published ${contentLabel}.`, error, {
+          table: 'movies',
+          columns: `${MOVIE_COLUMNS},created_at`,
+        });
+        throw new Error(`Could not load published ${contentLabel}.`, { cause: error });
+      }
+      return (data ?? []) as MovieRecord[];
+    }, PUBLISHED_CATALOG_PAGE_SIZE);
+    return records.map(toContentItem);
   }
 
   async getPublished() {

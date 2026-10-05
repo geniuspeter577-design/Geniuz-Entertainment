@@ -33,9 +33,13 @@ export function shuffleHomeCategoryRows<T, Metadata extends object>(
 ): HomeCategoryRow<T, Metadata>[] {
   const randomizedItems = rows.map((row, index) => ({
     ...row,
-    items: shuffleWithSeed(row.items, (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0),
+    items: row.key === 'latest'
+      ? [...row.items]
+      : shuffleWithSeed(row.items, (seed + Math.imul(index + 1, 0x9e3779b1)) >>> 0),
   }));
-  return shuffleWithSeed(randomizedItems, seed);
+  const latestRows = randomizedItems.filter(({ key }) => key === 'latest');
+  const otherRows = randomizedItems.filter(({ key }) => key !== 'latest');
+  return [...latestRows, ...shuffleWithSeed(otherRows, seed)];
 }
 
 export function createHomeShuffleSeed(previousSeed?: number) {

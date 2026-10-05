@@ -28,7 +28,7 @@ import { theme } from '../../src/theme';
 import { loadNotifications, getUnreadNotificationCount } from '../../src/services/NotificationsStore';
 import { formatRuntime } from '../../src/utils/contentPresentation';
 import {
-  getCategoryItems,
+  getHomeCategoryItems,
   isDemoCatalogEnabled,
   loadPublishedCatalog,
   sortPublishedNewest,
@@ -103,7 +103,7 @@ export default function HomeScreen() {
       { key: 'Anime', label: 'Anime' },
       { key: 'Animation', label: 'Animation' },
       { key: 'Kids', label: 'Kids' },
-      { key: 'Shorts', label: 'Shorts' },
+      { key: 'Reels', label: 'Reels' },
       { key: 'TV', label: 'TV' },
       { key: 'Nollywood', label: 'Nollywood' },
       { key: 'Football', label: 'Football' },
@@ -117,17 +117,17 @@ export default function HomeScreen() {
       selectedCategory === 'Trending'
         ? publishedItems
         : selectedCategory === 'TV'
-          ? series
-          : selectedCategory === 'Shorts'
-            ? shorts
-            : getCategoryItems(publishedItems, selectedCategory),
-    [publishedItems, selectedCategory, series, shorts],
+          ? getHomeCategoryItems(publishedItems, selectedCategory)
+          : selectedCategory === 'Reels'
+            ? shorts.filter((item) => item.availability.discoverable)
+            : getHomeCategoryItems(publishedItems, selectedCategory),
+    [publishedItems, selectedCategory, shorts],
   );
   const activeHeroItems = useMemo(
     () =>
       selectedCategory === 'Trending'
         ? heroItems
-        : selectedCategory === 'Shorts'
+        : selectedCategory === 'Reels'
           ? []
           : sortPublishedNewest(activeCategoryItems).slice(0, 5),
     [activeCategoryItems, heroItems, selectedCategory],
@@ -224,7 +224,7 @@ export default function HomeScreen() {
             title: selectedCategory,
             listKind: selectedCategory === 'TV'
               ? 'series'
-              : selectedCategory === 'Shorts'
+              : selectedCategory === 'Reels'
                 ? 'shorts'
                 : 'category',
             listValue: selectedCategory,
@@ -233,7 +233,9 @@ export default function HomeScreen() {
             isLoading: catalogQuery.isLoading,
           }]
         : [];
-    return shuffleHomeCategoryRows(rows, shuffleSeed);
+    return selectedCategory === 'Trending'
+      ? shuffleHomeCategoryRows(rows, shuffleSeed)
+      : rows;
   }, [
     activeCategoryItems,
     catalogQuery.isLoading,
@@ -381,7 +383,8 @@ export default function HomeScreen() {
                     }}
                     onPress={() => {
                       setSelectedCategory(key);
-                      if (key === 'Shorts') {
+                      if (key === 'Reels') {
+                        // TODO: Member reel upload, gated on membership (Phase 2 + Phase 6).
                         router.push('/shorts');
                       }
                     }}

@@ -185,6 +185,16 @@ test('new profile migration protects avatar ownership and adds short categories 
   assert.doesNotMatch(migration, /insert into public\.movies/i);
 });
 
+test('Me screen avatar opens Edit profile and replaces the standalone edit link', () => {
+  const screen = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+  assert.match(
+    screen,
+    /<Pressable[\s\S]*?accessibilityLabel="Edit profile"[\s\S]*?onPress=\{\(\) => router\.push\('\/edit-profile'\)\}[\s\S]*?styles\.avatarButton/,
+  );
+  assert.match(screen, /styles\.avatarEditBadge/);
+  assert.doesNotMatch(screen, /<Text[^>]*>\s*Edit profile\s*<\/Text>/);
+});
+
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
   const migration = fs.readFileSync('supabase/migrations/20261014000000_profile_date_of_birth.sql', 'utf8');
   assert.match(migration, /add column if not exists date_of_birth date/i);

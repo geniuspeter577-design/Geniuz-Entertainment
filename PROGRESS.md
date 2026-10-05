@@ -1,6 +1,6 @@
 # Progress
 
-Updated: 2026-10-04
+Updated: 2026-10-05
 
 ## Phase 0: Inspection
 
@@ -28,6 +28,9 @@ Updated: 2026-10-04
 
 ## Latest Validation
 
+- Home category tabs now fetch all published movies, series, and shorts in stable 500-row pages instead of relying on one unpaginated Supabase response, which could stop at the project row cap and omit older titles before category matching. Category membership is case-insensitive, multi-category aware, and excludes undiscoverable titles; TV includes series/TV items, and Home shuffle preserves the newest-first Latest row.
+- The Me avatar now opens Edit profile with an accessible pencil badge. Home labels Shorts as Reels while retaining `/shorts`; Reels is available in the admin category picker. Categories remain free-form, so no migration is required.
+- Validation for the Home/profile/Reels changes: `npm run typecheck` passed, `EXPO_NO_DOTENV=1 npm run lint` passed with two pre-existing duplicate-import warnings in `src/services/ProfileRepository.ts`, and `npm test` passed (108/108). No environment variables or database migration are needed; all changes are JavaScript/TypeScript and work in Expo Go as well as EAS builds.
 - Auth storage: Supabase's base `sb-<project-ref>-auth-token` and PKCE `-code-verifier` keys are valid; the old `:secure-chunk:<n>` suffix generated invalid SecureStore keys for large auth sessions. SecureStore calls now sanitize every key while leaving already-valid keys unchanged; existing inline SecureStore sessions and the legacy AsyncStorage migration path remain readable.
 - PKCE: added SDK 57-compatible `expo-crypto` and a WebCrypto `subtle.digest` shim backed by native SHA-256, retaining secure random generation and never downgrading challenge method to `plain`.
 - Auth validation: `npm test` passed (101/101); sanitizer tests confirm valid keys are unchanged, invalid characters are replaced, no key is empty, and every chunk operation uses allowed characters.

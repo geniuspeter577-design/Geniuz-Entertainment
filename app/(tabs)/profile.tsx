@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { router } from 'expo-router';
 import * as Clipboard from 'expo-clipboard';
@@ -47,13 +48,23 @@ export default function ProfileScreen() {
         <Text style={styles.header}>Profile</Text>
 
         <View style={styles.profileCard}>
-          <View style={styles.avatar}>
-            {auth.profile?.avatar_url ? (
-              <Image source={{ uri: auth.profile.avatar_url }} style={styles.avatarImage} />
-            ) : (
-              <Text style={styles.avatarText}>{auth.session ? getProfileInitial(auth.profile?.display_name, auth.session.user.email) : 'G+'}</Text>
-            )}
-          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Edit profile"
+            onPress={() => router.push('/edit-profile')}
+            style={styles.avatarButton}
+          >
+            <View style={styles.avatar}>
+              {auth.profile?.avatar_url ? (
+                <Image source={{ uri: auth.profile.avatar_url }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarText}>{auth.session ? getProfileInitial(auth.profile?.display_name, auth.session.user.email) : 'G+'}</Text>
+              )}
+            </View>
+            <View style={styles.avatarEditBadge}>
+              <Ionicons name="pencil" size={12} color={theme.background} />
+            </View>
+          </Pressable>
           <View style={styles.userInfo}>
             <Text style={styles.name}>{auth.session ? auth.profile?.display_name ?? auth.session.user.email ?? 'Geniuz+ user' : 'Guest profile'}</Text>
             <Text style={styles.handle}>
@@ -66,9 +77,6 @@ export default function ProfileScreen() {
         {auth.profileError ? <ContentNotice message={auth.profileError} tone="error" /> : null}
         {auth.session && auth.profile ? (
           <View style={styles.profileCard}>
-            <Pressable accessibilityRole="button" onPress={() => router.push('/edit-profile')} style={styles.editNameButton}>
-              <Text style={styles.editNameText}>Edit profile</Text>
-            </Pressable>
             <Pressable accessibilityRole="button" accessibilityLabel={`Copy account ID ${auth.profile.public_id}`} onPress={() => void copyPublicId()} style={styles.publicIdChip}>
               <Text style={styles.publicIdLabel}>ID</Text>
               <Text style={styles.publicIdValue}>{auth.profile.public_id}</Text>
@@ -129,6 +137,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.background,
   },
+  avatarButton: { position: 'relative', alignSelf: 'flex-start' },
   avatarImage: { width: '100%', height: '100%', borderRadius: 32 },
   content: {
     paddingHorizontal: 18,
@@ -156,6 +165,19 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
+    backgroundColor: theme.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarEditBadge: {
+    position: 'absolute',
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: theme.surface,
     backgroundColor: theme.accent,
     alignItems: 'center',
     justifyContent: 'center',

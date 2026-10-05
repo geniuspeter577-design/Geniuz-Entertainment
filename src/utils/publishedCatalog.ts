@@ -29,6 +29,23 @@ export async function loadPublishedCatalog<T extends ContentItem>(
   };
 }
 
+export async function loadAllPages<T>(
+  loadPage: (offset: number, pageSize: number) => Promise<T[]>,
+  pageSize: number,
+): Promise<T[]> {
+  if (!Number.isSafeInteger(pageSize) || pageSize < 1) {
+    throw new RangeError('Page size must be a positive safe integer.');
+  }
+  const items: T[] = [];
+  for (let offset = 0; ; offset += pageSize) {
+    const page = await loadPage(offset, pageSize);
+    items.push(...page);
+    if (page.length < pageSize) {
+      return items;
+    }
+  }
+}
+
 export function sortPublishedNewest<T extends ContentItem>(items: readonly T[]) {
   return [...items].sort((first, second) =>
     (second.createdAt ?? '').localeCompare(first.createdAt ?? ''),
@@ -48,12 +65,22 @@ export function getCategoryTabs(items: readonly ContentItem[]) {
 }
 
 export function getCategoryItems(items: readonly ContentItem[], category: string) {
-  const normalizedCategory = category.toLocaleLowerCase();
+  const normalizedCategory = category.trim().toLocaleLowerCase();
   return sortPublishedNewest(items.filter((item) =>
+    item.availability.discoverable &&
     (item.categories ?? []).some((itemCategory) =>
       itemCategory.toLocaleLowerCase() === normalizedCategory,
     ),
   ));
+}
+
+export function getHomeCategoryItems(items: readonly ContentItem[], category: string) {
+  if (category.trim().toLocaleLowerCase() === 'tv') {
+    return sortPublishedNewest(items.filter(
+      (item) => item.availability.discoverable && (item.type === 'series' || item.type === 'tv'),
+    ));
+  }
+  return getCategoryItems(items, category);
 }
 
 export function searchPublishedCatalog(

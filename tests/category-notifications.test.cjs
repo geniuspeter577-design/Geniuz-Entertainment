@@ -1,11 +1,14 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+const { TITLE_CATEGORIES } = require('../.test-build/src/constants/categories.js');
 
 const {
-  getCategoryItems,
+  loadAllPages,
+  getHomeCategoryItems,
   getCategoryTabs,
 } = require('../.test-build/src/utils/publishedCatalog.js');
 const { getRankedHomeListItems } = require('../.test-build/src/utils/homeList.js');
+const { shuffleHomeCategoryRows } = require('../.test-build/src/utils/homeRowShuffle.js');
 const {
   getUnreadNotificationCount,
 } = require('../.test-build/src/services/NotificationsStore.js');
@@ -63,34 +66,86 @@ const categoryItems = [
   },
 ];
 
-test('category tabs are ordered by count and filtered by category name', () => {
+test('Home category tabs include every matching published category case-insensitively', () => {
   const tabs = getCategoryTabs(categoryItems);
   assert.deepEqual(tabs.map(({ count }) => count), [3, 2, 1]);
   assert.deepEqual(new Set(tabs.map(({ category }) => category)), new Set(['Action', 'Drama', 'Horror']));
 
-  const dramaItems = getCategoryItems(categoryItems, 'Drama');
+  const dramaItems = getHomeCategoryItems(categoryItems, 'Drama');
   assert.deepEqual(dramaItems.map(({ title }) => title), ['Later Drama', 'Action Rush', 'Early Drama']);
 
-  const horrorItems = getCategoryItems(categoryItems, 'Horror');
+  const horrorItems = getHomeCategoryItems(categoryItems, 'Horror');
   assert.deepEqual(horrorItems.map(({ title }) => title), ['Horror Night']);
 });
 
-test('Animation titles are filtered by the Animation category', () => {
-  const animationItems = getCategoryItems([
-    ...categoryItems,
+test('Nollywood multi-category movies, Animation movies, and series appear in their matching Home tabs', () => {
+  const sharedMetadata = {
+    source: 'geniuz',
+    createdAt: '2026-10-05T00:00:00.000Z',
+    genres: [],
+    availability: { discoverable: true, stream: true, download: false, premium: false },
+  };
+  const titles = [
     {
+      ...sharedMetadata,
+      id: 'movie:nollywood',
+      title: 'Nollywood Comedy',
+      type: 'movie',
+      categories: ['Nollywood', 'Comedy', 'Romance'],
+    },
+    {
+      ...sharedMetadata,
       id: 'movie:animation',
-      source: 'geniuz',
       title: 'Animated Adventure',
       type: 'movie',
-      createdAt: '2026-10-05T00:00:00.000Z',
-      genres: ['Adventure'],
       categories: ['Animation'],
-      availability: { discoverable: true, stream: true, download: true, premium: false },
     },
-  ], 'Animation');
+    {
+      ...sharedMetadata,
+      id: 'series:tv',
+      title: 'Seasonal Series',
+      type: 'series',
+      categories: ['Drama'],
+    },
+  ];
 
-  assert.deepEqual(animationItems.map(({ title }) => title), ['Animated Adventure']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'Nollywood').map(({ id }) => id), ['movie:nollywood']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'Animation').map(({ id }) => id), ['movie:animation']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'TV').map(({ id }) => id), ['series:tv']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'nOlLyWoOd').map(({ id }) => id), ['movie:nollywood']);
+  assert.deepEqual(
+    getHomeCategoryItems([{ ...titles[0], categories: ['nOlLyWoOd'] }], 'Nollywood').map(({ id }) => id),
+    ['movie:nollywood'],
+  );
+  assert.deepEqual(getHomeCategoryItems(titles, 'Drama').map(({ id }) => id), ['series:tv']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'Comedy').map(({ id }) => id), ['movie:nollywood']);
+  assert.deepEqual(getHomeCategoryItems(titles, 'Romance').map(({ id }) => id), ['movie:nollywood']);
+});
+
+test('unpublished titles never appear in category tabs', () => {
+  const draft = {
+    id: 'movie:draft',
+    source: 'geniuz',
+    title: 'Unpublished Nollywood',
+    type: 'movie',
+    genres: [],
+    categories: ['Nollywood'],
+    availability: { discoverable: false, stream: false, download: false, premium: false },
+  };
+
+  assert.deepEqual(getHomeCategoryItems([draft], 'Nollywood'), []);
+});
+
+test('published catalog fetch follows all pages beyond the default Supabase row limit', async () => {
+  const allTitles = Array.from({ length: 1103 }, (_, index) => `title-${index}`);
+  const pageOffsets = [];
+  const result = await loadAllPages(async (offset, pageSize) => {
+    pageOffsets.push(offset);
+    return allTitles.slice(offset, offset + pageSize);
+  }, 500);
+
+  assert.deepEqual(pageOffsets, [0, 500, 1000]);
+  assert.deepEqual(result, allTitles);
 });
 
 test('Home lists sort newest first and keep Trending ranks continuous across pages', () => {
@@ -110,6 +165,26 @@ test('Home lists sort newest first and keep Trending ranks continuous across pag
     getRankedHomeListItems(categoryItems, false).map(({ rank }) => rank),
     [undefined, undefined, undefined, undefined, undefined],
   );
+});
+
+test('Home shuffle keeps the Latest row first and its titles newest-first', () => {
+  const latest = {
+    key: 'latest',
+    title: 'Latest',
+    emptyMessage: 'No titles',
+    isLoading: false,
+    items: ['newest', 'older'],
+  };
+  const shuffled = shuffleHomeCategoryRows(
+    [latest, { ...latest, key: 'movies', items: ['first', 'second'] }],
+    54321,
+  );
+  assert.equal(shuffled[0].key, 'latest');
+  assert.deepEqual(shuffled[0].items, ['newest', 'older']);
+});
+
+test('admin category picker includes Reels', () => {
+  assert.ok(TITLE_CATEGORIES.includes('Reels'));
 });
 
 test('notification unread counts reflect new reads without mutating the original array', () => {
