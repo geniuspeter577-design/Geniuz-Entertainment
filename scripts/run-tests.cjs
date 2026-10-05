@@ -33,6 +33,7 @@ const sources = [
   'src/utils/publishedCatalog.ts',
   'src/constants/categories.ts',
   'src/utils/homeList.ts',
+  'src/utils/homeNavigation.ts',
   'src/utils/homeRowShuffle.ts',
   'src/utils/titleDeletion.ts',
   'src/utils/downloadQueue.ts',

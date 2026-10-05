@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useFocusEffect, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -27,6 +27,7 @@ import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { loadNotifications, getUnreadNotificationCount } from '../../src/services/NotificationsStore';
 import { formatRuntime } from '../../src/utils/contentPresentation';
+import { resetHomeToTrending } from '../../src/utils/homeNavigation';
 import {
   getHomeCategoryItems,
   isDemoCatalogEnabled,
@@ -37,6 +38,9 @@ import { createHomeShuffleSeed, shuffleHomeCategoryRows } from '../../src/utils/
 
 const demoRepository = new MockContentRepository();
 const EMPTY_CONTENT_ITEMS: ContentItem[] = [];
+type HomeTabsNavigation = {
+  addListener: (eventName: 'tabPress', listener: () => void) => () => void;
+};
 
 export default function HomeScreen() {
   const { isOnline, retryConnection } = useNetwork();
@@ -112,6 +116,24 @@ export default function HomeScreen() {
   );
   const [selectedCategory, setSelectedCategory] = useState('Trending');
   const tabsScrollRef = useRef<ScrollView | null>(null);
+  const homeScrollRef = useRef<ScrollView | null>(null);
+  const navigation = useNavigation<HomeTabsNavigation>('/(tabs)');
+  const resetHomeView = useCallback(
+    () => resetHomeToTrending(
+      setSelectedCategory,
+      () => homeScrollRef.current?.scrollTo({ y: 0, animated: false }),
+    ),
+    [],
+  );
+  useFocusEffect(
+    useCallback(() => {
+      resetHomeView();
+    }, [resetHomeView]),
+  );
+  useEffect(
+    () => navigation.addListener('tabPress', resetHomeView),
+    [navigation, resetHomeView],
+  );
   const activeCategoryItems = useMemo(
     () =>
       selectedCategory === 'Trending'
@@ -233,9 +255,7 @@ export default function HomeScreen() {
             isLoading: catalogQuery.isLoading,
           }]
         : [];
-    return selectedCategory === 'Trending'
-      ? shuffleHomeCategoryRows(rows, shuffleSeed)
-      : rows;
+    return shuffleHomeCategoryRows(rows, shuffleSeed);
   }, [
     activeCategoryItems,
     catalogQuery.isLoading,
@@ -269,6 +289,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <ScrollView
+          ref={homeScrollRef}
           contentContainerStyle={styles.content}
           refreshControl={
             <RefreshControl

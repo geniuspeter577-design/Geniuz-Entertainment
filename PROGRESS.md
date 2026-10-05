@@ -28,6 +28,8 @@ Updated: 2026-10-05
 
 ## Latest Validation
 
+- Home now resets to Trending and scrolls to the top on Home tab presses and whenever the Home screen regains focus; tapping Home while already there does not reload the catalog. Pull-to-refresh generates a new shuffle seed. Existing Home row/item shuffling is restored while Latest remains first and newest-first.
+- Validation for Home reset/refresh: `npm run typecheck` passed; `EXPO_NO_DOTENV=1 npm run lint` passed with two pre-existing duplicate-import warnings in `src/services/ProfileRepository.ts`; `npm test` passed (109/109). No migration, environment variable, or native build requirement.
 - Home category tabs now fetch all published movies, series, and shorts in stable 500-row pages instead of relying on one unpaginated Supabase response, which could stop at the project row cap and omit older titles before category matching. Category membership is case-insensitive, multi-category aware, and excludes undiscoverable titles; TV includes series/TV items, and Home shuffle preserves the newest-first Latest row.
 - The Me avatar now opens Edit profile with an accessible pencil badge. Home labels Shorts as Reels while retaining `/shorts`; Reels is available in the admin category picker. Categories remain free-form, so no migration is required.
 - Validation for the Home/profile/Reels changes: `npm run typecheck` passed, `EXPO_NO_DOTENV=1 npm run lint` passed with two pre-existing duplicate-import warnings in `src/services/ProfileRepository.ts`, and `npm test` passed (108/108). No environment variables or database migration are needed; all changes are JavaScript/TypeScript and work in Expo Go as well as EAS builds.

@@ -5,10 +5,15 @@ const { TITLE_CATEGORIES } = require('../.test-build/src/constants/categories.js
 const {
   loadAllPages,
   getHomeCategoryItems,
+  sortPublishedNewest,
   getCategoryTabs,
 } = require('../.test-build/src/utils/publishedCatalog.js');
 const { getRankedHomeListItems } = require('../.test-build/src/utils/homeList.js');
-const { shuffleHomeCategoryRows } = require('../.test-build/src/utils/homeRowShuffle.js');
+const { resetHomeToTrending } = require('../.test-build/src/utils/homeNavigation.js');
+const {
+  createHomeShuffleSeed,
+  shuffleHomeCategoryRows,
+} = require('../.test-build/src/utils/homeRowShuffle.js');
 const {
   getUnreadNotificationCount,
 } = require('../.test-build/src/services/NotificationsStore.js');
@@ -167,20 +172,65 @@ test('Home lists sort newest first and keep Trending ranks continuous across pag
   );
 });
 
-test('Home shuffle keeps the Latest row first and its titles newest-first', () => {
-  const latest = {
-    key: 'latest',
-    title: 'Latest',
-    emptyMessage: 'No titles',
-    isLoading: false,
-    items: ['newest', 'older'],
-  };
-  const shuffled = shuffleHomeCategoryRows(
-    [latest, { ...latest, key: 'movies', items: ['first', 'second'] }],
-    54321,
+test('tapping Home resets the selected category to Trending and scrolls to the top', () => {
+  let selectedCategory = 'Football';
+  let scrollPosition = 640;
+  resetHomeToTrending(
+    (category) => { selectedCategory = category; },
+    () => { scrollPosition = 0; },
   );
-  assert.equal(shuffled[0].key, 'latest');
-  assert.deepEqual(shuffled[0].items, ['newest', 'older']);
+  assert.equal(selectedCategory, 'Trending');
+  assert.equal(scrollPosition, 0);
+});
+
+test('refresh changes the seeded shuffle while Latest stays newest-first', () => {
+  const originalRandom = Math.random;
+  const shuffledRows = [
+    {
+      key: 'latest',
+      title: 'Latest',
+      emptyMessage: 'No titles',
+      isLoading: false,
+      items: sortPublishedNewest([
+        { id: 'older', createdAt: '2026-10-01', title: 'Older' },
+        { id: 'newest', createdAt: '2026-10-05', title: 'Newest' },
+        { id: 'middle', createdAt: '2026-10-03', title: 'Middle' },
+      ]),
+    },
+    {
+      key: 'movies',
+      title: 'Movies',
+      emptyMessage: 'No titles',
+      isLoading: false,
+      items: ['a', 'b', 'c', 'd'],
+    },
+    {
+      key: 'series',
+      title: 'Series',
+      emptyMessage: 'No titles',
+      isLoading: false,
+      items: ['e', 'f', 'g', 'h'],
+    },
+  ];
+
+  try {
+    Math.random = () => 1201 / 0x100000000;
+    const firstSeed = createHomeShuffleSeed();
+    Math.random = () => 9842 / 0x100000000;
+    const refreshedSeed = createHomeShuffleSeed(firstSeed);
+    assert.notEqual(refreshedSeed, firstSeed);
+
+    const initialRows = shuffleHomeCategoryRows(shuffledRows, firstSeed);
+    const refreshedRows = shuffleHomeCategoryRows(shuffledRows, refreshedSeed);
+    assert.notDeepEqual(
+      refreshedRows.filter(({ key }) => key !== 'latest').map(({ key, items }) => [key, items]),
+      initialRows.filter(({ key }) => key !== 'latest').map(({ key, items }) => [key, items]),
+    );
+    assert.equal(refreshedRows[0].key, 'latest');
+    assert.deepEqual(refreshedRows[0].items.map(({ id }) => id), ['newest', 'middle', 'older']);
+  } finally {
+    Math.random = originalRandom;
+  }
 });
 
 test('admin category picker includes Reels', () => {
