@@ -27,6 +27,14 @@ Render's free web services spin down after inactivity. The first request after a
 - Set the admin role in Supabase user `app_metadata` to `{"role":"admin"}`.
 - Configure the Backblaze bucket and key with the permissions required for upload, signed URLs, and cleanup.
 - Add the required CORS rule for the app origin.
+- For Codespaces-only testing, set `CORS_ALLOW_CODESPACES=true` and `CODESPACE_NAME` to the active Codespace name. Leave `CORS_ALLOW_CODESPACES` at its default `false` in production; do not enable a wildcard origin or any `*.app.github.dev` host outside the current port-8081 pattern.
+- Recommended Backblaze bucket lifecycle rule: `Delete unfinished large files after 1 day`.
+
+## Codespace switching and one-time setup
+
+1. One-time backend setup: set the environment variables `CODESPACE_NAME` and `CORS_ALLOW_CODESPACES=true` in the backend environment for the current Codespace. Keep `CORS_ORIGIN` limited to the exact app origins you need, and include the current Codespace origin only when the flag is enabled.
+2. When you switch to a different Codespace, update `CODESPACE_NAME` and restart the backend. The allowed Codespace origin is always `https://$CODESPACE_NAME-8081.app.github.dev`, never a wildcard and never a different port.
+3. For local web testing, keep `http://localhost:8081` and `http://localhost:19006` in `CORS_ORIGIN` as needed. Do not set `CORS_ALLOW_CODESPACES=true` in production.
 
 ## Go-live checklist
 

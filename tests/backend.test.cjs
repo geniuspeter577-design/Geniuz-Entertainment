@@ -161,6 +161,24 @@ test('upload preflight allows the configured app origin and auth headers', async
   });
   assert.equal(denied.status, 403);
   assert.equal((await denied.json()).error.code, 'CORS_ORIGIN_DENIED');
+
+  const explicitOrigin = 'https://admin.example.test';
+  const explicitConfig = loadConfig({
+    CODESPACE_NAME: 'geniuz-workspace',
+    CORS_ORIGIN: explicitOrigin,
+  });
+  assert.deepEqual(explicitConfig.corsOrigins, [explicitOrigin]);
+  const explicitApi = await startApi({ corsOrigins: explicitConfig.corsOrigins });
+  context.after(explicitApi.close);
+  const explicitAllowed = await fetch(`${explicitApi.baseUrl}/uploads/init`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: explicitOrigin,
+      'Access-Control-Request-Method': 'POST',
+    },
+  });
+  assert.equal(explicitAllowed.status, 204);
+  assert.equal(explicitAllowed.headers.get('access-control-allow-origin'), explicitOrigin);
 });
 
 test('unauthenticated and non-admin callers are denied every upload, delete, cleanup, and edit API path', async (context) => {
@@ -460,12 +478,45 @@ test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => 
   assert.throws(() => loadConfig({ PORT: '65536' }), /65535/);
 });
 
-test('server CORS defaults include the current Codespaces web origin', () => {
-  const config = loadConfig({ CODESPACE_NAME: 'geniuz-workspace' });
+test('server CORS allows Codespaces only when explicitly enabled', async (context) => {
+  const codespaceOrigin = 'https://geniuz-workspace-8081.app.github.dev';
+  const otherOrigin = 'https://other-workspace-8081.app.github.dev';
+  const defaultConfig = loadConfig({ CODESPACE_NAME: 'geniuz-workspace' });
 
-  assert.ok(config.corsOrigins.includes('http://localhost:8081'));
-  assert.ok(config.corsOrigins.includes('http://localhost:19006'));
-  assert.ok(config.corsOrigins.includes('https://geniuz-workspace-8081.app.github.dev'));
+  assert.ok(defaultConfig.corsOrigins.includes('http://localhost:8081'));
+  assert.ok(defaultConfig.corsOrigins.includes('http://localhost:19006'));
+  assert.ok(!defaultConfig.corsOrigins.includes(codespaceOrigin));
+  assert.ok(!defaultConfig.corsOrigins.includes('*'));
+
+  const enabledConfig = loadConfig({
+    CODESPACE_NAME: 'geniuz-workspace',
+    CORS_ALLOW_CODESPACES: 'true',
+  });
+  assert.ok(enabledConfig.corsOrigins.includes(codespaceOrigin));
+  assert.ok(!enabledConfig.corsOrigins.includes(otherOrigin));
+  assert.ok(!enabledConfig.corsOrigins.includes('*'));
+
+  const api = await startApi({ corsOrigins: enabledConfig.corsOrigins });
+  context.after(api.close);
+  const allowed = await fetch(`${api.baseUrl}/uploads/init`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: codespaceOrigin,
+      'Access-Control-Request-Method': 'POST',
+    },
+  });
+  assert.equal(allowed.status, 204);
+  assert.equal(allowed.headers.get('access-control-allow-origin'), codespaceOrigin);
+
+  const denied = await fetch(`${api.baseUrl}/uploads/init`, {
+    method: 'OPTIONS',
+    headers: {
+      Origin: otherOrigin,
+      'Access-Control-Request-Method': 'POST',
+    },
+  });
+  assert.equal(denied.status, 403);
+  assert.equal((await denied.json()).error.code, 'CORS_ORIGIN_DENIED');
 });
 
 test('health endpoint does not require catalog credentials', async (context) => {

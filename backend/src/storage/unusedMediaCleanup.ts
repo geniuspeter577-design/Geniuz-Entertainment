@@ -13,6 +13,18 @@ export type MediaObject = {
   lastModified: string;
 };
 
+export type IncompleteMultipartUpload = {
+  key: string;
+  uploadId: string;
+  initiatedAt: string;
+  ageHours: number;
+  uploadedSizeBytes?: number;
+};
+
+export function multipartUploadIdentity(upload: Pick<IncompleteMultipartUpload, 'key' | 'uploadId'>) {
+  return `${upload.key}\u0000${upload.uploadId}`;
+}
+
 export function isManagedMediaKey(key: string) {
   const [prefix, ...segments] = key.split('/');
   return (
@@ -125,6 +137,106 @@ export async function scanUnusedMediaFiles(
     loadReferencedMediaKeys(client),
   ]);
   return findUnusedMediaFiles(objects, referencedKeys, now, minimumAgeHours);
+}
+
+export function findIncompleteMultipartUploads(
+  uploads: readonly Omit<IncompleteMultipartUpload, 'ageHours'>[],
+  referencedKeys: ReadonlySet<string>,
+  now: number,
+  minimumAgeHours: number,
+  activeUploads: ReadonlySet<string> = new Set(),
+): IncompleteMultipartUpload[] {
+  const minimumAgeMs = minimumAgeHours * 60 * 60 * 1000;
+  return uploads
+    .flatMap((upload) => {
+      const initiatedAt = Date.parse(upload.initiatedAt);
+      const ageMs = now - initiatedAt;
+      if (
+        !isManagedMediaKey(upload.key) ||
+        !upload.uploadId ||
+        !Number.isFinite(initiatedAt) ||
+        ageMs < minimumAgeMs ||
+        referencedKeys.has(upload.key) ||
+        activeUploads.has(multipartUploadIdentity(upload))
+      ) {
+        return [];
+      }
+      return [{ ...upload, ageHours: Math.floor(ageMs / (60 * 60 * 1000)) }];
+    })
+    .sort((first, second) => first.initiatedAt.localeCompare(second.initiatedAt) || first.key.localeCompare(second.key));
+}
+
+export async function scanIncompleteMultipartUploads(
+  storage: { listIncompleteMultipartUploads: () => Promise<Omit<IncompleteMultipartUpload, 'ageHours'>[]> },
+  client: SupabaseClient,
+  minimumAgeHours: number,
+  now = Date.now(),
+  activeUploads: ReadonlySet<string> = new Set(),
+) {
+  const [uploads, referencedKeys] = await Promise.all([
+    storage.listIncompleteMultipartUploads(),
+    loadReferencedMediaKeys(client),
+  ]);
+  return findIncompleteMultipartUploads(uploads, referencedKeys, now, minimumAgeHours, activeUploads);
+}
+
+export async function deleteListedIncompleteMultipartUploads(
+  storage: {
+    listIncompleteMultipartUploads: () => Promise<Omit<IncompleteMultipartUpload, 'ageHours'>[]>;
+    abortMultipartUpload: (key: string, uploadId: string) => Promise<void>;
+  },
+  client: SupabaseClient,
+  listedUploads: readonly IncompleteMultipartUpload[],
+  minimumAgeHours: number,
+  now = Date.now(),
+  activeUploads: ReadonlySet<string> = new Set(),
+) {
+  const currentUploads = await scanIncompleteMultipartUploads(
+    storage,
+    client,
+    minimumAgeHours,
+    now,
+    activeUploads,
+  );
+  const currentByIdentity = new Map(currentUploads.map((upload) => [multipartUploadIdentity(upload), upload]));
+  const candidates = listedUploads.flatMap((upload) => {
+    const current = currentByIdentity.get(multipartUploadIdentity(upload));
+    return current ? [current] : [];
+  });
+  const deleted: IncompleteMultipartUpload[] = [];
+  const failures: { key: string; uploadId: string; message: string }[] = [];
+  let bytesFreed = 0;
+
+  for (const upload of candidates) {
+    try {
+      await storage.abortMultipartUpload(upload.key, upload.uploadId);
+      deleted.push(upload);
+      bytesFreed += upload.uploadedSizeBytes ?? 0;
+      console.info('[UnusedMediaCleanup] Aborted stale multipart upload.', {
+        key: upload.key,
+        uploadId: upload.uploadId,
+        uploadedSizeBytes: upload.uploadedSizeBytes,
+      });
+    } catch (error) {
+      console.error('[UnusedMediaCleanup] Failed to abort stale multipart upload.', {
+        key: upload.key,
+        uploadId: upload.uploadId,
+        errorName: error instanceof Error ? error.name : 'UnknownError',
+      });
+      failures.push({
+        key: upload.key,
+        uploadId: upload.uploadId,
+        message: 'Backblaze could not abort this multipart upload.',
+      });
+    }
+  }
+
+  return {
+    deleted,
+    failures,
+    skipped: listedUploads.length - candidates.length,
+    bytesFreed,
+  };
 }
 
 export async function deleteListedUnusedMediaFiles(

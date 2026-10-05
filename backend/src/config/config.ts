@@ -67,10 +67,11 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     throw new Error('TMDB_BASE_URL must use HTTPS.');
   }
 
+  const allowCodespaces = (environment.CORS_ALLOW_CODESPACES ?? 'false').trim().toLowerCase() === 'true';
   const defaultCorsOrigins = [
     'http://localhost:8081',
     'http://localhost:19006',
-    ...(environment.CODESPACE_NAME
+    ...(allowCodespaces && environment.CODESPACE_NAME
       ? [`https://${environment.CODESPACE_NAME}-8081.app.github.dev`]
       : []),
   ];

@@ -5,6 +5,7 @@ import {
   HeadBucketCommand,
   HeadObjectCommand,
   GetObjectCommand,
+  ListMultipartUploadsCommand,
   ListObjectsV2Command,
   ListPartsCommand,
   DeleteObjectCommand,
@@ -180,6 +181,62 @@ export class B2StorageService {
       } while (continuationToken);
     }
     return objects;
+  }
+
+  async listIncompleteMultipartUploads() {
+    const uploads: { key: string; uploadId: string; initiatedAt: string; uploadedSizeBytes?: number }[] = [];
+    for (const prefix of MEDIA_PREFIXES) {
+      let keyMarker: string | undefined;
+      let uploadIdMarker: string | undefined;
+      do {
+        const response = await this.client.send(new ListMultipartUploadsCommand({
+          Bucket: this.config.s3Bucket,
+          Prefix: prefix,
+          MaxUploads: MAX_LIST_KEYS,
+          ...(keyMarker ? { KeyMarker: keyMarker } : {}),
+          ...(uploadIdMarker ? { UploadIdMarker: uploadIdMarker } : {}),
+        }));
+
+        for (const upload of response.Uploads ?? []) {
+          if (!(upload.Key && upload.UploadId && upload.Initiated)) {
+            continue;
+          }
+          const key = upload.Key;
+          if (!isManagedMediaKey(key)) {
+            continue;
+          }
+          let uploadedSizeBytes: number | undefined;
+          try {
+            const parts = await this.client.send(new ListPartsCommand({
+              Bucket: this.config.s3Bucket,
+              Key: key,
+              UploadId: upload.UploadId,
+              MaxParts: 1000,
+            }));
+            uploadedSizeBytes = (parts.Parts ?? []).reduce(
+              (total, part) => total + (typeof part.Size === 'number' ? part.Size : 0),
+              0,
+            );
+          } catch {
+            uploadedSizeBytes = undefined;
+          }
+          uploads.push({
+            key,
+            uploadId: upload.UploadId,
+            initiatedAt: upload.Initiated.toISOString(),
+            uploadedSizeBytes,
+          });
+        }
+
+        const isTruncated = response.IsTruncated;
+        if (isTruncated && (!response.NextKeyMarker && !response.NextUploadIdMarker)) {
+          throw new HttpError(502, 'B2_MULTIPART_LIST_INCOMPLETE', 'Backblaze did not return valid multipart upload pagination markers.');
+        }
+        keyMarker = isTruncated ? response.NextKeyMarker ?? undefined : undefined;
+        uploadIdMarker = isTruncated ? response.NextUploadIdMarker ?? undefined : undefined;
+      } while (keyMarker || uploadIdMarker);
+    }
+    return uploads;
   }
 
   async createPlaybackProbeUrl(key: string) {

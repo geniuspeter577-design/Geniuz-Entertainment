@@ -40,7 +40,6 @@ import {
 import { theme } from '../src/theme';
 import { detectVideoFileType, validateVideoFileSize } from '../src/utils/videoFile';
 import {
-  deleteRecordThenCleanup,
   getTitleCleanupFailureMessage,
   logTitleCleanupFailures,
   retryTitleCleanup,
@@ -89,10 +88,20 @@ type UnusedMediaFile = {
   lastModified: string;
 };
 
+type IncompleteMultipartUpload = {
+  key: string;
+  uploadId: string;
+  initiatedAt: string;
+  ageHours: number;
+  uploadedSizeBytes?: number;
+};
+
 type UnusedMediaScan = {
   scanId: string;
   files: UnusedMediaFile[];
+  incompleteUploads: IncompleteMultipartUpload[];
   totalSizeBytes: number;
+  incompleteUploadTotalSizeBytes: number;
   minimumAgeHours: number;
 };
 
@@ -117,10 +126,31 @@ function parseUnusedMediaScan(value: unknown): UnusedMediaScan | undefined {
     return [{ key: record.key, sizeBytes: record.sizeBytes, lastModified: record.lastModified }];
   });
 
+  const incompleteUploads = Array.isArray(candidate.incompleteUploads)
+    ? candidate.incompleteUploads.flatMap((item) => {
+      if (typeof item !== 'object' || item === null) {
+        return [];
+      }
+      const record = item as Record<string, unknown>;
+      if (typeof record.key !== 'string' || typeof record.uploadId !== 'string' || typeof record.initiatedAt !== 'string' || typeof record.ageHours !== 'number') {
+        return [];
+      }
+      return [{
+        key: record.key,
+        uploadId: record.uploadId,
+        initiatedAt: record.initiatedAt,
+        ageHours: record.ageHours,
+        uploadedSizeBytes: typeof record.uploadedSizeBytes === 'number' ? record.uploadedSizeBytes : undefined,
+      }];
+    })
+    : [];
+
   return {
     scanId: candidate.scanId,
     files,
+    incompleteUploads,
     totalSizeBytes: candidate.totalSizeBytes,
+    incompleteUploadTotalSizeBytes: typeof candidate.incompleteUploadTotalSizeBytes === 'number' ? candidate.incompleteUploadTotalSizeBytes : 0,
     minimumAgeHours: candidate.minimumAgeHours,
   };
 }
@@ -1670,43 +1700,28 @@ export default function AdminScreen() {
       if (error || !accessToken) {
         throw new Error('Your admin session expired. Sign in again before deleting a title.');
       }
-      let assets;
-      try {
-        assets = await repository.getAdminTitleAssets(movie.id);
-      } catch (error) {
-        console.error('[AdminScreen] Could not inspect title files before deletion.', error);
-        throw new Error('Files step failed: the title files could not be listed, so the record was left unchanged.');
+      const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim().replace(/\/+$/, '');
+      if (!apiBaseUrl) {
+        throw new Error('The backend URL is not configured; the title was not changed.');
       }
-      const cleanupAssets: TitleCleanupAsset[] = [
-        ...assets.b2Keys.map((key) => ({ kind: 'b2' as const, key })),
-        ...assets.supabaseVideoPaths.map((path) => ({ kind: 'supabase-video' as const, path })),
-        ...assets.images.map((url) => ({ kind: 'image' as const, url })),
-      ];
-      let result;
-      try {
-        result = await deleteRecordThenCleanup(
-          { titleId: movie.id, title: movie.title, assets: cleanupAssets },
-          () => repository.deleteAdminTitleRecord(movie.id),
-          (asset) => removeTitleCleanupAsset(asset, accessToken),
-        );
-      } catch (error) {
-        console.error('[AdminScreen] Title record deletion failed.', error);
-        throw new Error(
-          `Record step failed: ${error instanceof Error ? error.message : 'the title record was not deleted'}`,
-        );
+
+      const titleId = movie.id.replace(/^geniuz:(?:movie|series|short):/, '');
+      const response = await fetch(`${apiBaseUrl}/admin/titles/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({ titleId }),
+      });
+      const result = await response.json().catch(() => undefined);
+      if (!response.ok) {
+        const message = result?.error?.message;
+        throw new Error(typeof message === 'string'
+          ? message
+          : 'The title could not be deleted. No database rows were removed unless all files were deleted.');
       }
-      logTitleCleanupFailures(result.failures);
-      if (result.pending) {
-        const next = [
-          ...pendingCleanups.filter((item) => item.titleId !== movie.id),
-          result.pending,
-        ];
-        await savePendingCleanups(next);
-        const failedKinds = [...new Set(result.pending.assets.map((asset) => getTitleCleanupFailureMessage(asset.kind)))];
-        setCleanupError(`The title was deleted, but cleanup failed for its ${failedKinds.join(' and ')}. Retry cleanup below.`);
-      } else {
-        await savePendingCleanups(pendingCleanups.filter((item) => item.titleId !== movie.id));
-      }
+      await savePendingCleanups(pendingCleanups.filter((item) => item.titleId !== movie.id));
       await loadMovies();
     } catch (error) {
       console.error('[AdminScreen] Could not delete title and its files.', error);
@@ -1714,7 +1729,7 @@ export default function AdminScreen() {
     } finally {
       setUpdatingMovieId(undefined);
     }
-  }, [loadMovies, pendingCleanups, removeTitleCleanupAsset, savePendingCleanups]);
+  }, [loadMovies, pendingCleanups, savePendingCleanups]);
 
   const adminSeries = movies.filter((movie) => movie.type === 'series');
   const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
@@ -2435,12 +2450,13 @@ export default function AdminScreen() {
             <View style={styles.card}>
               <Text style={styles.sectionTitle}>Backblaze cleanup</Text>
               <Text style={styles.helper}>
-                Finds media older than {unusedMediaScan?.minimumAgeHours ?? '24'} hours that is no longer referenced by any title.
+                Finds media older than {unusedMediaScan?.minimumAgeHours ?? '24'} hours that is no longer referenced by any title, and stale multipart uploads older than the same cutoff.
               </Text>
+              <Text style={styles.helper}>Recommended Backblaze lifecycle rule: “Delete unfinished large files after 1 day”.</Text>
               {unusedMediaError ? <ContentNotice message={unusedMediaError} tone="error" /> : null}
               {unusedMediaDeleteSummary ? (
                 <Text style={styles.successText}>
-                  Deleted {unusedMediaDeleteSummary.deleted} file{unusedMediaDeleteSummary.deleted === 1 ? '' : 's'}.
+                  Deleted {unusedMediaDeleteSummary.deleted} item{unusedMediaDeleteSummary.deleted === 1 ? '' : 's'}.
                   {unusedMediaDeleteSummary.failures ? ` ${unusedMediaDeleteSummary.failures} failed.` : ''}
                   {unusedMediaDeleteSummary.skipped ? ` ${unusedMediaDeleteSummary.skipped} were left alone.` : ''}
                 </Text>
@@ -2448,13 +2464,22 @@ export default function AdminScreen() {
               {unusedMediaScan ? (
                 <View style={styles.cleanupRow}>
                   <View style={styles.grow}>
-                    <Text style={styles.movieTitle}>{unusedMediaScan.files.length} unused files</Text>
-                    <Text style={styles.helper}>{formatFileSize(unusedMediaScan.totalSizeBytes)} total</Text>
-                    {unusedMediaScan.files.slice(0, 10).map((file) => (
+                    <Text style={styles.movieTitle}>{unusedMediaScan.files.length} unused files · {unusedMediaScan.incompleteUploads.length} stale uploads</Text>
+                    <Text style={styles.helper}>{formatFileSize(unusedMediaScan.totalSizeBytes)} files total · {formatFileSize(unusedMediaScan.incompleteUploadTotalSizeBytes)} uploads total</Text>
+                    {unusedMediaScan.files.slice(0, 5).map((file) => (
                       <Text key={file.key} style={styles.helper}>{file.key}</Text>
                     ))}
-                    {unusedMediaScan.files.length > 10 ? (
-                      <Text style={styles.helper}>…and {unusedMediaScan.files.length - 10} more</Text>
+                    {unusedMediaScan.files.length > 5 ? (
+                      <Text style={styles.helper}>…and {unusedMediaScan.files.length - 5} more files</Text>
+                    ) : null}
+                    {unusedMediaScan.incompleteUploads.slice(0, 5).map((upload) => (
+                      <Text key={`${upload.key}:${upload.uploadId}`} style={styles.helper}>
+                        {upload.key} · {upload.uploadId} · {upload.ageHours}h old
+                        {typeof upload.uploadedSizeBytes === 'number' ? ` · ${formatFileSize(upload.uploadedSizeBytes)}` : ''}
+                      </Text>
+                    ))}
+                    {unusedMediaScan.incompleteUploads.length > 5 ? (
+                      <Text style={styles.helper}>…and {unusedMediaScan.incompleteUploads.length - 5} more uploads</Text>
                     ) : null}
                   </View>
                 </View>

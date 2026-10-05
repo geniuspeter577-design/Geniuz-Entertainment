@@ -4,9 +4,14 @@ import { randomUUID } from 'node:crypto';
 import type { Config } from '../config/config';
 import type { ContentPage } from '../models/content';
 import { B2StorageService } from '../storage/B2StorageService';
+import { deleteAdminTitle } from '../services/adminTitleDeletion';
 import {
+  deleteListedIncompleteMultipartUploads,
   deleteListedUnusedMediaFiles,
+  scanIncompleteMultipartUploads,
   scanUnusedMediaFiles,
+  multipartUploadIdentity,
+  type IncompleteMultipartUpload,
   type MediaObject,
 } from '../storage/unusedMediaCleanup';
 import {
@@ -32,6 +37,7 @@ type StorageFactory = (config: Config) => B2StorageService;
 type UnusedMediaScan = {
   userId: string;
   files: MediaObject[];
+  incompleteUploads: IncompleteMultipartUpload[];
   expiresAt: number;
 };
 type ApiServerOptions = {
@@ -221,6 +227,7 @@ async function handleRequest(
   content: ContentService,
   getStorage: StorageFactory,
   unusedMediaScans: Map<string, UnusedMediaScan>,
+  activeMultipartUploads: Set<string>,
   now: () => number,
 ) {
   const originAllowed = withCors(request, response, config);
@@ -318,6 +325,20 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/admin/titles/delete') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, userId } = await authenticateAdmin(config, request.headers.authorization);
+    const titleId = requiredString(await readJson(request), 'titleId', 64);
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(titleId)) {
+      throw new HttpError(400, 'INVALID_TITLE_ID', 'The title ID is invalid.');
+    }
+    const result = await deleteAdminTitle(client, getStorage(config), config, titleId, userId, new Date(now()));
+    writeJson(response, 200, result);
+    return;
+  }
+
   if (pathname === '/admin/unused-files' || pathname === '/admin/unused-files/delete') {
     const { client, userId } = await authenticateAdmin(config, request.headers.authorization);
     for (const [scanId, scan] of unusedMediaScans) {
@@ -330,22 +351,32 @@ async function handleRequest(
       if (request.method !== 'GET') {
         throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
       }
-      const files = await scanUnusedMediaFiles(
-        getStorage(config),
-        client,
-        config.unusedMediaMinAgeHours,
-        now(),
-      );
+      const [files, incompleteUploads] = await Promise.all([
+        scanUnusedMediaFiles(getStorage(config), client, config.unusedMediaMinAgeHours, now()),
+        scanIncompleteMultipartUploads(
+          getStorage(config),
+          client,
+          config.unusedMediaMinAgeHours,
+          now(),
+          activeMultipartUploads,
+        ),
+      ]);
       const scanId = randomUUID();
       unusedMediaScans.set(scanId, {
         userId,
         files,
+        incompleteUploads,
         expiresAt: now() + UNUSED_MEDIA_SCAN_TTL_MS,
       });
       writeJson(response, 200, {
         scanId,
         files,
+        incompleteUploads,
         totalSizeBytes: files.reduce((total, file) => total + file.sizeBytes, 0),
+        incompleteUploadTotalSizeBytes: incompleteUploads.reduce(
+          (total, upload) => total + (upload.uploadedSizeBytes ?? 0),
+          0,
+        ),
         minimumAgeHours: config.unusedMediaMinAgeHours,
       });
       return;
@@ -364,14 +395,31 @@ async function handleRequest(
       throw new HttpError(403, 'ADMIN_REQUIRED', 'This scan belongs to a different admin session.');
     }
     unusedMediaScans.delete(scanId);
-    const result = await deleteListedUnusedMediaFiles(
-      getStorage(config),
-      client,
-      scan.files,
-      config.unusedMediaMinAgeHours,
-      now(),
-    );
-    writeJson(response, 200, result);
+    const [result, incompleteResult] = await Promise.all([
+      deleteListedUnusedMediaFiles(
+        getStorage(config),
+        client,
+        scan.files,
+        config.unusedMediaMinAgeHours,
+        now(),
+      ),
+      deleteListedIncompleteMultipartUploads(
+        getStorage(config),
+        client,
+        scan.incompleteUploads,
+        config.unusedMediaMinAgeHours,
+        now(),
+        activeMultipartUploads,
+      ),
+    ]);
+    writeJson(response, 200, {
+      deleted: [...result.deleted, ...incompleteResult.deleted],
+      failures: [...result.failures, ...incompleteResult.failures],
+      skipped: result.skipped + incompleteResult.skipped,
+      bytesFreed: result.deleted.reduce((total, file) => total + file.sizeBytes, 0) + incompleteResult.bytesFreed,
+      filesDeleted: result.deleted.length,
+      incompleteUploadsDeleted: incompleteResult.deleted.length,
+    });
     return;
   }
 
@@ -384,10 +432,12 @@ async function handleRequest(
         throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
       }
       const input = validateUploadInput(await readJson(request));
+      const upload = await storage.startMultipartUpload(input.fileName, input.contentType, input.objectType, input.kind);
+      activeMultipartUploads.add(multipartUploadIdentity(upload));
       writeJson(
         response,
         201,
-        await storage.startMultipartUpload(input.fileName, input.contentType, input.objectType, input.kind),
+        upload,
       );
       return;
     }
@@ -414,7 +464,9 @@ async function handleRequest(
       const key = requiredString(body, 'key');
       const uploadId = requiredString(body, 'uploadId');
       const parts = validateCompletedParts(body.parts, 64);
-      writeJson(response, 200, await storage.completeMultipartUpload(key, uploadId, parts));
+      const result = await storage.completeMultipartUpload(key, uploadId, parts);
+      activeMultipartUploads.delete(multipartUploadIdentity({ key, uploadId }));
+      writeJson(response, 200, result);
       return;
     }
 
@@ -423,10 +475,13 @@ async function handleRequest(
         throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
       }
       const body = await readJson(request);
+      const key = requiredString(body, 'key');
+      const uploadId = requiredString(body, 'uploadId');
       await storage.abortMultipartUpload(
-        requiredString(body, 'key'),
-        requiredString(body, 'uploadId'),
+        key,
+        uploadId,
       );
+      activeMultipartUploads.delete(multipartUploadIdentity({ key, uploadId }));
       writeJson(response, 200, { aborted: true });
       return;
     }
@@ -660,9 +715,10 @@ async function handleRequest(
 export function createApiServer(config: Config, content: ContentService, options: ApiServerOptions = {}): Server {
   const getStorage = options.storageFactory ?? getB2Storage;
   const unusedMediaScans = new Map<string, UnusedMediaScan>();
+  const activeMultipartUploads = new Set<string>();
   const now = options.now ?? Date.now;
   return createServer((request, response) => {
-    void handleRequest(request, response, config, content, getStorage, unusedMediaScans, now).catch((error: unknown) => {
+    void handleRequest(request, response, config, content, getStorage, unusedMediaScans, activeMultipartUploads, now).catch((error: unknown) => {
       const httpError =
         error instanceof HttpError
           ? error

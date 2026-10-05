@@ -63,23 +63,21 @@ function normalizeOrigin(value) {
 function buildAllowedOrigins({
   codespaceName = process.env.CODESPACE_NAME,
   corsOrigin = process.env.CORS_ORIGIN,
+  allowCodespaces = String(process.env.CORS_ALLOW_CODESPACES ?? 'false').toLowerCase() === 'true',
 } = {}) {
   const normalizedCodespaceName = codespaceName?.trim();
-  if (!normalizedCodespaceName) {
-    throw new Error('CODESPACE_NAME is required to build the current Codespaces origin.');
-  }
-
   const configuredOrigins = (corsOrigin ?? '')
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean)
     .map(normalizeOrigin);
-  const codespacesOrigin = normalizeOrigin(
-    `https://${normalizedCodespaceName}-8081.app.github.dev`,
-  );
+
+  const codespacesOrigin = normalizedCodespaceName && allowCodespaces
+    ? normalizeOrigin(`https://${normalizedCodespaceName}-8081.app.github.dev`)
+    : undefined;
   return [...new Set([
     ...configuredOrigins,
-    codespacesOrigin,
+    ...(codespacesOrigin ? [codespacesOrigin] : []),
     'http://localhost:8081',
     'http://localhost:19006',
   ])];

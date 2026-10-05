@@ -16,6 +16,7 @@ const { B2StorageService } = require('../.test-build/backend/backend/src/storage
 const {
   collectReferencedMediaKeys,
   deleteListedUnusedMediaFiles,
+  findIncompleteMultipartUploads,
   findUnusedMediaFiles,
   scanUnusedMediaFiles,
 } = require('../.test-build/backend/backend/src/storage/unusedMediaCleanup.js');
@@ -257,17 +258,49 @@ test('multipart parts must be unique, in range, contiguous, and carry ETags', ()
   );
 });
 
+test('incomplete multipart uploads keep only stale, unreferenced managed uploads', () => {
+  const now = Date.parse('2026-10-04T12:00:00.000Z');
+  const candidates = [
+    { key: 'movies/unfinished.mp4', uploadId: 'u-1', initiatedAt: '2026-10-03T10:00:00.000Z', uploadedSizeBytes: 1048576 },
+    { key: 'episodes/current.mp4', uploadId: 'u-2', initiatedAt: '2026-10-04T11:30:00.000Z', uploadedSizeBytes: 524288 },
+    { key: 'movies/referenced.mp4', uploadId: 'u-3', initiatedAt: '2026-10-01T00:00:00.000Z', uploadedSizeBytes: 2097152 },
+    { key: 'avatars/other.jpg', uploadId: 'u-4', initiatedAt: '2026-10-01T00:00:00.000Z', uploadedSizeBytes: 1048576 },
+  ];
+
+  assert.deepEqual(
+    findIncompleteMultipartUploads(candidates, new Set(['movies/referenced.mp4']), now, 24).map(({ key }) => key),
+    ['movies/unfinished.mp4'],
+  );
+});
+
 test('B2 CORS origin builder combines configured, Codespaces, and localhost origins once', () => {
+  const configured = buildAllowedOrigins({
+    codespaceName: 'abc123',
+    corsOrigin: 'https://app.example.test, http://localhost:8081',
+    allowCodespaces: true,
+  });
+  assert.deepEqual(configured, [
+    'https://app.example.test',
+    'http://localhost:8081',
+    'https://abc123-8081.app.github.dev',
+    'http://localhost:19006',
+  ]);
+
   assert.deepEqual(
     buildAllowedOrigins({
-      codespaceName: 'fictional-space-waffle-vprqq96jxjgq24vv',
-      corsOrigin: ' https://admin.example.test/ , http://localhost:8081, https://admin.example.test ',
+      codespaceName: 'abc123',
+      corsOrigin: 'https://app.example.test',
+      allowCodespaces: false,
     }),
-    [
-      'https://admin.example.test',
-      'http://localhost:8081',
-      'https://fictional-space-waffle-vprqq96jxjgq24vv-8081.app.github.dev',
-      'http://localhost:19006',
-    ],
+    ['https://app.example.test', 'http://localhost:8081', 'http://localhost:19006'],
+  );
+
+  assert.deepEqual(
+    buildAllowedOrigins({
+      codespaceName: 'abc123',
+      corsOrigin: 'https://not-allowed.example.test',
+      allowCodespaces: false,
+    }),
+    ['https://not-allowed.example.test', 'http://localhost:8081', 'http://localhost:19006'],
   );
 });
