@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router, useFocusEffect, useNavigation } from 'expo-router';
+import { router, useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
@@ -120,15 +120,11 @@ export default function HomeScreen() {
   const navigation = useNavigation<HomeTabsNavigation>('/(tabs)');
   const resetHomeView = useCallback(
     () => resetHomeToTrending(
+      selectedCategory,
       setSelectedCategory,
       () => homeScrollRef.current?.scrollTo({ y: 0, animated: false }),
     ),
-    [],
-  );
-  useFocusEffect(
-    useCallback(() => {
-      resetHomeView();
-    }, [resetHomeView]),
+    [selectedCategory],
   );
   useEffect(
     () => navigation.addListener('tabPress', resetHomeView),

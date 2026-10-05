@@ -1,7 +1,10 @@
 export function resetHomeToTrending(
+  selectedCategory: string,
   setSelectedCategory: (category: string) => void,
   scrollToTop: () => void,
 ) {
-  setSelectedCategory('Trending');
+  if (selectedCategory !== 'Trending') {
+    setSelectedCategory('Trending');
+  }
   scrollToTop();
 }

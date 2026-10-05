@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { test } = require('node:test');
 const { TITLE_CATEGORIES } = require('../.test-build/src/constants/categories.js');
 
@@ -176,11 +177,28 @@ test('tapping Home resets the selected category to Trending and scrolls to the t
   let selectedCategory = 'Football';
   let scrollPosition = 640;
   resetHomeToTrending(
+    selectedCategory,
     (category) => { selectedCategory = category; },
     () => { scrollPosition = 0; },
   );
   assert.equal(selectedCategory, 'Trending');
   assert.equal(scrollPosition, 0);
+});
+
+test('tapping Home on Trending only scrolls, while returning to Home preserves its view', () => {
+  let categoryUpdates = 0;
+  let scrollPosition = 640;
+  resetHomeToTrending(
+    'Trending',
+    () => { categoryUpdates += 1; },
+    () => { scrollPosition = 0; },
+  );
+  assert.equal(categoryUpdates, 0);
+  assert.equal(scrollPosition, 0);
+
+  const homeRoute = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
+  assert.doesNotMatch(homeRoute, /useFocusEffect|useIsFocused/);
+  assert.match(homeRoute, /navigation\.addListener\('tabPress', resetHomeView\)/);
 });
 
 test('refresh changes the seeded shuffle while Latest stays newest-first', () => {
