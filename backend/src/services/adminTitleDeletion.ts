@@ -148,15 +148,6 @@ export async function deleteAdminTitle(
 
   const movieRecord = movie as StoredTitle;
   const movieTitle = stringField(movieRecord, 'title') ?? titleId;
-  const protectedDraftNames = new Set(['Run', 'NIGERIA']);
-  if (!movieRecord.published && protectedDraftNames.has(movieTitle.trim())) {
-    await updateAudit(client, auditId, {
-      title_name: movieTitle,
-      result: 'files_failed',
-      completed_at: now.toISOString(),
-    });
-    throw new HttpError(409, 'TITLE_PROTECTED', `The draft title "${movieTitle}" is protected from automated deletion.`);
-  }
   const contentType = movieRecord.content_type;
   let seasons: StoredTitle[] = [];
   let episodes: StoredEpisode[] = [];

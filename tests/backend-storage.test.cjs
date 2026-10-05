@@ -13,6 +13,7 @@ const {
   validateUploadInput,
 } = require('../.test-build/backend/backend/src/storage/uploadValidation.js');
 const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+const { deleteAdminTitle } = require('../.test-build/backend/backend/src/services/adminTitleDeletion.js');
 const {
   collectReferencedMediaKeys,
   deleteListedUnusedMediaFiles,
@@ -271,6 +272,94 @@ test('incomplete multipart uploads keep only stale, unreferenced managed uploads
     findIncompleteMultipartUploads(candidates, new Set(['movies/referenced.mp4']), now, 24).map(({ key }) => key),
     ['movies/unfinished.mp4'],
   );
+});
+
+test('an admin can delete a draft title after its exact stored file key is removed', async () => {
+  const titleId = '00000000-0000-4000-8000-000000000001';
+  const events = [];
+  const draft = {
+    id: titleId,
+    title: 'Admin-owned draft',
+    published: false,
+    content_type: 'movie',
+    storage_provider: 'b2',
+    storage_key: 'movies/drafts/admin-owned.mp4',
+  };
+  const client = {
+    from(table) {
+      let operation = 'select';
+      const query = {
+        insert() {
+          operation = 'insert';
+          events.push('audit-start');
+          return query;
+        },
+        select() {
+          return query;
+        },
+        update(values) {
+          operation = 'update';
+          query.values = values;
+          return query;
+        },
+        delete() {
+          operation = 'delete';
+          return query;
+        },
+        eq() {
+          return query;
+        },
+        async single() {
+          return { data: { id: 'audit-1' }, error: null };
+        },
+        async maybeSingle() {
+          if (table === 'movies' && operation === 'select') {
+            return { data: draft, error: null };
+          }
+          if (table === 'movies' && operation === 'delete') {
+            events.push('database-delete');
+            return { data: { id: titleId }, error: null };
+          }
+          return { data: null, error: null };
+        },
+        then(resolve, reject) {
+          events.push(`audit-${query.values.result}`);
+          return Promise.resolve({ error: null }).then(resolve, reject);
+        },
+      };
+      return query;
+    },
+  };
+  client.storage = {
+    from(bucket) {
+      return {
+        async remove(keys) {
+          events.push(`file-delete:${bucket}/${keys[0]}`);
+          return { error: null };
+        },
+      };
+    },
+  };
+
+  const result = await deleteAdminTitle(
+    client,
+    {
+      async deleteObject(key) {
+        events.push(`file-delete:${key}`);
+      },
+    },
+    { supabaseUrl: 'https://supabase.example.test' },
+    titleId,
+    'admin-user',
+  );
+
+  assert.deepEqual(result, {
+    deleted: true,
+    titleId,
+    filesRemoved: ['movies/drafts/admin-owned.mp4'],
+  });
+  assert.ok(events.indexOf('file-delete:movies/drafts/admin-owned.mp4') < events.indexOf('database-delete'));
+  assert.ok(events.includes('audit-success'));
 });
 
 test('B2 CORS origin builder combines configured, Codespaces, and localhost origins once', () => {

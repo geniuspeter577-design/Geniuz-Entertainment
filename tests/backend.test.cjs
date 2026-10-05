@@ -209,6 +209,7 @@ test('unauthenticated and non-admin callers are denied every upload, delete, cle
     '/uploads/cleanup',
     '/uploads/trailer',
     '/uploads/edit',
+    '/admin/titles/delete',
   ];
   for (const path of paths) {
     const unauthenticated = await originalFetch(`${api.baseUrl}${path}`, { method: 'POST' });
