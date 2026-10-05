@@ -50,6 +50,14 @@ import { TitleCleanupStore } from '../src/services/TitleCleanupStore';
 import { getAdminRouteState, isAdminMetadata } from '../src/utils/adminAccess';
 import { getFriendlyAuthError } from '../src/utils/accountAuth';
 import { backOrReplace } from '../src/utils/navigation';
+import { createConfirmAction } from '../src/utils/confirmAction';
+
+const confirmAction = createConfirmAction({
+  platform: Platform.OS,
+  webConfirm: (message) => window.confirm(message),
+  nativeAlert: (title, message, buttons, options) =>
+    Alert.alert(title, message, buttons, options),
+});
 
 type AdminMovie = ContentItem & {
   published: boolean;
@@ -333,12 +341,18 @@ export default function AdminScreen() {
   const [seasons, setSeasons] = useState<AdminSeasonChoice[]>([]);
   const [moviesLoading, setMoviesLoading] = useState(false);
   const [moviesError, setMoviesError] = useState<string>();
+  const [moviesMessage, setMoviesMessage] = useState<string>();
   const [seriesError, setSeriesError] = useState<string>();
   const [pendingCleanups, setPendingCleanups] = useState<PendingTitleCleanup[]>([]);
   const [cleanupError, setCleanupError] = useState<string>();
   const [unusedMediaScan, setUnusedMediaScan] = useState<UnusedMediaScan | null>(null);
   const [unusedMediaError, setUnusedMediaError] = useState<string>();
-  const [unusedMediaDeleteSummary, setUnusedMediaDeleteSummary] = useState<{ deleted: number; failures: number; skipped: number } | null>(null);
+  const [unusedMediaDeleteSummary, setUnusedMediaDeleteSummary] = useState<{
+    deleted: number;
+    failures: number;
+    failedKeys: string[];
+    skipped: number;
+  } | null>(null);
   const [isScanningUnusedMedia, setIsScanningUnusedMedia] = useState(false);
   const [isDeletingUnusedMedia, setIsDeletingUnusedMedia] = useState(false);
   const [retryingCleanupId, setRetryingCleanupId] = useState<string>();
@@ -348,6 +362,7 @@ export default function AdminScreen() {
   }>();
   const [isRetryingMovieSave, setIsRetryingMovieSave] = useState(false);
   const [updatingMovieId, setUpdatingMovieId] = useState<string>();
+  const [deletingMovieId, setDeletingMovieId] = useState<string>();
   const [editingMovie, setEditingMovie] = useState<AdminMovie>();
   const [editTitle, setEditTitle] = useState('');
   const [editDescription, setEditDescription] = useState('');
@@ -498,15 +513,16 @@ export default function AdminScreen() {
     }
 
     const fileCount = unusedMediaScan.files.length;
-    Alert.alert(
+    const uploadCount = unusedMediaScan.incompleteUploads.length;
+    const confirmed = await confirmAction(
       'Delete unused files?',
-      `This will delete ${fileCount} Backblaze object${fileCount === 1 ? '' : 's'} listed by the scan. Only files older than ${unusedMediaScan.minimumAgeHours} hours and not connected to any title will be removed.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
+      `This will delete ${fileCount} unused Backblaze object${fileCount === 1 ? '' : 's'} and abort ${uploadCount} stale unfinished multipart upload${uploadCount === 1 ? '' : 's'}. Only items older than ${unusedMediaScan.minimumAgeHours} hours and not connected to any title will be removed.`,
+      { confirmLabel: 'Delete', destructive: true },
+    );
+    if (!confirmed) {
+      return;
+    }
+
             setIsDeletingUnusedMedia(true);
             setUnusedMediaError(undefined);
             try {
@@ -541,19 +557,29 @@ export default function AdminScreen() {
 
               const result = await response.json();
               const deleted = Array.isArray(result?.deleted) ? result.deleted.length : 0;
-              const failures = Array.isArray(result?.failures) ? result.failures.length : 0;
+              const failureEntries: { key?: unknown; uploadId?: unknown }[] =
+                Array.isArray(result?.failures) ? result.failures : [];
+              const failedKeys = failureEntries.flatMap((failure) => {
+                if (typeof failure?.key !== 'string') {
+                  return [];
+                }
+                return [typeof failure.uploadId === 'string'
+                  ? `${failure.key} (${failure.uploadId})`
+                  : failure.key];
+              });
               const skipped = typeof result?.skipped === 'number' ? result.skipped : 0;
-              setUnusedMediaDeleteSummary({ deleted, failures, skipped });
+              setUnusedMediaDeleteSummary({
+                deleted,
+                failures: failureEntries.length,
+                failedKeys,
+                skipped,
+              });
               setUnusedMediaScan(null);
             } catch (error) {
               setUnusedMediaError(error instanceof Error ? error.message : 'Unused files could not be deleted.');
             } finally {
               setIsDeletingUnusedMedia(false);
             }
-          },
-        },
-      ],
-    );
   };
 
   useEffect(() => {
@@ -1344,17 +1370,35 @@ export default function AdminScreen() {
   const handleTogglePublishing = useCallback(
     async (movie: AdminMovie) => {
       if (!supabaseMovieRepository) {
+        setMoviesError('The catalog is unavailable; publishing status was not changed.');
+        return;
+      }
+
+      const nextPublished = !movie.published;
+      const confirmed = await confirmAction(
+        nextPublished ? 'Publish title?' : 'Unpublish title?',
+        nextPublished
+          ? `Publish "${movie.title}" so it becomes available to viewers?`
+          : `Unpublish "${movie.title}" so it is no longer available to viewers?`,
+        {
+          confirmLabel: nextPublished ? 'Publish' : 'Unpublish',
+          destructive: !nextPublished,
+        },
+      );
+      if (!confirmed) {
         return;
       }
 
       setUpdatingMovieId(movie.id);
       setMoviesError(undefined);
+      setMoviesMessage(undefined);
       try {
-        await supabaseMovieRepository.setPublished(movie.id, !movie.published);
+        await supabaseMovieRepository.setPublished(movie.id, nextPublished);
         await loadMovies();
+        setMoviesMessage(`"${movie.title}" ${nextPublished ? 'published' : 'unpublished'}.`);
       } catch (error) {
         console.error('[AdminScreen] Could not change movie publishing status.', error);
-        setMoviesError('The movie status could not be updated. Please retry.');
+        setMoviesError(error instanceof Error ? error.message : 'The movie status could not be updated. Please retry.');
       } finally {
         setUpdatingMovieId(undefined);
       }
@@ -1690,10 +1734,12 @@ export default function AdminScreen() {
   const deleteAdminTitle = useCallback(async (movie: AdminMovie) => {
     const repository = supabaseMovieRepository;
     if (!repository || !supabase) {
-      return;
+      setMoviesError('The catalog is unavailable; this title was not deleted.');
+      return false;
     }
-    setUpdatingMovieId(movie.id);
+    setDeletingMovieId(movie.id);
     setMoviesError(undefined);
+    setMoviesMessage(undefined);
     try {
       const { data, error } = await supabase.auth.getSession();
       const accessToken = data.session?.access_token;
@@ -1723,13 +1769,27 @@ export default function AdminScreen() {
       }
       await savePendingCleanups(pendingCleanups.filter((item) => item.titleId !== movie.id));
       await loadMovies();
+      setMoviesMessage(`"${movie.title}" and its associated files were deleted.`);
+      return true;
     } catch (error) {
       console.error('[AdminScreen] Could not delete title and its files.', error);
       setMoviesError(error instanceof Error ? error.message : 'Could not delete this title. Retry.');
+      return false;
     } finally {
-      setUpdatingMovieId(undefined);
+      setDeletingMovieId(undefined);
     }
   }, [loadMovies, pendingCleanups, savePendingCleanups]);
+
+  const confirmAndDeleteTitle = useCallback(async (movie: AdminMovie) => {
+    const confirmed = await confirmAction(
+      'Delete title?',
+      `This permanently deletes "${movie.title}", its video/trailer, images, and series episodes.`,
+      { confirmLabel: 'Delete title', destructive: true },
+    );
+    if (confirmed) {
+      await deleteAdminTitle(movie);
+    }
+  }, [deleteAdminTitle]);
 
   const adminSeries = movies.filter((movie) => movie.type === 'series');
   const availableSeasons = seasons.filter((season) => season.series_id === seasonSeriesId);
@@ -1746,24 +1806,21 @@ export default function AdminScreen() {
       return;
     }
 
-    Alert.alert(
+    const confirmed = await confirmAction(
       'Delete selected titles?',
       `This permanently removes ${selectedMovies.length} title(s): ${selectedMovies.map(({ title }) => title).join(', ')}.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: `Delete selected (${selectedMovies.length})`,
-          style: 'destructive',
-          onPress: async () => {
-            for (const movie of selectedMovies) {
-              await deleteAdminTitle(movie);
-            }
-            setSelectedTitleIds([]);
-            setSelectMode(false);
-          },
-        },
-      ],
+      { confirmLabel: `Delete selected (${selectedMovies.length})`, destructive: true },
     );
+    if (!confirmed) {
+      return;
+    }
+    for (const movie of selectedMovies) {
+      if (!(await deleteAdminTitle(movie))) {
+        return;
+      }
+    }
+    setSelectedTitleIds([]);
+    setSelectMode(false);
   }, [deleteAdminTitle, movies, selectedTitleIds]);
 
   if (!authLoading && routeState === 'not-found') {
@@ -2156,20 +2213,16 @@ export default function AdminScreen() {
                   <Pressable
                     accessibilityRole="button"
                     disabled={isRetryingMovieSave}
-                    onPress={() =>
-                      Alert.alert(
+                    onPress={() => void (async () => {
+                      const confirmed = await confirmAction(
                         'Delete orphaned video?',
                         'This permanently deletes the uploaded B2 video. No movie record will be created.',
-                        [
-                          { text: 'Keep video', style: 'cancel' },
-                          {
-                            text: 'Delete video',
-                            style: 'destructive',
-                            onPress: () => void deleteOrphanedMovieUpload(),
-                          },
-                        ],
-                      )
-                    }
+                        { confirmLabel: 'Delete video', destructive: true },
+                      );
+                      if (confirmed) {
+                        await deleteOrphanedMovieUpload();
+                      }
+                    })()}
                     style={styles.secondaryButton}
                   >
                     <Text style={styles.secondaryButtonText}>Delete orphaned video</Text>
@@ -2412,6 +2465,7 @@ export default function AdminScreen() {
                 onAction={() => void loadMovies()}
               />
             ) : null}
+            {moviesMessage ? <Text style={styles.successText}>{moviesMessage}</Text> : null}
             {seriesError ? (
               <ContentNotice
                 message={seriesError}
@@ -2457,8 +2511,12 @@ export default function AdminScreen() {
               {unusedMediaDeleteSummary ? (
                 <Text style={styles.successText}>
                   Deleted {unusedMediaDeleteSummary.deleted} item{unusedMediaDeleteSummary.deleted === 1 ? '' : 's'}.
-                  {unusedMediaDeleteSummary.failures ? ` ${unusedMediaDeleteSummary.failures} failed.` : ''}
                   {unusedMediaDeleteSummary.skipped ? ` ${unusedMediaDeleteSummary.skipped} were left alone.` : ''}
+                </Text>
+              ) : null}
+              {unusedMediaDeleteSummary?.failures ? (
+                <Text style={styles.errorText}>
+                  Could not delete: {unusedMediaDeleteSummary.failedKeys.join(', ') || `${unusedMediaDeleteSummary.failures} items (file keys unavailable)`}.
                 </Text>
               ) : null}
               {unusedMediaScan ? (
@@ -2561,7 +2619,7 @@ export default function AdminScreen() {
                 {movie.mediaPath || movie.type === 'series' ? (
                   <Pressable
                     accessibilityRole="button"
-                    disabled={updatingMovieId === movie.id}
+                    disabled={updatingMovieId === movie.id || deletingMovieId === movie.id}
                     onPress={() => void handleTogglePublishing(movie)}
                   >
                     <Text style={styles.linkText}>
@@ -2578,24 +2636,11 @@ export default function AdminScreen() {
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  disabled={updatingMovieId === movie.id}
-                  onPress={() =>
-                    Alert.alert(
-                      'Delete title?',
-                      `This permanently deletes "${movie.title}", its video/trailer, images, and series episodes.`,
-                      [
-                        { text: 'Cancel', style: 'cancel' },
-                        {
-                          text: 'Delete title',
-                          style: 'destructive',
-                          onPress: () => void deleteAdminTitle(movie),
-                        },
-                      ],
-                    )
-                  }
+                  disabled={deletingMovieId === movie.id || updatingMovieId === movie.id}
+                  onPress={() => void confirmAndDeleteTitle(movie)}
                 >
                   <Text style={styles.removeText}>
-                    {updatingMovieId === movie.id ? 'Deleting…' : 'Delete'}
+                    {deletingMovieId === movie.id ? 'Deleting…' : 'Delete'}
                   </Text>
                 </Pressable>
               </View>
