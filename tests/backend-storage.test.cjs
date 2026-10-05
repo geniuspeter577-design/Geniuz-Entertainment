@@ -1,5 +1,34 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
+
+let getRemuxVerdict;
+test('media probe classifies remux-compatible codecs and reports subtitles', async () => {
+  ({ getRemuxVerdict } = await import('../backend/scripts/probe-media.mjs'));
+
+  const compatible = getRemuxVerdict([
+    { codec_type: 'video', codec_name: 'h264' },
+    { codec_type: 'audio', codec_name: 'aac' },
+    { codec_type: 'subtitle', codec_name: 'subrip' },
+  ]);
+  assert.equal(compatible.verdict, 'REMUX_OK');
+  assert.equal(compatible.subtitles[0].codec_name, 'subrip');
+
+  assert.equal(
+    getRemuxVerdict([{ codec_type: 'video', codec_name: 'h264' }]).verdict,
+    'REMUX_OK',
+  );
+
+  const videoNeedsReencode = getRemuxVerdict([{ codec_type: 'video', codec_name: 'hevc' }]);
+  assert.equal(videoNeedsReencode.verdict, 'REENCODE_NEEDED');
+  assert.match(videoNeedsReencode.reason, /hevc/);
+
+  const audioNeedsReencode = getRemuxVerdict([
+    { codec_type: 'video', codec_name: 'h264' },
+    { codec_type: 'audio', codec_name: 'ac3' },
+  ]);
+  assert.equal(audioNeedsReencode.verdict, 'REENCODE_NEEDED');
+  assert.match(audioNeedsReencode.reason, /ac3/);
+});
 const { buildAllowedOrigins } = require('../scripts/b2-cors.cjs');
 
 const {
