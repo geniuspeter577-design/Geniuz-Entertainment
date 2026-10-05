@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
 let getRemuxVerdict;
+let isAllowedOutputPath;
 test('media probe classifies remux-compatible codecs and reports subtitles', async () => {
   ({ getRemuxVerdict } = await import('../backend/scripts/probe-media.mjs'));
 
@@ -28,6 +29,17 @@ test('media probe classifies remux-compatible codecs and reports subtitles', asy
   ]);
   assert.equal(audioNeedsReencode.verdict, 'REENCODE_NEEDED');
   assert.match(audioNeedsReencode.reason, /ac3/);
+});
+
+test('media download output paths stay under /tmp and reject traversal into the repository', async () => {
+  ({ isAllowedOutputPath } = await import('../backend/scripts/download-media.mjs'));
+  const repositoryRoot = process.cwd();
+
+  assert.equal(isAllowedOutputPath('/tmp/conversion-tests/movie.mkv', repositoryRoot), true);
+  assert.equal(isAllowedOutputPath(`${repositoryRoot}/movie.mkv`, repositoryRoot), false);
+  assert.equal(isAllowedOutputPath('/tmp/../workspaces/Geniuz-Entertainment/movie.mkv', repositoryRoot), false);
+  assert.equal(isAllowedOutputPath('/tmp/conversion-tests/../../repo/movie.mkv', repositoryRoot), false);
+  assert.equal(isAllowedOutputPath('relative/movie.mkv', repositoryRoot), false);
 });
 const { buildAllowedOrigins } = require('../scripts/b2-cors.cjs');
 
