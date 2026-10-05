@@ -52,6 +52,41 @@ export function isAllowedOutputPath(outputPath, repositoryRoot, temporaryRoot = 
   );
 }
 
+export async function downloadObjectToFile(client, bucket, key, outputPath, onProgress = () => {}) {
+  const result = await client.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  const totalBytes = result.ContentLength;
+  if (!result.Body || !Number.isSafeInteger(totalBytes) || totalBytes < 0) {
+    throw new Error('Object did not provide a readable body and content length.');
+  }
+
+  let downloadedBytes = 0;
+  const progress = new Transform({
+    transform(chunk, _encoding, callback) {
+      downloadedBytes += chunk.length;
+      onProgress(downloadedBytes, totalBytes);
+      callback(null, chunk);
+    },
+  });
+
+  try {
+    await pipeline(result.Body, progress, createWriteStream(outputPath, { flags: 'wx', mode: 0o600 }));
+    const { size: localBytes } = await stat(outputPath);
+    if (localBytes !== totalBytes) {
+      const mismatch = new Error(`Expected ${totalBytes} bytes, received ${localBytes} bytes.`);
+      mismatch.code = 'SIZE_MISMATCH';
+      throw mismatch;
+    }
+    return { sizeBytes: localBytes };
+  } catch (error) {
+    await unlink(outputPath).catch((cleanupError) => {
+      if (cleanupError?.code !== 'ENOENT') {
+        console.error('Could not remove the incomplete temporary output file.');
+      }
+    });
+    throw error;
+  }
+}
+
 function parseArguments(args) {
   const options = new Map();
   let force = false;
@@ -151,33 +186,18 @@ async function runDownload(args) {
 
   let keepTemporaryFile = false;
   try {
-    const result = await client.send(
-      new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: options.key }),
-    );
-    const totalBytes = result.ContentLength;
-    if (!result.Body || !Number.isSafeInteger(totalBytes) || totalBytes < 0) {
-      throw new Error('Object did not provide a readable body and content length.');
-    }
-
-    let downloadedBytes = 0;
-    const progress = new Transform({
-      transform(chunk, _encoding, callback) {
-        downloadedBytes += chunk.length;
-        const totalMb = (totalBytes / MEGABYTE).toFixed(2);
+    const { sizeBytes: totalBytes } = await downloadObjectToFile(
+      client,
+      process.env.S3_BUCKET,
+      options.key,
+      temporaryPath,
+      (downloadedBytes, expectedBytes) => {
         const downloadedMb = (downloadedBytes / MEGABYTE).toFixed(2);
+        const totalMb = (expectedBytes / MEGABYTE).toFixed(2);
         process.stdout.write(`\r${downloadedMb} MB / ${totalMb} MB`);
-        callback(null, chunk);
       },
-    });
-    await pipeline(result.Body, progress, createWriteStream(temporaryPath, { flags: 'wx', mode: 0o600 }));
+    );
     process.stdout.write('\n');
-
-    const { size: localBytes } = await stat(temporaryPath);
-    if (localBytes !== totalBytes) {
-      console.error(`MISMATCH: expected ${totalBytes} bytes, received ${localBytes} bytes.`);
-      process.exitCode = 1;
-      return;
-    }
 
     if (options.force) {
       await rename(temporaryPath, outputPath);
@@ -186,9 +206,14 @@ async function runDownload(args) {
       await unlink(temporaryPath);
     }
     keepTemporaryFile = true;
-    console.log(`OK: ${localBytes} bytes saved to ${outputPath}`);
-  } catch {
+    console.log(`OK: ${totalBytes} bytes saved to ${outputPath}`);
+  } catch (error) {
     process.stdout.write('\n');
+    if (error?.code === 'SIZE_MISMATCH') {
+      console.error(`MISMATCH: ${error.message}`);
+      process.exitCode = 1;
+      return;
+    }
     console.error('Download failed. Check the storage key, S3 settings, output directory, and local disk space.');
     process.exitCode = 1;
   } finally {

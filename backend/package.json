@@ -9,7 +9,8 @@
     "build": "tsc -p tsconfig.json",
     "start": "node --env-file-if-exists=.env dist/server.js",
     "media:probe": "node --env-file-if-exists=.env scripts/probe-media.mjs",
-    "media:download": "node --env-file-if-exists=.env scripts/download-media.mjs"
+    "media:download": "node --env-file-if-exists=.env scripts/download-media.mjs",
+    "media:convert": "node --env-file-if-exists=.env scripts/convert-media.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1146.0",

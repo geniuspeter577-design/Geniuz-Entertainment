@@ -41,6 +41,89 @@ test('media download output paths stay under /tmp and reject traversal into the 
   assert.equal(isAllowedOutputPath('/tmp/conversion-tests/../../repo/movie.mkv', repositoryRoot), false);
   assert.equal(isAllowedOutputPath('relative/movie.mkv', repositoryRoot), false);
 });
+
+test('media conversion derives a new UUID key and selects copy or re-encode arguments', async () => {
+  const { buildFfmpegArgs, getConvertedObjectKey } = await import('../backend/scripts/convert-media.mjs');
+  const oldKey = 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv';
+  const newKey = 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mp4';
+
+  assert.equal(getConvertedObjectKey(oldKey), newKey);
+  assert.throws(() => getConvertedObjectKey('../movies/not-a-uuid.mkv'), /movie MKV/);
+
+  const remuxArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
+    { codec_type: 'video', codec_name: 'h264' },
+    { codec_type: 'audio', codec_name: 'aac' },
+  ]);
+  assert.deepEqual(remuxArgs.slice(remuxArgs.indexOf('-c'), remuxArgs.indexOf('-sn')), ['-c', 'copy']);
+  assert.ok(remuxArgs.includes('-map_chapters'));
+
+  const videoReencodeAudioCopyArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
+    { codec_type: 'video', codec_name: 'hevc' },
+    { codec_type: 'audio', codec_name: 'aac' },
+  ]);
+  assert.ok(videoReencodeAudioCopyArgs.includes('libx264'));
+  assert.deepEqual(
+    videoReencodeAudioCopyArgs.slice(videoReencodeAudioCopyArgs.indexOf('-c:a'), videoReencodeAudioCopyArgs.indexOf('-sn')),
+    ['-c:a', 'copy'],
+  );
+
+  const audioReencodeArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
+    { codec_type: 'video', codec_name: 'hevc' },
+    { codec_type: 'audio', codec_name: 'ac3' },
+  ]);
+  assert.deepEqual(
+    audioReencodeArgs.slice(audioReencodeArgs.indexOf('-c:a'), audioReencodeArgs.indexOf('-sn')),
+    ['-c:a', 'aac', '-b:a', '128k'],
+  );
+});
+
+test('media conversion verification enforces codecs, duration tolerance, and non-empty output', async () => {
+  const { verifyConvertedMedia } = await import('../backend/scripts/convert-media.mjs');
+  const validProbe = {
+    streams: [
+      { codec_type: 'video', codec_name: 'h264' },
+      { codec_type: 'audio', codec_name: 'aac' },
+    ],
+    format: { duration: '100.5' },
+  };
+  assert.equal(
+    verifyConvertedMedia({
+      sourceDuration: 100,
+      sourceStreams: validProbe.streams,
+      outputProbe: validProbe,
+      outputSize: 1024,
+    }).valid,
+    true,
+  );
+  assert.equal(verifyConvertedMedia({ sourceDuration: 100, outputProbe: validProbe, outputSize: 0 }).valid, false);
+  assert.equal(
+    verifyConvertedMedia({
+      sourceDuration: 100,
+      sourceStreams: validProbe.streams,
+      outputProbe: { ...validProbe, streams: [{ codec_type: 'video', codec_name: 'hevc' }] },
+      outputSize: 1024,
+    }).valid,
+    false,
+  );
+  assert.equal(
+    verifyConvertedMedia({
+      sourceDuration: 100,
+      sourceStreams: validProbe.streams,
+      outputProbe: { ...validProbe, format: { duration: '102.01' } },
+      outputSize: 1024,
+    }).valid,
+    false,
+  );
+  assert.equal(
+    verifyConvertedMedia({
+      sourceDuration: 100,
+      sourceStreams: validProbe.streams,
+      outputProbe: { ...validProbe, streams: [{ codec_type: 'video', codec_name: 'h264' }] },
+      outputSize: 1024,
+    }).valid,
+    false,
+  );
+});
 const { buildAllowedOrigins } = require('../scripts/b2-cors.cjs');
 
 const {
