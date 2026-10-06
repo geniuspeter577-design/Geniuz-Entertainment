@@ -133,6 +133,26 @@ export function setPlayerCurrentTime(player: VideoPlayer, seconds: number): void
   player.currentTime = seconds;
 }
 
+export function getPlayerTapZone(x: number, width: number): 'left' | 'right' | 'center' {
+  if (!Number.isFinite(x) || !Number.isFinite(width) || width <= 0) {
+    return 'center';
+  }
+  return x < width / 2 ? 'left' : 'right';
+}
+
+export function accumulateSkipSeconds(currentTotalSeconds: number, nextDeltaSeconds: number): number {
+  const safeCurrent = Number.isFinite(currentTotalSeconds) ? currentTotalSeconds : 0;
+  const safeDelta = Number.isFinite(nextDeltaSeconds) ? nextDeltaSeconds : 0;
+  return safeCurrent + safeDelta;
+}
+
+export function getSwipeValue(startValue: number, deltaY: number, trackHeight: number): number {
+  if (!Number.isFinite(startValue) || !Number.isFinite(deltaY) || !Number.isFinite(trackHeight) || trackHeight <= 0) {
+    return clampPlayerValue(startValue);
+  }
+  return clampPlayerValue(startValue - deltaY / trackHeight);
+}
+
 export function runPlayerActionIfActive(isReleased: boolean, action: () => void): boolean {
   if (isReleased) {
     return false;

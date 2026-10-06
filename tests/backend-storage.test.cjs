@@ -1,6 +1,13 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 
+const {
+  accumulateSkipSeconds,
+  clampPlayerValue,
+  getPlayerTapZone,
+  getSwipeValue,
+} = require('../.test-build/src/utils/playerControls.js');
+
 let getRemuxVerdict;
 let isAllowedOutputPath;
 test('media probe classifies remux-compatible codecs and reports subtitles', async () => {
@@ -40,6 +47,17 @@ test('media download output paths stay under /tmp and reject traversal into the 
   assert.equal(isAllowedOutputPath('/tmp/../workspaces/Geniuz-Entertainment/movie.mkv', repositoryRoot), false);
   assert.equal(isAllowedOutputPath('/tmp/conversion-tests/../../repo/movie.mkv', repositoryRoot), false);
   assert.equal(isAllowedOutputPath('relative/movie.mkv', repositoryRoot), false);
+});
+
+test('player gesture helpers keep tap zones, skip totals, and swipe values bounded', () => {
+  assert.equal(getPlayerTapZone(10, 100), 'left');
+  assert.equal(getPlayerTapZone(90, 100), 'right');
+  assert.equal(getPlayerTapZone(50, 100), 'right');
+  assert.equal(accumulateSkipSeconds(10, 10), 20);
+  assert.equal(clampPlayerValue(-1), 0);
+  assert.equal(clampPlayerValue(2), 1);
+  assert.equal(getSwipeValue(0.5, -40, 200), 0.7);
+  assert.equal(getSwipeValue(0.2, 400, 200), 0);
 });
 
 test('media conversion parser accepts upload-only and other quality flags', async () => {

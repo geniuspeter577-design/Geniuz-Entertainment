@@ -1,8 +1,10 @@
 import { Ionicons } from '@expo/vector-icons';
+import * as Brightness from 'expo-brightness';
 import { VideoView, useVideoPlayer } from 'expo-video';
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  PanResponder,
   Pressable,
   StyleSheet,
   Text,
@@ -14,11 +16,14 @@ import {
 import { theme } from '../../theme';
 import {
   PLAYER_SPEED_OPTIONS,
+  accumulateSkipSeconds,
   clampPlayerValue,
   formatPlaybackTime,
   getPlayerFitLabel,
   getPlayerSpeedLabel,
+  getPlayerTapZone,
   getSeekBarTarget,
+  getSwipeValue,
   type PlayerFitMode,
 } from '../../utils/playerControls';
 
@@ -86,15 +91,202 @@ export function PlayerHeader({
   onRetry,
 }: PlayerHeaderProps) {
   const seekBarWidth = useRef(0);
-  const [lockTapVisible, setLockTapVisible] = React.useState(false);
+  const [gestureSize, setGestureSize] = useState({ width: 1, height: 1 });
+  const lastTapTimestamp = useRef(0);
+  const lastTapZone = useRef<'left' | 'right' | 'center'>('center');
+  const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const skipDeltaRef = useRef(0);
+  const holdPreviousSpeedRef = useRef<number | null>(null);
+  const hold2xTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const brightnessStartRef = useRef(1);
+  const volumeStartRef = useRef(1);
+  const brightnessOriginalRef = useRef<number | null>(null);
+  const [lockTapVisible, setLockTapVisible] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [gestureHud, setGestureHud] = useState<{ kind: 'brightness' | 'volume' | 'hold' | 'skip'; side?: 'left' | 'right'; value?: number; label?: string } | null>(null);
+  const [brightnessValue, setBrightnessValue] = useState(1);
+  const [volumeValue, setVolumeValue] = useState(() => clampPlayerValue(player.volume ?? 1));
+  const [activePlaybackRate, setActivePlaybackRate] = useState(playbackSpeed);
   const progress = duration > 0 ? clampPlayerValue(currentTime / duration) : 0;
   const bufferedProgress = duration > 0 ? clampPlayerValue(bufferedPosition / duration) : 0;
+
+  useEffect(() => {
+    let active = true;
+    void Brightness.getBrightnessAsync().then((brightness) => {
+      if (active) {
+        brightnessOriginalRef.current = brightness;
+        setBrightnessValue(brightness);
+      }
+    }).catch(() => {
+      if (active) {
+        brightnessOriginalRef.current = 1;
+      }
+    });
+    return () => {
+      active = false;
+      if (brightnessOriginalRef.current !== null) {
+        void Brightness.setBrightnessAsync(brightnessOriginalRef.current).catch(() => undefined);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setActivePlaybackRate(playbackSpeed);
+  }, [playbackSpeed]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
+    player.playbackRate = activePlaybackRate;
+  }, [activePlaybackRate, player]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability
+    player.volume = volumeValue;
+  }, [player, volumeValue]);
+
+  useEffect(() => {
+    if (!toastMessage) {
+      return undefined;
+    }
+    const timeout = setTimeout(() => setToastMessage(null), 800);
+    return () => clearTimeout(timeout);
+  }, [toastMessage]);
+
+  useEffect(() => {
+    return () => {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+      }
+      if (hold2xTimerRef.current) {
+        clearTimeout(hold2xTimerRef.current);
+      }
+      if (skipDeltaRef.current !== 0) {
+        skipDeltaRef.current = 0;
+      }
+    };
+  }, []);
+
+  const showGestureHud = (kind: 'brightness' | 'volume' | 'hold' | 'skip', value?: number, side?: 'left' | 'right', label?: string) => {
+    setGestureHud({ kind, value, side, label });
+    if (kind === 'hold' && hold2xTimerRef.current) {
+      clearTimeout(hold2xTimerRef.current);
+    }
+    if (kind === 'skip' || kind === 'brightness' || kind === 'volume') {
+      hold2xTimerRef.current = setTimeout(() => setGestureHud(null), 500);
+    }
+  };
+
+  const triggerSkip = (zone: 'left' | 'right') => {
+    const direction = zone === 'right' ? 1 : -1;
+    const nextDelta = direction * 10;
+    skipDeltaRef.current = accumulateSkipSeconds(skipDeltaRef.current, nextDelta);
+    const displaySeconds = Math.abs(skipDeltaRef.current);
+    setGestureHud({ kind: 'skip', side: zone, label: `${displaySeconds} seconds` });
+    onSeekBy(skipDeltaRef.current);
+    if (hold2xTimerRef.current) {
+      clearTimeout(hold2xTimerRef.current);
+    }
+    hold2xTimerRef.current = setTimeout(() => {
+      skipDeltaRef.current = 0;
+      setGestureHud(null);
+    }, 650);
+  };
 
   const seekFromEvent = (event: GestureResponderEvent) => {
     onSeekTo(getSeekBarTarget(event.nativeEvent.locationX, seekBarWidth.current, duration));
   };
   const handleSeekBarLayout = (event: LayoutChangeEvent) => {
     seekBarWidth.current = event.nativeEvent.layout.width;
+  };
+
+  // eslint-disable-next-line react-hooks/refs
+  const panResponder = PanResponder.create({
+    onStartShouldSetPanResponder: () => !isLocked,
+    onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 8 || Math.abs(gestureState.dx) > 8,
+    onPanResponderGrant: (_, gestureState) => {
+      if (isLocked) {
+        return;
+      }
+      const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
+      if (zone === 'left') {
+        brightnessStartRef.current = brightnessValue;
+        setGestureHud({ kind: 'brightness', value: brightnessValue, side: 'left' });
+      } else if (zone === 'right') {
+        volumeStartRef.current = volumeValue;
+        setGestureHud({ kind: 'volume', value: volumeValue, side: 'right' });
+      }
+    },
+    onPanResponderMove: (_, gestureState) => {
+      if (isLocked) {
+        return;
+      }
+      const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
+      const nextValue = getSwipeValue(
+        zone === 'left' ? brightnessStartRef.current : volumeStartRef.current,
+        gestureState.dy,
+        gestureSize.height,
+      );
+      if (zone === 'left') {
+        const clamped = clampPlayerValue(nextValue);
+        setBrightnessValue(clamped);
+        void Brightness.setBrightnessAsync(clamped).catch(() => undefined);
+        setGestureHud({ kind: 'brightness', value: clamped, side: 'left' });
+      } else if (zone === 'right') {
+        const clamped = clampPlayerValue(nextValue);
+        setVolumeValue(clamped);
+        setGestureHud({ kind: 'volume', value: clamped, side: 'right' });
+      }
+    },
+    onPanResponderRelease: () => {
+      setGestureHud(null);
+    },
+  });
+
+  const handleSurfacePress = (event: GestureResponderEvent) => {
+    if (isLocked) {
+      return;
+    }
+    const zone = getPlayerTapZone(event.nativeEvent.locationX ?? gestureSize.width / 2, gestureSize.width);
+    const now = Date.now();
+    const tapDelta = now - lastTapTimestamp.current;
+    lastTapTimestamp.current = now;
+    lastTapZone.current = zone;
+
+    if (zone !== 'center' && tapDelta < 280 && lastTapZone.current === zone) {
+      if (singleTapTimeoutRef.current) {
+        clearTimeout(singleTapTimeoutRef.current);
+      }
+      triggerSkip(zone);
+      return;
+    }
+
+    if (singleTapTimeoutRef.current) {
+      clearTimeout(singleTapTimeoutRef.current);
+    }
+    singleTapTimeoutRef.current = setTimeout(() => {
+      onToggleControls();
+    }, 220);
+  };
+
+  const handleHoldStart = () => {
+    if (isLocked) {
+      return;
+    }
+    holdPreviousSpeedRef.current = playbackSpeed;
+    setActivePlaybackRate(2);
+    onSelectSpeed(2);
+    showGestureHud('hold', 2, undefined, '2x');
+  };
+
+  const handleHoldEnd = () => {
+    if (isLocked) {
+      return;
+    }
+    const previousSpeed = holdPreviousSpeedRef.current ?? playbackSpeed;
+    setActivePlaybackRate(previousSpeed);
+    onSelectSpeed(previousSpeed);
+    setGestureHud(null);
   };
 
   if (isLocked) {
@@ -142,12 +334,56 @@ export function PlayerHeader({
           allowsPictureInPicture={false}
         />
       ) : null}
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel={showControls ? 'Hide playback controls' : 'Show playback controls'}
-        onPress={onToggleControls}
+      <View
         style={StyleSheet.absoluteFill}
-      />
+        onLayout={(event) => {
+          const { width, height } = event.nativeEvent.layout;
+          setGestureSize({ width, height });
+        }}
+        {...panResponder.panHandlers}
+      >
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={showControls ? 'Hide playback controls' : 'Show playback controls'}
+          delayLongPress={220}
+          onPress={handleSurfacePress}
+          onLongPress={handleHoldStart}
+          onPressOut={handleHoldEnd}
+          style={StyleSheet.absoluteFill}
+        />
+      </View>
+      {gestureHud ? (
+        <View pointerEvents="none" style={[styles.gestureHud, gestureHud.side === 'left' ? styles.gestureHudLeft : gestureHud.side === 'right' ? styles.gestureHudRight : styles.gestureHudCenter]}> 
+          {gestureHud.kind === 'brightness' ? (
+            <>
+              <Ionicons name="sunny-outline" size={22} color={theme.text} />
+              <View style={styles.gestureBarTrack}>
+                <View style={[styles.gestureBarFill, { width: `${Math.max(0, Math.min(100, (gestureHud.value ?? 0) * 100))}%` }]} />
+              </View>
+            </>
+          ) : null}
+          {gestureHud.kind === 'volume' ? (
+            <>
+              <Ionicons name="volume-medium-outline" size={22} color={theme.text} />
+              <View style={styles.gestureBarTrack}>
+                <View style={[styles.gestureBarFill, { width: `${Math.max(0, Math.min(100, (gestureHud.value ?? 0) * 100))}%` }]} />
+              </View>
+            </>
+          ) : null}
+          {gestureHud.kind === 'hold' ? <Text style={styles.holdBadge}>2x</Text> : null}
+          {gestureHud.kind === 'skip' ? (
+            <View style={styles.skipRipple}>
+              <Ionicons name={gestureHud.side === 'left' ? 'arrow-back-outline' : 'arrow-forward-outline'} size={18} color={theme.text} />
+              <Text style={styles.skipRippleText}>{gestureHud.label ?? '10 seconds'}</Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+      {toastMessage ? (
+        <View pointerEvents="none" style={styles.toast}>
+          <Text style={styles.toastText}>{toastMessage}</Text>
+        </View>
+      ) : null}
       {isBuffering ? (
         <View pointerEvents="none" style={styles.bufferingBadge}>
           <ActivityIndicator color={theme.accent} size="small" />
@@ -171,6 +407,30 @@ export function PlayerHeader({
             </Pressable>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
             <View style={styles.rightControls}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open TV"
+                onPress={() => setToastMessage('Coming soon')}
+                style={styles.controlButton}
+              >
+                <Ionicons name="tv-outline" size={20} color={theme.text} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open help"
+                onPress={() => setToastMessage('Coming soon')}
+                style={styles.controlButton}
+              >
+                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Open settings"
+                onPress={() => setToastMessage('Coming soon')}
+                style={styles.controlButton}
+              >
+                <Ionicons name="settings-outline" size={20} color={theme.text} />
+              </Pressable>
               <View style={styles.speedWrap}>
                 <Pressable
                   accessibilityRole="button"
@@ -477,6 +737,76 @@ const styles = StyleSheet.create({
     height: 44,
     flex: 1,
     justifyContent: 'center',
+  },
+  gestureHud: {
+    position: 'absolute',
+    top: 84,
+    alignSelf: 'center',
+    minWidth: 132,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(15, 18, 22, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(114, 240, 106, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  gestureHudLeft: {
+    left: 32,
+  },
+  gestureHudRight: {
+    right: 32,
+  },
+  gestureHudCenter: {
+    left: '50%',
+    transform: [{ translateX: -66 }],
+  },
+  gestureBarTrack: {
+    width: 84,
+    height: 6,
+    borderRadius: 999,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    overflow: 'hidden',
+  },
+  gestureBarFill: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: theme.accent,
+  },
+  skipRipple: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  skipRippleText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  holdBadge: {
+    color: theme.accent,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  toast: {
+    position: 'absolute',
+    top: 84,
+    alignSelf: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: 'rgba(15, 18, 22, 0.86)',
+    borderWidth: 1,
+    borderColor: 'rgba(114, 240, 106, 0.35)',
+  },
+  toastText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
   },
   seekTrack: {
     height: 4,
