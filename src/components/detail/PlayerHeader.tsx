@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import * as Brightness from 'expo-brightness';
+import { LinearGradient } from 'expo-linear-gradient';
 import { VideoView, useVideoPlayer } from 'expo-video';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -392,98 +393,82 @@ export function PlayerHeader({
       ) : null}
       {showControls ? (
         <View style={styles.controls} pointerEvents="box-none">
-          <View style={styles.topBar}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Lock playback controls"
-              onPress={() => {
-                setLockTapVisible(false);
-                onToggleLock();
-              }}
-              style={styles.controlButton}
-              hitSlop={8}
-            >
-              <Ionicons name="lock-closed-outline" size={22} color={theme.text} />
-            </Pressable>
-            <Text style={styles.title} numberOfLines={1}>{title}</Text>
-            <View style={styles.rightControls}>
+          <LinearGradient colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']} style={styles.topGradient} pointerEvents="none" />
+          <View style={styles.topBar} pointerEvents="box-none">
+            <View style={styles.topLeftGroup} pointerEvents="box-none">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={onBack}
+                style={styles.iconButton}
+                hitSlop={8}
+              >
+                <Ionicons name="arrow-back" size={22} color={theme.text} />
+              </Pressable>
+              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            </View>
+            <View style={styles.rightControls} pointerEvents="box-none">
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open TV"
                 onPress={() => setToastMessage('Coming soon')}
-                style={styles.controlButton}
+                style={styles.iconLabelButton}
               >
-                <Ionicons name="tv-outline" size={20} color={theme.text} />
+                <Ionicons name="tv-outline" size={22} color={theme.text} />
+                <Text style={styles.iconLabel}>TV</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open help"
                 onPress={() => setToastMessage('Coming soon')}
-                style={styles.controlButton}
+                style={styles.iconLabelButton}
               >
-                <Ionicons name="help-circle-outline" size={20} color={theme.text} />
+                <Ionicons name="help-circle-outline" size={22} color={theme.text} />
+                <Text style={styles.iconLabel}>Help</Text>
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open settings"
                 onPress={() => setToastMessage('Coming soon')}
-                style={styles.controlButton}
+                style={styles.iconLabelButton}
               >
-                <Ionicons name="settings-outline" size={20} color={theme.text} />
-              </Pressable>
-              <View style={styles.speedWrap}>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Playback speed"
-                  onPress={onToggleSpeedMenu}
-                  style={styles.speedButton}
-                >
-                  <Text style={styles.speedButtonText}>{getPlayerSpeedLabel(playbackSpeed)}</Text>
-                </Pressable>
-                {speedMenuOpen ? (
-                  <View style={styles.speedMenu}>
-                    {PLAYER_SPEED_OPTIONS.map((speed) => (
-                      <Pressable
-                        key={String(speed)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Playback speed ${getPlayerSpeedLabel(speed)}`}
-                        onPress={() => {
-                          player.playbackRate = speed;
-                          onSelectSpeed(speed);
-                          onToggleSpeedMenu();
-                        }}
-                        style={[styles.speedMenuItem, playbackSpeed === speed && styles.speedMenuItemSelected]}
-                      >
-                        <Text style={[styles.speedMenuText, playbackSpeed === speed && styles.speedMenuTextSelected]}>
-                          {getPlayerSpeedLabel(speed)}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                ) : null}
-              </View>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Change video fit"
-                onPress={onCycleFit}
-                style={styles.controlButton}
-              >
-                <Text style={styles.controlButtonText}>{getPlayerFitLabel(fitMode)}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel={isRotateLocked ? 'Unlock portrait orientation' : 'Lock landscape orientation'}
-                onPress={onToggleRotate}
-                style={styles.controlButton}
-              >
-                <Ionicons
-                  name={isRotateLocked ? 'phone-landscape-outline' : 'phone-portrait-outline'}
-                  size={20}
-                  color={theme.text}
-                />
+                <Ionicons name="settings-outline" size={22} color={theme.text} />
+                <Text style={styles.iconLabel}>Setting</Text>
               </Pressable>
             </View>
           </View>
+
+          {!isLandscape ? (
+            <View style={styles.portraitTopBar} pointerEvents="box-none">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Go back"
+                onPress={onBack}
+                style={styles.iconButton}
+                hitSlop={8}
+              >
+                <Ionicons name="arrow-back" size={22} color={theme.text} />
+              </Pressable>
+              <View style={styles.portraitActions} pointerEvents="box-none">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open TV"
+                  onPress={() => setToastMessage('Coming soon')}
+                  style={styles.iconButton}
+                >
+                  <Ionicons name="tv-outline" size={22} color={theme.text} />
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open help"
+                  onPress={() => setToastMessage('Coming soon')}
+                  style={styles.iconButton}
+                >
+                  <Ionicons name="help-circle-outline" size={22} color={theme.text} />
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           {error ? (
             <View style={styles.errorPanel}>
@@ -495,76 +480,188 @@ export function PlayerHeader({
             </View>
           ) : (
             <>
-              <View style={styles.centerControls} pointerEvents="box-none">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Back 10 seconds"
-                  onPress={() => onSeekBy(-10)}
-                  style={styles.skipButton}
-                  hitSlop={8}
-                >
-                  <Ionicons name="play-back" size={28} color={theme.text} />
-                  <Text style={styles.skipText}>10</Text>
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
-                  onPress={onPlayPause}
-                  style={styles.playButton}
-                  hitSlop={8}
-                >
-                  <Ionicons name={isPlaying ? 'pause' : 'play'} size={38} color={theme.background} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Forward 10 seconds"
-                  onPress={() => onSeekBy(10)}
-                  style={styles.skipButton}
-                  hitSlop={8}
-                >
-                  <Ionicons name="play-forward" size={28} color={theme.text} />
-                  <Text style={styles.skipText}>10</Text>
-                </Pressable>
-              </View>
-
-              <View style={styles.seekControls}>
-                <Text style={styles.timeText}>{formatPlaybackTime(currentTime)}</Text>
-                <View
-                  accessible
-                  accessibilityRole="adjustable"
-                  accessibilityLabel="Playback position"
-                  accessibilityValue={{
-                    min: 0,
-                    max: duration > 0 ? duration : 0,
-                    now: Math.min(currentTime, duration),
-                    text: `${formatPlaybackTime(currentTime)} of ${duration > 0 ? formatPlaybackTime(duration) : 'unknown duration'}`,
-                  }}
-                  accessibilityActions={[{ name: 'increment', label: 'Forward 10 seconds' }, { name: 'decrement', label: 'Back 10 seconds' }]}
-                  onAccessibilityAction={(event) => {
-                    onSeekBy(event.nativeEvent.actionName === 'increment' ? 10 : -10);
-                  }}
-                  onLayout={handleSeekBarLayout}
-                  onStartShouldSetResponder={() => duration > 0}
-                  onMoveShouldSetResponder={() => duration > 0}
-                  onResponderGrant={(event) => {
-                    onSeekingChange(true);
-                    seekFromEvent(event);
-                  }}
-                  onResponderMove={seekFromEvent}
-                  onResponderRelease={(event) => {
-                    seekFromEvent(event);
-                    onSeekingChange(false);
-                  }}
-                  onResponderTerminate={() => onSeekingChange(false)}
-                  style={styles.seekBarTouchTarget}
-                >
-                  <View pointerEvents="none" style={styles.seekTrack}>
-                    <View style={[styles.seekBuffered, { width: `${bufferedProgress * 100}%` }]} />
-                    <View style={[styles.seekProgress, { width: `${progress * 100}%` }]} />
-                    <View style={[styles.seekThumb, { left: `${progress * 100}%` }]} />
-                  </View>
+              {isLandscape ? (
+                <View style={styles.centerControls} pointerEvents="box-none">
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Back 10 seconds"
+                    onPress={() => onSeekBy(-10)}
+                    style={styles.skipButton}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="reload-outline" size={22} color={theme.text} style={styles.skipIconBack} />
+                    <Text style={styles.skipText}>10</Text>
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                    onPress={onPlayPause}
+                    style={styles.playButton}
+                    hitSlop={8}
+                  >
+                    <Ionicons name={isPlaying ? 'pause' : 'play'} size={38} color={theme.background} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel="Forward 10 seconds"
+                    onPress={() => onSeekBy(10)}
+                    style={styles.skipButton}
+                    hitSlop={8}
+                  >
+                    <Ionicons name="reload-outline" size={22} color={theme.text} style={styles.skipIconForward} />
+                    <Text style={styles.skipText}>10</Text>
+                  </Pressable>
                 </View>
-                <Text style={styles.timeText}>{duration > 0 ? formatPlaybackTime(duration) : '--:--'}</Text>
+              ) : null}
+
+              <View style={isLandscape ? styles.bottomStack : styles.portraitBottomStack} pointerEvents="box-none">
+                <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.42)', 'rgba(0,0,0,0.78)']} style={styles.bottomGradient} pointerEvents="none" />
+                {isLandscape ? (
+                  <>
+                    <View style={styles.seekControls}>
+                      <Text style={styles.timeText}>{formatPlaybackTime(currentTime)}</Text>
+                      <View
+                        accessible
+                        accessibilityRole="adjustable"
+                        accessibilityLabel="Playback position"
+                        accessibilityValue={{
+                          min: 0,
+                          max: duration > 0 ? duration : 0,
+                          now: Math.min(currentTime, duration),
+                          text: `${formatPlaybackTime(currentTime)} of ${duration > 0 ? formatPlaybackTime(duration) : 'unknown duration'}`,
+                        }}
+                        accessibilityActions={[{ name: 'increment', label: 'Forward 10 seconds' }, { name: 'decrement', label: 'Back 10 seconds' }]}
+                        onAccessibilityAction={(event) => {
+                          onSeekBy(event.nativeEvent.actionName === 'increment' ? 10 : -10);
+                        }}
+                        onLayout={handleSeekBarLayout}
+                        onStartShouldSetResponder={() => duration > 0}
+                        onMoveShouldSetResponder={() => duration > 0}
+                        onResponderGrant={(event) => {
+                          onSeekingChange(true);
+                          seekFromEvent(event);
+                        }}
+                        onResponderMove={seekFromEvent}
+                        onResponderRelease={(event) => {
+                          seekFromEvent(event);
+                          onSeekingChange(false);
+                        }}
+                        onResponderTerminate={() => onSeekingChange(false)}
+                        style={styles.seekBarTouchTarget}
+                      >
+                        <View pointerEvents="none" style={styles.seekTrack}>
+                          <View style={[styles.seekBuffered, { width: `${bufferedProgress * 100}%` }]} />
+                          <View style={[styles.seekProgress, { width: `${progress * 100}%` }]} />
+                          <View style={[styles.seekThumb, { left: `${progress * 100}%` }]} />
+                        </View>
+                      </View>
+                      <Text style={styles.timeText}>{duration > 0 ? formatPlaybackTime(duration) : '--:--'}</Text>
+                    </View>
+                    <View style={styles.bottomRow} pointerEvents="box-none">
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                        onPress={onPlayPause}
+                        style={styles.miniPlayButton}
+                        hitSlop={8}
+                      >
+                        <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={theme.background} />
+                      </Pressable>
+                      <View style={styles.footerActions} pointerEvents="box-none">
+                        <Pressable accessibilityRole="button" accessibilityLabel="Change video fit" onPress={onCycleFit} style={styles.footerActionButton}>
+                          <Ionicons name="contract-outline" size={16} color={theme.text} />
+                          <Text style={styles.footerLabel}>{getPlayerFitLabel(fitMode)}</Text>
+                        </Pressable>
+                        <View style={styles.speedWrap}>
+                          <Pressable accessibilityRole="button" accessibilityLabel="Playback speed" onPress={onToggleSpeedMenu} style={styles.footerActionButton}>
+                            <Ionicons name="speedometer-outline" size={16} color={theme.text} />
+                            <Text style={styles.footerLabel}>{getPlayerSpeedLabel(playbackSpeed)}</Text>
+                          </Pressable>
+                          {speedMenuOpen ? (
+                            <View style={styles.speedMenu}>
+                              {PLAYER_SPEED_OPTIONS.map((speed) => (
+                                <Pressable
+                                  key={String(speed)}
+                                  accessibilityRole="button"
+                                  accessibilityLabel={`Playback speed ${getPlayerSpeedLabel(speed)}`}
+                                  onPress={() => {
+                                    player.playbackRate = speed;
+                                    onSelectSpeed(speed);
+                                    onToggleSpeedMenu();
+                                  }}
+                                  style={[styles.speedMenuItem, playbackSpeed === speed && styles.speedMenuItemSelected]}
+                                >
+                                  <Text style={[styles.speedMenuText, playbackSpeed === speed && styles.speedMenuTextSelected]}>
+                                    {getPlayerSpeedLabel(speed)}
+                                  </Text>
+                                </Pressable>
+                              ))}
+                            </View>
+                          ) : null}
+                        </View>
+                        <Pressable accessibilityRole="button" accessibilityLabel="Exit full screen" onPress={onToggleRotate} style={styles.footerActionButton}>
+                          <Ionicons name="contract-outline" size={16} color={theme.text} />
+                        </Pressable>
+                      </View>
+                    </View>
+                  </>
+                ) : (
+                  <View style={styles.portraitFooter} pointerEvents="box-none">
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={isPlaying ? 'Pause' : 'Play'}
+                      onPress={onPlayPause}
+                      style={styles.miniPlayButton}
+                      hitSlop={8}
+                    >
+                      <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={theme.background} />
+                    </Pressable>
+                    <View style={styles.portraitSeekWrap}>
+                      <View
+                        accessible
+                        accessibilityRole="adjustable"
+                        accessibilityLabel="Playback position"
+                        accessibilityValue={{
+                          min: 0,
+                          max: duration > 0 ? duration : 0,
+                          now: Math.min(currentTime, duration),
+                          text: `${formatPlaybackTime(currentTime)} of ${duration > 0 ? formatPlaybackTime(duration) : 'unknown duration'}`,
+                        }}
+                        accessibilityActions={[{ name: 'increment', label: 'Forward 10 seconds' }, { name: 'decrement', label: 'Back 10 seconds' }]}
+                        onAccessibilityAction={(event) => {
+                          onSeekBy(event.nativeEvent.actionName === 'increment' ? 10 : -10);
+                        }}
+                        onLayout={handleSeekBarLayout}
+                        onStartShouldSetResponder={() => duration > 0}
+                        onMoveShouldSetResponder={() => duration > 0}
+                        onResponderGrant={(event) => {
+                          onSeekingChange(true);
+                          seekFromEvent(event);
+                        }}
+                        onResponderMove={seekFromEvent}
+                        onResponderRelease={(event) => {
+                          seekFromEvent(event);
+                          onSeekingChange(false);
+                        }}
+                        onResponderTerminate={() => onSeekingChange(false)}
+                        style={styles.seekBarTouchTarget}
+                      >
+                        <View pointerEvents="none" style={styles.seekTrack}>
+                          <View style={[styles.seekBuffered, { width: `${bufferedProgress * 100}%` }]} />
+                          <View style={[styles.seekProgress, { width: `${progress * 100}%` }]} />
+                          <View style={[styles.seekThumb, { left: `${progress * 100}%` }]} />
+                        </View>
+                      </View>
+                      <Text style={styles.portraitTimeText}>{`${formatPlaybackTime(currentTime)}/${duration > 0 ? formatPlaybackTime(duration) : '--:--'}`}</Text>
+                    </View>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Mini player coming soon" onPress={() => setToastMessage('Coming soon')} style={styles.portraitMiniButton}>
+                      <Ionicons name="play-circle-outline" size={16} color={theme.text} />
+                    </Pressable>
+                    <Pressable accessibilityRole="button" accessibilityLabel="Enter full screen" onPress={onToggleRotate} style={styles.fullscreenButton}>
+                      <Ionicons name="contract-outline" size={18} color={theme.text} />
+                    </Pressable>
+                  </View>
+                )}
               </View>
             </>
           )}
@@ -592,63 +689,242 @@ const styles = StyleSheet.create({
   controls: {
     ...StyleSheet.absoluteFill,
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(14, 16, 20, 0.18)',
+  },
+  topGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    height: 180,
   },
   topBar: {
-    minHeight: 64,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingHorizontal: 16,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  topLeftGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 14,
-    backgroundColor: theme.scrim,
+    flex: 1,
+    gap: 10,
   },
   title: {
     flex: 1,
     color: theme.text,
     fontSize: 16,
     fontWeight: '700',
+    flexShrink: 1,
   },
   rightControls: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  portraitTopBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 12,
+  },
+  portraitActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  controlButton: {
-    width: 42,
-    height: 42,
+  iconButton: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 21,
-    backgroundColor: 'rgba(15, 18, 22, 0.72)',
+    borderRadius: 18,
+    backgroundColor: 'rgba(20, 23, 27, 0.32)',
   },
-  controlButtonText: {
+  iconLabelButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 48,
+  },
+  iconLabel: {
     color: theme.text,
     fontSize: 10,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  lockRevealButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 36,
+    backgroundColor: 'rgba(15, 18, 22, 0.75)',
+    transform: [{ translateX: -36 }, { translateY: -36 }],
+  },
+  centerControls: {
+    position: 'absolute',
+    top: '50%',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 28,
+    transform: [{ translateY: -38 }],
+  },
+  skipButton: {
+    width: 64,
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 32,
+    backgroundColor: 'rgba(18, 20, 24, 0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  skipIconBack: {
+    transform: [{ rotate: '180deg' }],
+  },
+  skipIconForward: {
+    transform: [{ rotate: '0deg' }],
+  },
+  skipText: {
+    position: 'absolute',
+    color: theme.text,
+    fontSize: 11,
     fontWeight: '800',
-    letterSpacing: 0.4,
-    textTransform: 'uppercase',
+    textAlign: 'center',
+  },
+  playButton: {
+    width: 82,
+    height: 82,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 41,
+    backgroundColor: 'rgba(18, 20, 24, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+  bottomStack: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 16,
+    paddingBottom: 12,
+  },
+  bottomGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 180,
+  },
+  portraitBottomStack: {
+    ...StyleSheet.absoluteFill,
+    justifyContent: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 10,
+  },
+  seekControls: {
+    position: 'relative',
+    zIndex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: 8,
+  },
+  timeText: {
+    minWidth: 42,
+    color: theme.text,
+    fontSize: 12,
+    fontVariant: ['tabular-nums'],
+    textAlign: 'center',
+  },
+  seekBarTouchTarget: {
+    flex: 1,
+    height: 40,
+    justifyContent: 'center',
+  },
+  seekTrack: {
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+    justifyContent: 'center',
+  },
+  seekBuffered: {
+    position: 'absolute',
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+  },
+  seekProgress: {
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: theme.accent,
+  },
+  seekThumb: {
+    position: 'absolute',
+    top: -5,
+    width: 14,
+    height: 14,
+    marginLeft: -7,
+    borderRadius: 7,
+    backgroundColor: theme.accent,
+  },
+  bottomRow: {
+    position: 'relative',
+    zIndex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  miniPlayButton: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: theme.accent,
+  },
+  footerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  footerActionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 32,
+    paddingHorizontal: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(18, 20, 24, 0.35)',
+  },
+  footerLabel: {
+    color: theme.text,
+    fontSize: 11,
+    fontWeight: '700',
   },
   speedWrap: {
     position: 'relative',
   },
-  speedButton: {
-    minWidth: 54,
-    height: 34,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 17,
-    backgroundColor: 'rgba(15, 18, 22, 0.72)',
-    paddingHorizontal: 12,
-  },
-  speedButtonText: {
-    color: theme.text,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   speedMenu: {
     position: 'absolute',
     right: 0,
-    top: 40,
+    bottom: 36,
     minWidth: 96,
     backgroundColor: 'rgba(15, 18, 22, 0.96)',
     borderWidth: 1,
@@ -672,71 +948,39 @@ const styles = StyleSheet.create({
   speedMenuTextSelected: {
     color: theme.accent,
   },
-  lockRevealButton: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: 72,
-    height: 72,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 36,
-    backgroundColor: 'rgba(15, 18, 22, 0.75)',
-    transform: [{ translateX: -36 }, { translateY: -36 }],
-  },
-  centerControls: {
-    position: 'absolute',
-    top: '50%',
-    left: 0,
-    right: 0,
+  portraitFooter: {
+    position: 'relative',
+    zIndex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 24,
-    transform: [{ translateY: -34 }],
+    gap: 8,
+    marginTop: 8,
   },
-  skipButton: {
-    width: 58,
-    height: 58,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 29,
-    backgroundColor: 'rgba(26, 29, 35, 0.9)',
-  },
-  skipText: {
-    position: 'absolute',
-    color: theme.text,
-    fontSize: 10,
-    fontWeight: '800',
-    marginTop: 15,
-  },
-  playButton: {
-    width: 70,
-    height: 70,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 35,
-    backgroundColor: theme.accent,
-  },
-  seekControls: {
-    minHeight: 64,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 16,
-    backgroundColor: theme.scrim,
-  },
-  timeText: {
-    minWidth: 42,
-    color: theme.text,
-    fontSize: 12,
-    fontVariant: ['tabular-nums'],
-    textAlign: 'center',
-  },
-  seekBarTouchTarget: {
-    height: 44,
+  portraitSeekWrap: {
     flex: 1,
+  },
+  portraitTimeText: {
+    color: theme.text,
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    marginTop: 4,
+  },
+  portraitMiniButton: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(18, 20, 24, 0.35)',
+  },
+  fullscreenButton: {
+    width: 30,
+    height: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: 'rgba(18, 20, 24, 0.35)',
   },
   gestureHud: {
     position: 'absolute',
@@ -808,32 +1052,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  seekTrack: {
-    height: 4,
-    borderRadius: 4,
-    backgroundColor: theme.surfaceSoft,
-    justifyContent: 'center',
-  },
-  seekBuffered: {
-    position: 'absolute',
-    height: 4,
-    borderRadius: 4,
-    backgroundColor: theme.secondaryText,
-  },
-  seekProgress: {
-    height: 4,
-    borderRadius: 4,
-    backgroundColor: theme.accent,
-  },
-  seekThumb: {
-    position: 'absolute',
-    top: -5,
-    width: 14,
-    height: 14,
-    marginLeft: -7,
-    borderRadius: 7,
-    backgroundColor: theme.accent,
-  },
   bufferingBadge: {
     position: 'absolute',
     top: 72,
@@ -842,7 +1060,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     borderRadius: 999,
-    backgroundColor: theme.scrim,
+    backgroundColor: 'rgba(15, 18, 22, 0.56)',
     paddingHorizontal: 12,
     paddingVertical: 8,
   },
