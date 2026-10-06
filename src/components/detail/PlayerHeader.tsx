@@ -24,7 +24,6 @@ import {
   getPlayerSpeedLabel,
   getPlayerTapZone,
   getSeekBarTarget,
-  getSwipeValue,
   type PlayerFitMode,
 } from '../../utils/playerControls';
 
@@ -174,8 +173,16 @@ export function PlayerHeader({
       clearTimeout(hold2xTimerRef.current);
     }
     if (kind === 'skip' || kind === 'brightness' || kind === 'volume') {
-      hold2xTimerRef.current = setTimeout(() => setGestureHud(null), 500);
+      hold2xTimerRef.current = setTimeout(() => setGestureHud(null), 1000);
     }
+  };
+
+  const getSwipeAmount = (startValue: number, deltaY: number, trackHeight: number) => {
+    if (!Number.isFinite(startValue) || !Number.isFinite(deltaY) || !Number.isFinite(trackHeight) || trackHeight <= 0) {
+      return clampPlayerValue(startValue);
+    }
+    const deltaRatio = deltaY / trackHeight;
+    return clampPlayerValue(startValue + (-deltaRatio));
   };
 
   const triggerSkip = (zone: 'left' | 'right') => {
@@ -223,11 +230,8 @@ export function PlayerHeader({
         return;
       }
       const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
-      const nextValue = getSwipeValue(
-        zone === 'left' ? brightnessStartRef.current : volumeStartRef.current,
-        gestureState.dy,
-        gestureSize.height,
-      );
+      const baseValue = zone === 'left' ? brightnessStartRef.current : volumeStartRef.current;
+      const nextValue = getSwipeAmount(baseValue, gestureState.dy, gestureSize.height);
       if (zone === 'left') {
         const clamped = clampPlayerValue(nextValue);
         setBrightnessValue(clamped);
@@ -367,7 +371,7 @@ export function PlayerHeader({
             <>
               <Ionicons name="volume-medium-outline" size={22} color={theme.text} />
               <View style={styles.gestureBarTrack}>
-                <View style={[styles.gestureBarFill, { width: `${Math.max(0, Math.min(100, (gestureHud.value ?? 0) * 100))}%` }]} />
+                <View style={[styles.gestureBarFill, { width: `${Math.max(0, Math.min(100, Math.min(1, (gestureHud.value ?? 0)) * 100))}%` }]} />
               </View>
             </>
           ) : null}
