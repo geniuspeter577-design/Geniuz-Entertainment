@@ -13,9 +13,13 @@ import {
 
 import { theme } from '../../theme';
 import {
+  PLAYER_SPEED_OPTIONS,
   clampPlayerValue,
   formatPlaybackTime,
+  getPlayerFitLabel,
+  getPlayerSpeedLabel,
   getSeekBarTarget,
+  type PlayerFitMode,
 } from '../../utils/playerControls';
 
 type PlayerHeaderProps = {
@@ -31,8 +35,18 @@ type PlayerHeaderProps = {
   error?: string;
   showControls: boolean;
   isLandscape: boolean;
+  isLocked: boolean;
+  playbackSpeed: number;
+  speedMenuOpen: boolean;
+  fitMode: PlayerFitMode;
+  isRotateLocked: boolean;
   onBack: () => void;
   onToggleControls: () => void;
+  onToggleLock: () => void;
+  onToggleSpeedMenu: () => void;
+  onSelectSpeed: (speed: number) => void;
+  onCycleFit: () => void;
+  onToggleRotate: () => void;
   onPlayPause: () => void;
   onSeekBy: (seconds: number) => void;
   onSeekTo: (seconds: number) => void;
@@ -53,8 +67,18 @@ export function PlayerHeader({
   error,
   showControls,
   isLandscape,
+  isLocked,
+  playbackSpeed,
+  speedMenuOpen,
+  fitMode,
+  isRotateLocked,
   onBack,
   onToggleControls,
+  onToggleLock,
+  onToggleSpeedMenu,
+  onSelectSpeed,
+  onCycleFit,
+  onToggleRotate,
   onPlayPause,
   onSeekBy,
   onSeekTo,
@@ -62,6 +86,7 @@ export function PlayerHeader({
   onRetry,
 }: PlayerHeaderProps) {
   const seekBarWidth = useRef(0);
+  const [lockTapVisible, setLockTapVisible] = React.useState(false);
   const progress = duration > 0 ? clampPlayerValue(currentTime / duration) : 0;
   const bufferedProgress = duration > 0 ? clampPlayerValue(bufferedPosition / duration) : 0;
 
@@ -72,6 +97,39 @@ export function PlayerHeader({
     seekBarWidth.current = event.nativeEvent.layout.width;
   };
 
+  if (isLocked) {
+    return (
+      <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
+        {playbackUrl ? (
+          <VideoView
+            player={player}
+            style={styles.video}
+            nativeControls={false}
+            fullscreenOptions={{ enable: false }}
+            contentFit={fitMode}
+            allowsPictureInPicture={false}
+          />
+        ) : null}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Tap to reveal lock control"
+          onPress={() => setLockTapVisible(true)}
+          style={StyleSheet.absoluteFill}
+        />
+        {lockTapVisible ? (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Unlock playback controls"
+            onPress={onToggleLock}
+            style={styles.lockRevealButton}
+          >
+            <Ionicons name="lock-open-outline" size={32} color={theme.text} />
+          </Pressable>
+        ) : null}
+      </View>
+    );
+  }
+
   return (
     <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
       {playbackUrl ? (
@@ -80,7 +138,7 @@ export function PlayerHeader({
           style={styles.video}
           nativeControls={false}
           fullscreenOptions={{ enable: false }}
-          contentFit="contain"
+          contentFit={fitMode}
           allowsPictureInPicture={false}
         />
       ) : null}
@@ -101,14 +159,70 @@ export function PlayerHeader({
           <View style={styles.topBar}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Go back"
-              onPress={onBack}
-              style={styles.backButton}
+              accessibilityLabel="Lock playback controls"
+              onPress={() => {
+                setLockTapVisible(false);
+                onToggleLock();
+              }}
+              style={styles.controlButton}
               hitSlop={8}
             >
-              <Ionicons name="chevron-back" size={26} color={theme.text} />
+              <Ionicons name="lock-closed-outline" size={22} color={theme.text} />
             </Pressable>
             <Text style={styles.title} numberOfLines={1}>{title}</Text>
+            <View style={styles.rightControls}>
+              <View style={styles.speedWrap}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Playback speed"
+                  onPress={onToggleSpeedMenu}
+                  style={styles.speedButton}
+                >
+                  <Text style={styles.speedButtonText}>{getPlayerSpeedLabel(playbackSpeed)}</Text>
+                </Pressable>
+                {speedMenuOpen ? (
+                  <View style={styles.speedMenu}>
+                    {PLAYER_SPEED_OPTIONS.map((speed) => (
+                      <Pressable
+                        key={String(speed)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Playback speed ${getPlayerSpeedLabel(speed)}`}
+                        onPress={() => {
+                          player.playbackRate = speed;
+                          onSelectSpeed(speed);
+                          onToggleSpeedMenu();
+                        }}
+                        style={[styles.speedMenuItem, playbackSpeed === speed && styles.speedMenuItemSelected]}
+                      >
+                        <Text style={[styles.speedMenuText, playbackSpeed === speed && styles.speedMenuTextSelected]}>
+                          {getPlayerSpeedLabel(speed)}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Change video fit"
+                onPress={onCycleFit}
+                style={styles.controlButton}
+              >
+                <Text style={styles.controlButtonText}>{getPlayerFitLabel(fitMode)}</Text>
+              </Pressable>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isRotateLocked ? 'Unlock portrait orientation' : 'Lock landscape orientation'}
+                onPress={onToggleRotate}
+                style={styles.controlButton}
+              >
+                <Ionicons
+                  name={isRotateLocked ? 'phone-landscape-outline' : 'phone-portrait-outline'}
+                  size={20}
+                  color={theme.text}
+                />
+              </Pressable>
+            </View>
           </View>
 
           {error ? (
@@ -228,19 +342,87 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     backgroundColor: theme.scrim,
   },
-  backButton: {
-    width: 48,
-    height: 48,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 24,
-    backgroundColor: theme.surface,
-  },
   title: {
     flex: 1,
     color: theme.text,
     fontSize: 16,
     fontWeight: '700',
+  },
+  rightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  controlButton: {
+    width: 42,
+    height: 42,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: 'rgba(15, 18, 22, 0.72)',
+  },
+  controlButtonText: {
+    color: theme.text,
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+  },
+  speedWrap: {
+    position: 'relative',
+  },
+  speedButton: {
+    minWidth: 54,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 17,
+    backgroundColor: 'rgba(15, 18, 22, 0.72)',
+    paddingHorizontal: 12,
+  },
+  speedButtonText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  speedMenu: {
+    position: 'absolute',
+    right: 0,
+    top: 40,
+    minWidth: 96,
+    backgroundColor: 'rgba(15, 18, 22, 0.96)',
+    borderWidth: 1,
+    borderColor: 'rgba(114, 240, 106, 0.35)',
+    borderRadius: 12,
+    paddingVertical: 6,
+  },
+  speedMenuItem: {
+    minHeight: 32,
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+  },
+  speedMenuItemSelected: {
+    backgroundColor: 'rgba(114, 240, 106, 0.12)',
+  },
+  speedMenuText: {
+    color: theme.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  speedMenuTextSelected: {
+    color: theme.accent,
+  },
+  lockRevealButton: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: 72,
+    height: 72,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 36,
+    backgroundColor: 'rgba(15, 18, 22, 0.75)',
+    transform: [{ translateX: -36 }, { translateY: -36 }],
   },
   centerControls: {
     position: 'absolute',

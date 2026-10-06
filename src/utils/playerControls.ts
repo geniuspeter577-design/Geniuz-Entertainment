@@ -1,9 +1,57 @@
 import type { VideoPlayer } from 'expo-video';
 
 export const PLAYER_CONTROLS_AUTO_HIDE_MS = 3000;
+export const PLAYER_SPEED_OPTIONS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+export const PLAYER_FIT_OPTIONS = ['contain', 'fill', 'cover'] as const;
+
+export type PlayerFitMode = typeof PLAYER_FIT_OPTIONS[number];
 
 export function clampPlayerValue(value: number): number {
   return Math.max(0, Math.min(1, value));
+}
+
+export function getPlayerSpeedOptions(): number[] {
+  return [...PLAYER_SPEED_OPTIONS];
+}
+
+export function getPlayerSpeedLabel(speed: number): string {
+  const normalized = Number.isFinite(speed) ? speed : 1;
+  const trimmed = Number.isInteger(normalized)
+    ? String(normalized)
+    : normalized.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  return `${trimmed}x`;
+}
+
+export function getNextPlayerSpeed(currentSpeed: number): number {
+  const options = getPlayerSpeedOptions();
+  const safeSpeed = options.some((option) => option === currentSpeed) ? currentSpeed : 1;
+  const index = options.indexOf(safeSpeed);
+  return options[(index + 1) % options.length];
+}
+
+export function togglePlayerLock(isLocked: boolean): boolean {
+  return !isLocked;
+}
+
+export function getNextPlayerFit(currentFit: string): PlayerFitMode {
+  const safeFit = PLAYER_FIT_OPTIONS.includes(currentFit as PlayerFitMode)
+    ? (currentFit as PlayerFitMode)
+    : 'contain';
+  const index = PLAYER_FIT_OPTIONS.indexOf(safeFit);
+  return PLAYER_FIT_OPTIONS[(index + 1) % PLAYER_FIT_OPTIONS.length];
+}
+
+export function getPlayerFitLabel(currentFit: string): 'Fit' | 'Fill' | 'Stretch' {
+  switch (currentFit) {
+    case 'contain':
+      return 'Fit';
+    case 'fill':
+      return 'Fill';
+    case 'cover':
+      return 'Stretch';
+    default:
+      return 'Fit';
+  }
 }
 
 export function getSeekTarget(currentSeconds: number, durationSeconds: number, deltaSeconds: number): number {

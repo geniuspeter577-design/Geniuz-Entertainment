@@ -21,10 +21,16 @@ const {
   getSeekTarget,
   formatPlaybackTime,
   PLAYER_CONTROLS_AUTO_HIDE_MS,
+  PLAYER_SPEED_OPTIONS,
+  getPlayerSpeedLabel,
+  getNextPlayerSpeed,
+  getNextPlayerFit,
+  getPlayerFitLabel,
   runPlayerActionIfActive,
   shouldAutoHidePlayerControls,
   setPlayerMuted,
   setPlayerVolume,
+  togglePlayerLock,
   togglePlayerOrientation,
 } = require('../.test-build/src/utils/playerControls.js');
 const {
@@ -225,7 +231,7 @@ test('Home hero selects five newest published titles and only downloaded cached 
   assert.deepEqual(getHomeHeroItems([], cached, false).map(({ id }) => id), ['new', 'old']);
 });
 
-test('player controls clamp seeks and drag values and toggle orientation', () => {
+test('player controls clamp seeks, speed presets, fit cycling, and lock state', () => {
   assert.equal(getSeekTarget(5, 60, 10), 15);
   assert.equal(getSeekTarget(5, 60, -10), 0);
   assert.equal(getSeekTarget(58, 60, 10), 60);
@@ -233,6 +239,19 @@ test('player controls clamp seeks and drag values and toggle orientation', () =>
   assert.equal(getDragTarget(0.5, 100, 100), 0);
   assert.equal(getDragTarget(0.5, -100, 100), 1);
   assert.equal(getDragTarget(0.5, 10, 0), 0.5);
+  assert.deepEqual(PLAYER_SPEED_OPTIONS, [0.5, 0.75, 1, 1.25, 1.5, 2]);
+  assert.equal(getPlayerSpeedLabel(1), '1x');
+  assert.equal(getPlayerSpeedLabel(1.25), '1.25x');
+  assert.equal(getNextPlayerSpeed(1), 1.25);
+  assert.equal(getNextPlayerSpeed(2), 0.5);
+  assert.equal(getNextPlayerFit('contain'), 'fill');
+  assert.equal(getNextPlayerFit('fill'), 'cover');
+  assert.equal(getNextPlayerFit('cover'), 'contain');
+  assert.equal(getPlayerFitLabel('contain'), 'Fit');
+  assert.equal(getPlayerFitLabel('fill'), 'Fill');
+  assert.equal(getPlayerFitLabel('cover'), 'Stretch');
+  assert.equal(togglePlayerLock(false), true);
+  assert.equal(togglePlayerLock(true), false);
   assert.equal(togglePlayerOrientation(false), true);
   assert.equal(togglePlayerOrientation(true), false);
   assert.equal(isPlayerGestureArea(60, 100, 360, 200), true);

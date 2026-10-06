@@ -1,6 +1,7 @@
+import * as ScreenOrientation from 'expo-screen-orientation';
 import { Stack, useLocalSearchParams } from 'expo-router';
-import { useVideoPlayer } from 'expo-video';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { createVideoPlayer } from 'expo-video';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -14,12 +15,14 @@ import { theme } from '../../src/theme';
 import { logger } from '../../src/utils/logger';
 import { getFriendlyPlaybackError, getPlaybackErrorDetails, isExpiredPlaybackLinkError, PlaybackError } from '../../src/utils/playbackError';
 import {
+  getNextPlayerFit,
   getSeekTarget,
   PLAYER_CONTROLS_AUTO_HIDE_MS,
   runPlayerActionIfActive,
   setPlayerCurrentTime,
   setPlayerTimeUpdateInterval,
   shouldAutoHidePlayerControls,
+  type PlayerFitMode,
 } from '../../src/utils/playerControls';
 import { backOrReplace } from '../../src/utils/navigation';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
@@ -28,7 +31,7 @@ export default function WatchScreen() {
   const { id: routeId, trailer: routeTrailer } = useLocalSearchParams<{ id: string; trailer?: string }>();
   const id = typeof routeId === 'string' ? routeId : '';
   const isTrailer = routeTrailer === '1';
-  const player = useVideoPlayer(null);
+  const player = useMemo(() => createVideoPlayer(null), []);
   const downloads = useDownloads();
   const { isOnline } = useNetwork();
   const { width, height } = useWindowDimensions();
@@ -48,6 +51,11 @@ export default function WatchScreen() {
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isSeeking, setIsSeeking] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
+  const [fitMode, setFitMode] = useState<PlayerFitMode>('contain');
+  const [isPlayerLocked, setIsPlayerLocked] = useState(false);
+  const [isRotateLocked, setIsRotateLocked] = useState(false);
   const playerReleasedRef = useRef(false);
   const expiredLinkRetryRef = useRef(false);
   const failureHandledRef = useRef(false);
@@ -74,6 +82,13 @@ export default function WatchScreen() {
   }, [player]);
 
   useEffect(() => {
+    void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    return () => {
+      void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+    };
+  }, []);
+
+  useEffect(() => {
     setPlayerTimeUpdateInterval(player, 0.25);
     const timeSubscription = player.addListener('timeUpdate', ({ currentTime: time }) => {
       setCurrentTime(time);
@@ -88,12 +103,41 @@ export default function WatchScreen() {
   }, [player]);
 
   useEffect(() => {
-    if (!showControls || !shouldAutoHidePlayerControls(isPlaying, isSeeking)) {
+    if (isPlayerLocked || !showControls || !shouldAutoHidePlayerControls(isPlaying, isSeeking)) {
       return;
     }
     const timeout = setTimeout(() => setShowControls(false), PLAYER_CONTROLS_AUTO_HIDE_MS);
     return () => clearTimeout(timeout);
-  }, [isPlaying, isSeeking, showControls]);
+  }, [isPlaying, isPlayerLocked, isSeeking, showControls]);
+
+  const toggleLock = useCallback(() => {
+    setIsPlayerLocked((locked) => {
+      const nextLocked = !locked;
+      setShowControls(!nextLocked);
+      return nextLocked;
+    });
+    setSpeedMenuOpen(false);
+  }, []);
+
+  const toggleSpeedMenu = useCallback(() => {
+    if (isPlayerLocked) {
+      return;
+    }
+    setSpeedMenuOpen((open) => !open);
+  }, [isPlayerLocked]);
+
+  const cycleFitMode = useCallback(() => {
+    setFitMode((current) => getNextPlayerFit(current));
+  }, []);
+
+  const toggleRotateLock = useCallback(async () => {
+    const nextLocked = !isRotateLocked;
+    await ScreenOrientation.lockAsync(
+      nextLocked ? ScreenOrientation.OrientationLock.LANDSCAPE : ScreenOrientation.OrientationLock.PORTRAIT,
+    );
+    setIsRotateLocked(nextLocked);
+    setShowControls(true);
+  }, [isRotateLocked]);
 
   const refreshExpiredLink = useCallback(async () => {
     if (!movie || isOfflinePlayback || !isOnline || !supabaseMovieRepository) {
@@ -184,6 +228,7 @@ export default function WatchScreen() {
       setIsOfflinePlayback(false);
       setCurrentTime(0);
       setShowControls(true);
+      setSpeedMenuOpen(false);
       expiredLinkRetryRef.current = false;
       failureHandledRef.current = false;
 
@@ -394,8 +439,21 @@ export default function WatchScreen() {
         error={error}
         showControls={showControls}
         isLandscape={isLandscape}
+        isLocked={isPlayerLocked}
+        playbackSpeed={playbackSpeed}
+        speedMenuOpen={speedMenuOpen}
+        fitMode={fitMode}
+        isRotateLocked={isRotateLocked}
         onBack={() => backOrReplace('/')}
         onToggleControls={() => setShowControls((visible) => !visible)}
+        onToggleLock={toggleLock}
+        onToggleSpeedMenu={toggleSpeedMenu}
+        onSelectSpeed={(speed) => {
+          setPlaybackSpeed(speed);
+          setSpeedMenuOpen(false);
+        }}
+        onCycleFit={cycleFitMode}
+        onToggleRotate={toggleRotateLock}
         onPlayPause={togglePlayback}
         onSeekBy={seekBy}
         onSeekTo={seekTo}
