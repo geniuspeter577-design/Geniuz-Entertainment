@@ -1,8 +1,8 @@
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { createVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { Alert, AppState, Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
@@ -60,6 +60,16 @@ export default function WatchScreen() {
   const expiredLinkRetryRef = useRef(false);
   const failureHandledRef = useRef(false);
 
+  const releasePlayer = useCallback(() => {
+    if (playerReleasedRef.current) {
+      return;
+    }
+    playerReleasedRef.current = true;
+    player.pause();
+    player.release();
+    setIsPlaying(false);
+  }, [player]);
+
   const downloadRecord = downloads.records.find((record) => record.item.id === id);
   const isDownloading = downloadRecord?.status === 'downloading';
   const isQueued = downloadRecord?.status === 'queued';
@@ -77,9 +87,26 @@ export default function WatchScreen() {
   useEffect(() => {
     playerReleasedRef.current = false;
     return () => {
-      playerReleasedRef.current = true;
+      releasePlayer();
     };
-  }, [player]);
+  }, [player, releasePlayer]);
+
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        releasePlayer();
+      };
+    }, [releasePlayer]),
+  );
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        releasePlayer();
+      }
+    });
+    return () => subscription.remove();
+  }, [releasePlayer]);
 
   useEffect(() => {
     void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
