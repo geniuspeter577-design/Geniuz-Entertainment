@@ -63,6 +63,10 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
   ]);
   assert.ok(videoReencodeAudioCopyArgs.includes('libx264'));
   assert.deepEqual(
+    videoReencodeAudioCopyArgs.slice(videoReencodeAudioCopyArgs.indexOf('-crf'), videoReencodeAudioCopyArgs.indexOf('-pix_fmt')),
+    ['-crf', '30', '-maxrate', '900k', '-bufsize', '1800k'],
+  );
+  assert.deepEqual(
     videoReencodeAudioCopyArgs.slice(videoReencodeAudioCopyArgs.indexOf('-c:a'), videoReencodeAudioCopyArgs.indexOf('-sn')),
     ['-c:a', 'copy'],
   );
@@ -75,6 +79,23 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
     audioReencodeArgs.slice(audioReencodeArgs.indexOf('-c:a'), audioReencodeArgs.indexOf('-sn')),
     ['-c:a', 'aac', '-b:a', '128k'],
   );
+  const qualityOverrideArgs = buildFfmpegArgs(
+    '/tmp/convert/input.mkv',
+    '/tmp/convert/output.mp4',
+    [{ codec_type: 'video', codec_name: 'hevc' }],
+    { crf: 24, maxrateKbps: 1200 },
+  );
+  assert.deepEqual(
+    qualityOverrideArgs.slice(qualityOverrideArgs.indexOf('-crf'), qualityOverrideArgs.indexOf('-pix_fmt')),
+    ['-crf', '24', '-maxrate', '1200k', '-bufsize', '2400k'],
+  );
+});
+
+test('media conversion warns only when output exceeds source size', async () => {
+  const { shouldWarnOutputIsLarger } = await import('../backend/scripts/convert-media.mjs');
+  assert.equal(shouldWarnOutputIsLarger(1000, 1001), true);
+  assert.equal(shouldWarnOutputIsLarger(1000, 1000), false);
+  assert.equal(shouldWarnOutputIsLarger(1000, 999), false);
 });
 
 test('media conversion verification enforces codecs, duration tolerance, and non-empty output', async () => {

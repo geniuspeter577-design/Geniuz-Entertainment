@@ -33,7 +33,7 @@ export function getConvertedObjectKey(oldKey) {
   return `movies/${match[1]}.mp4`;
 }
 
-export function buildFfmpegArgs(sourcePath, outputPath, streams) {
+export function buildFfmpegArgs(sourcePath, outputPath, streams, { crf = 30, maxrateKbps = 900 } = {}) {
   const videoStreams = streams.filter((stream) => stream.codec_type === 'video');
   const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
   if (videoStreams.length === 0) {
@@ -47,7 +47,10 @@ export function buildFfmpegArgs(sourcePath, outputPath, streams) {
   if (canRemux) {
     args.push('-c', 'copy');
   } else {
-    args.push('-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23', '-pix_fmt', 'yuv420p');
+    args.push(
+      '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf),
+      '-maxrate', `${maxrateKbps}k`, '-bufsize', `${maxrateKbps * 2}k`, '-pix_fmt', 'yuv420p',
+    );
     if (audioStreams.length === 0 || audioStreams.every((stream) => stream.codec_name === 'aac')) {
       args.push('-c:a', 'copy');
     } else {
@@ -56,6 +59,10 @@ export function buildFfmpegArgs(sourcePath, outputPath, streams) {
   }
   args.push('-sn', '-dn', '-map_chapters', '-1', '-movflags', '+faststart', '-n', outputPath);
   return args;
+}
+
+export function shouldWarnOutputIsLarger(sourceSize, outputSize) {
+  return outputSize > sourceSize;
 }
 
 export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outputProbe, outputSize }) {
@@ -91,17 +98,18 @@ export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outpu
 function parseArguments(args) {
   const options = new Map();
   let dryRun = false;
+  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--dry-run]';
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--dry-run') {
       if (dryRun) {
-        throw new Error('Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--dry-run]');
+        throw new Error(usage);
       }
       dryRun = true;
       continue;
     }
-    if (argument !== '--key' || options.has(argument) || !args[index + 1]) {
-      throw new Error('Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--dry-run]');
+    if (!['--key', '--input', '--crf', '--maxrate-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
+      throw new Error(usage);
     }
     options.set(argument, args[index + 1]);
     index += 1;
@@ -109,9 +117,14 @@ function parseArguments(args) {
 
   const key = options.get('--key');
   if (!key) {
-    throw new Error('Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--dry-run]');
+    throw new Error(usage);
   }
-  return { key, dryRun };
+  const crf = options.has('--crf') ? Number(options.get('--crf')) : 30;
+  const maxrateKbps = options.has('--maxrate-kbps') ? Number(options.get('--maxrate-kbps')) : 900;
+  if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0) {
+    throw new Error(usage);
+  }
+  return { key, input: options.get('--input'), crf, maxrateKbps, dryRun };
 }
 
 function isMissingObjectError(error) {
@@ -186,6 +199,30 @@ async function probe(input) {
   }
 }
 
+async function resolveLocalInput(inputPath) {
+  if (!isAllowedOutputPath(inputPath, REPOSITORY_ROOT)) {
+    throw new ConversionError('Input path must be an absolute path inside /tmp and outside the repository.');
+  }
+  let resolvedPath;
+  let details;
+  try {
+    resolvedPath = await realpath(inputPath);
+    if (!isAllowedOutputPath(resolvedPath, REPOSITORY_ROOT)) {
+      throw new ConversionError('Input path must resolve inside /tmp and outside the repository.');
+    }
+    details = await stat(resolvedPath);
+  } catch (error) {
+    if (error instanceof ConversionError) {
+      throw error;
+    }
+    throw new ConversionError('The local input file could not be read.');
+  }
+  if (!details.isFile()) {
+    throw new ConversionError('The local input path must be a readable file.');
+  }
+  return { path: resolvedPath, size: details.size };
+}
+
 async function runConversion(args) {
   let options;
   let newKey;
@@ -214,12 +251,13 @@ async function runConversion(args) {
     return;
   }
 
-  const inputPath = path.join(conversionDirectory, `${randomUUID()}.mkv`);
+  const downloadedInputPath = path.join(conversionDirectory, `${randomUUID()}.mkv`);
+  let inputPath = downloadedInputPath;
   const outputPath = path.join(conversionDirectory, `${randomUUID()}.mp4`);
   if (
-    !isAllowedOutputPath(inputPath, REPOSITORY_ROOT) ||
+    !isAllowedOutputPath(downloadedInputPath, REPOSITORY_ROOT) ||
     !isAllowedOutputPath(outputPath, REPOSITORY_ROOT) ||
-    !inputPath.startsWith(`${conversionDirectory}${path.sep}`) ||
+    !downloadedInputPath.startsWith(`${conversionDirectory}${path.sep}`) ||
     !outputPath.startsWith(`${conversionDirectory}${path.sep}`)
   ) {
     console.error('Temporary conversion paths must remain inside /tmp/convert.');
@@ -240,22 +278,37 @@ async function runConversion(args) {
   try {
     await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
     let sourceProbe;
-    if (options.dryRun) {
+    let sourceSize;
+    if (options.input) {
+      const localInput = await resolveLocalInput(options.input);
+      inputPath = localInput.path;
+      const head = await client.send(new HeadObjectCommand({ Bucket: process.env.S3_BUCKET, Key: options.key }));
+      if (!Number.isSafeInteger(head.ContentLength) || head.ContentLength < 0) {
+        throw new ConversionError('The source object did not provide a valid size.');
+      }
+      if (localInput.size !== head.ContentLength) {
+        throw new ConversionError(`Local input size mismatch: source object is ${head.ContentLength} bytes; local file is ${localInput.size} bytes.`);
+      }
+      sourceSize = localInput.size;
+      sourceProbe = await probe(inputPath);
+      console.log(`Local input size verified against source HEAD: ${sourceSize} bytes.`);
+    } else if (options.dryRun) {
       const command = new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: options.key });
       const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
       const signedUrl = await getSignedUrl(client, command, { expiresIn: 10 * 60 });
       sourceProbe = await probe(signedUrl);
     } else {
-      const { sizeBytes: sourceSize } = await downloadObjectToFile(
+      const downloadResult = await downloadObjectToFile(
         client,
         process.env.S3_BUCKET,
         options.key,
-        inputPath,
+        downloadedInputPath,
         (done, total) => {
           process.stdout.write(`\rDownloading ${(done / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`);
         },
       );
       process.stdout.write('\n');
+      sourceSize = downloadResult.sizeBytes;
       console.log(`Source download size verified: ${sourceSize} bytes.`);
       sourceProbe = await probe(inputPath);
     }
@@ -264,7 +317,7 @@ async function runConversion(args) {
     if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
       throw new ConversionError('The source duration could not be determined.');
     }
-    const ffmpegArgs = buildFfmpegArgs(inputPath, outputPath, sourceProbe.streams);
+    const ffmpegArgs = buildFfmpegArgs(inputPath, outputPath, sourceProbe.streams, options);
 
     if (options.dryRun) {
       console.log(`New key: ${newKey}`);
@@ -277,8 +330,13 @@ async function runConversion(args) {
     } catch {
       throw new ConversionError('ffmpeg conversion failed.');
     }
-    const outputProbe = await probe(outputPath);
     const { size: outputSize } = await stat(outputPath);
+    if (Number.isFinite(sourceSize) && shouldWarnOutputIsLarger(sourceSize, outputSize)) {
+      console.error(`WARNING: Converted output is larger than the source; refusing upload. Source: ${sourceSize} bytes; output: ${outputSize} bytes.`);
+      process.exitCode = 1;
+      return;
+    }
+    const outputProbe = await probe(outputPath);
     const verification = verifyConvertedMedia({
       sourceDuration,
       sourceStreams: sourceProbe.streams,
@@ -340,7 +398,8 @@ async function runConversion(args) {
     process.exitCode = 1;
   } finally {
     client.destroy();
-    for (const temporaryPath of [inputPath, outputPath]) {
+    const cleanupPaths = options.input ? [outputPath] : [downloadedInputPath, outputPath];
+    for (const temporaryPath of cleanupPaths) {
       await unlink(temporaryPath).catch((error) => {
         if (error?.code !== 'ENOENT') {
           console.error('Could not clean up a temporary conversion file.');
