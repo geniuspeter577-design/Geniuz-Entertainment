@@ -138,6 +138,16 @@ export function parseArguments(args) {
   return { key, input: options.get('--input'), uploadOnly: options.get('--upload-only'), crf, maxrateKbps, audioKbps, dryRun };
 }
 
+export function buildUploadObjectParams({ bucket, key, body, contentLength }) {
+  return {
+    Bucket: bucket,
+    Key: key,
+    Body: body,
+    ContentLength: contentLength,
+    ContentType: 'video/mp4',
+  };
+}
+
 function isMissingObjectError(error) {
   return (
     error?.$metadata?.httpStatusCode === 404 ||
@@ -284,8 +294,6 @@ async function runConversion(args) {
       accessKeyId: process.env.S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     },
-    requestChecksumCalculation: 'when_required',
-    responseChecksumValidation: 'when_required',
   });
 
   let stableConvertedPath = null;
@@ -387,14 +395,12 @@ async function runConversion(args) {
     await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
     try {
       await client.send(
-        new PutObjectCommand({
-          Bucket: process.env.S3_BUCKET,
-          Key: newKey,
-          Body: createReadStream(uploadSource, { highWaterMark: 1024 * 1024 }),
-          ContentLength: uploadSize,
-          ContentType: 'video/mp4',
-          IfNoneMatch: '*',
-        }),
+        new PutObjectCommand(buildUploadObjectParams({
+          bucket: process.env.S3_BUCKET,
+          key: newKey,
+          body: createReadStream(uploadSource, { highWaterMark: 1024 * 1024 }),
+          contentLength: uploadSize,
+        })),
       );
     } catch (error) {
       if (

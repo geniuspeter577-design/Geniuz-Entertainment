@@ -64,6 +64,21 @@ test('media conversion parser accepts upload-only and other quality flags', asyn
   assert.throws(() => parseArguments(['--upload-only']), /Usage/);
 });
 
+test('media conversion upload params omit conditional headers unsupported by Backblaze', async () => {
+  const { buildUploadObjectParams } = await import('../backend/scripts/convert-media.mjs');
+  const params = buildUploadObjectParams({
+    bucket: 'demo-bucket',
+    key: 'movies/123e4567-e89b-12d3-a456-426614174000.mp4',
+    body: Buffer.from('abc'),
+    contentLength: 3,
+  });
+
+  assert.equal(params.ContentType, 'video/mp4');
+  assert.equal(params.ContentLength, 3);
+  assert.equal('IfNoneMatch' in params, false);
+  assert.equal(params.IfNoneMatch, undefined);
+});
+
 test('media conversion derives a new UUID key and selects copy or re-encode arguments', async () => {
   const { buildFfmpegArgs, getConvertedObjectKey } = await import('../backend/scripts/convert-media.mjs');
   const oldKey = 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv';
