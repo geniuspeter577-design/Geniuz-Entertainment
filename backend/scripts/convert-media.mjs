@@ -33,12 +33,23 @@ export function getConvertedObjectKey(oldKey) {
   return `movies/${match[1]}.mp4`;
 }
 
-export function buildFfmpegArgs(sourcePath, outputPath, streams, { crf = 30, maxrateKbps = 900 } = {}) {
+export function buildFfmpegArgs(
+  sourcePath,
+  outputPath,
+  streams,
+  { crf = 30, maxrateKbps = 200, audioKbps = 64 } = {},
+) {
   const videoStreams = streams.filter((stream) => stream.codec_type === 'video');
   const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
   if (videoStreams.length === 0) {
     throw new ConversionError('The source has no video stream.');
   }
+
+  const sourceHeight = videoStreams.reduce((maxHeight, stream) => {
+    const height = Number.isFinite(stream.height) ? stream.height : 0;
+    return Math.max(maxHeight, height);
+  }, 0);
+  const shouldScaleVideo = sourceHeight > 480;
 
   const canRemux =
     videoStreams.every((stream) => stream.codec_name === 'h264') &&
@@ -51,11 +62,10 @@ export function buildFfmpegArgs(sourcePath, outputPath, streams, { crf = 30, max
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf),
       '-maxrate', `${maxrateKbps}k`, '-bufsize', `${maxrateKbps * 2}k`, '-pix_fmt', 'yuv420p',
     );
-    if (audioStreams.length === 0 || audioStreams.every((stream) => stream.codec_name === 'aac')) {
-      args.push('-c:a', 'copy');
-    } else {
-      args.push('-c:a', 'aac', '-b:a', '128k');
+    if (shouldScaleVideo) {
+      args.push('-vf', 'scale=-2:480');
     }
+    args.push('-c:a', 'aac', '-b:a', `${audioKbps}k`, '-ac', '2');
   }
   args.push('-sn', '-dn', '-map_chapters', '-1', '-movflags', '+faststart', '-n', outputPath);
   return args;
@@ -98,7 +108,7 @@ export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outpu
 function parseArguments(args) {
   const options = new Map();
   let dryRun = false;
-  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--dry-run]';
+  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run]';
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--dry-run') {
@@ -108,7 +118,7 @@ function parseArguments(args) {
       dryRun = true;
       continue;
     }
-    if (!['--key', '--input', '--crf', '--maxrate-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
+    if (!['--key', '--input', '--crf', '--maxrate-kbps', '--audio-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
       throw new Error(usage);
     }
     options.set(argument, args[index + 1]);
@@ -120,11 +130,12 @@ function parseArguments(args) {
     throw new Error(usage);
   }
   const crf = options.has('--crf') ? Number(options.get('--crf')) : 30;
-  const maxrateKbps = options.has('--maxrate-kbps') ? Number(options.get('--maxrate-kbps')) : 900;
-  if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0) {
+  const maxrateKbps = options.has('--maxrate-kbps') ? Number(options.get('--maxrate-kbps')) : 200;
+  const audioKbps = options.has('--audio-kbps') ? Number(options.get('--audio-kbps')) : 64;
+  if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0 || !Number.isSafeInteger(audioKbps) || audioKbps <= 0) {
     throw new Error(usage);
   }
-  return { key, input: options.get('--input'), crf, maxrateKbps, dryRun };
+  return { key, input: options.get('--input'), crf, maxrateKbps, audioKbps, dryRun };
 }
 
 function isMissingObjectError(error) {

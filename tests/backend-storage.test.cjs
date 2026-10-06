@@ -57,37 +57,51 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
   assert.deepEqual(remuxArgs.slice(remuxArgs.indexOf('-c'), remuxArgs.indexOf('-sn')), ['-c', 'copy']);
   assert.ok(remuxArgs.includes('-map_chapters'));
 
-  const videoReencodeAudioCopyArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
-    { codec_type: 'video', codec_name: 'hevc' },
+  const scaledReencodeArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
+    { codec_type: 'video', codec_name: 'hevc', height: 720 },
     { codec_type: 'audio', codec_name: 'aac' },
   ]);
-  assert.ok(videoReencodeAudioCopyArgs.includes('libx264'));
+  assert.ok(scaledReencodeArgs.includes('libx264'));
   assert.deepEqual(
-    videoReencodeAudioCopyArgs.slice(videoReencodeAudioCopyArgs.indexOf('-crf'), videoReencodeAudioCopyArgs.indexOf('-pix_fmt')),
-    ['-crf', '30', '-maxrate', '900k', '-bufsize', '1800k'],
+    scaledReencodeArgs.slice(scaledReencodeArgs.indexOf('-crf'), scaledReencodeArgs.indexOf('-pix_fmt')),
+    ['-crf', '30', '-maxrate', '200k', '-bufsize', '400k'],
   );
   assert.deepEqual(
-    videoReencodeAudioCopyArgs.slice(videoReencodeAudioCopyArgs.indexOf('-c:a'), videoReencodeAudioCopyArgs.indexOf('-sn')),
-    ['-c:a', 'copy'],
+    scaledReencodeArgs.slice(scaledReencodeArgs.indexOf('-vf'), scaledReencodeArgs.indexOf('-c:a')),
+    ['-vf', 'scale=-2:480'],
+  );
+  assert.deepEqual(
+    scaledReencodeArgs.slice(scaledReencodeArgs.indexOf('-c:a'), scaledReencodeArgs.indexOf('-sn')),
+    ['-c:a', 'aac', '-b:a', '64k', '-ac', '2'],
   );
 
+  const noScaleWhenSmallArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
+    { codec_type: 'video', codec_name: 'hevc', height: 480 },
+    { codec_type: 'audio', codec_name: 'aac' },
+  ]);
+  assert.ok(!noScaleWhenSmallArgs.includes('-vf'));
+
   const audioReencodeArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
-    { codec_type: 'video', codec_name: 'hevc' },
+    { codec_type: 'video', codec_name: 'hevc', height: 1080 },
     { codec_type: 'audio', codec_name: 'ac3' },
   ]);
   assert.deepEqual(
     audioReencodeArgs.slice(audioReencodeArgs.indexOf('-c:a'), audioReencodeArgs.indexOf('-sn')),
-    ['-c:a', 'aac', '-b:a', '128k'],
+    ['-c:a', 'aac', '-b:a', '64k', '-ac', '2'],
   );
   const qualityOverrideArgs = buildFfmpegArgs(
     '/tmp/convert/input.mkv',
     '/tmp/convert/output.mp4',
-    [{ codec_type: 'video', codec_name: 'hevc' }],
-    { crf: 24, maxrateKbps: 1200 },
+    [{ codec_type: 'video', codec_name: 'hevc', height: 1080 }],
+    { crf: 24, maxrateKbps: 1200, audioKbps: 96 },
   );
   assert.deepEqual(
     qualityOverrideArgs.slice(qualityOverrideArgs.indexOf('-crf'), qualityOverrideArgs.indexOf('-pix_fmt')),
     ['-crf', '24', '-maxrate', '1200k', '-bufsize', '2400k'],
+  );
+  assert.deepEqual(
+    qualityOverrideArgs.slice(qualityOverrideArgs.indexOf('-c:a'), qualityOverrideArgs.indexOf('-sn')),
+    ['-c:a', 'aac', '-b:a', '96k', '-ac', '2'],
   );
 });
 

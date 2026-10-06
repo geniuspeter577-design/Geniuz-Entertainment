@@ -5,6 +5,7 @@ Updated: 2026-10-06
 ## Latest Work
 
 - Watch-player controls Task 3B (2026-10-06): added lock, speed selector, fit-cycle, and orientation-lock controls to the player overlay in `app/watch/[id].tsx` and `src/components/detail/PlayerHeader.tsx`, backed by shared helpers in `src/utils/playerControls.ts`. Playback speed is applied in the live player interaction path, fit labels stay aligned to the valid `expo-video` modes, and the screen preserves portrait defaults unless the user intentionally rotates and locks the device orientation. Validation in order: `npm --prefix backend run build`, `npm run typecheck`, `npm run lint`, and `npm test` all completed successfully; the full suite passed (123/123), with only two existing duplicate-import warnings in `src/services/ProfileRepository.ts` from the lint configuration.
+- Small-file re-encode profile (2026-10-06): `backend/scripts/convert-media.mjs` now applies `-vf scale=-2:480` only when a source video is taller than 480 px, defaults to `--crf 30` and `--maxrate-kbps 200` with a `2x` bufsize, re-encodes audio to AAC stereo at 64 kbps by default, supports `--audio-kbps` overrides, and preserves the existing `--input` and reject-larger-than-source behavior. The pure argument-builder tests were updated to cover the downscale rule, AAC stereo default/override behavior, and the default quality profile. Validation remains in the requested order: backend build, app typecheck, lint, and test suite.
 
 ## Phase 0: Inspection
 
