@@ -42,6 +42,28 @@ test('media download output paths stay under /tmp and reject traversal into the 
   assert.equal(isAllowedOutputPath('relative/movie.mkv', repositoryRoot), false);
 });
 
+test('media conversion parser accepts upload-only and other quality flags', async () => {
+  const { parseArguments } = await import('../backend/scripts/convert-media.mjs');
+  const parsed = parseArguments([
+    '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+    '--upload-only', '/tmp/convert/f157edce-7fcf-4ab2-a80c-365306fae850.converted.mp4',
+    '--crf', '26',
+    '--maxrate-kbps', '1500',
+    '--audio-kbps', '96',
+  ]);
+
+  assert.deepEqual(parsed, {
+    key: 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+    input: undefined,
+    uploadOnly: '/tmp/convert/f157edce-7fcf-4ab2-a80c-365306fae850.converted.mp4',
+    crf: 26,
+    maxrateKbps: 1500,
+    audioKbps: 96,
+    dryRun: false,
+  });
+  assert.throws(() => parseArguments(['--upload-only']), /Usage/);
+});
+
 test('media conversion derives a new UUID key and selects copy or re-encode arguments', async () => {
   const { buildFfmpegArgs, getConvertedObjectKey } = await import('../backend/scripts/convert-media.mjs');
   const oldKey = 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv';

@@ -1,6 +1,6 @@
 import { GetObjectCommand, HeadObjectCommand, PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { createReadStream } from 'node:fs';
-import { lstat, mkdir, realpath, stat, unlink } from 'node:fs/promises';
+import { lstat, mkdir, realpath, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
@@ -105,10 +105,10 @@ export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outpu
   return { valid: true };
 }
 
-function parseArguments(args) {
+export function parseArguments(args) {
   const options = new Map();
   let dryRun = false;
-  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run]';
+  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--upload-only </tmp/convert/<uuid>.converted.mp4>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run]';
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--dry-run') {
@@ -118,7 +118,7 @@ function parseArguments(args) {
       dryRun = true;
       continue;
     }
-    if (!['--key', '--input', '--crf', '--maxrate-kbps', '--audio-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
+    if (!['--key', '--input', '--upload-only', '--crf', '--maxrate-kbps', '--audio-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
       throw new Error(usage);
     }
     options.set(argument, args[index + 1]);
@@ -135,7 +135,7 @@ function parseArguments(args) {
   if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0 || !Number.isSafeInteger(audioKbps) || audioKbps <= 0) {
     throw new Error(usage);
   }
-  return { key, input: options.get('--input'), crf, maxrateKbps, audioKbps, dryRun };
+  return { key, input: options.get('--input'), uploadOnly: options.get('--upload-only'), crf, maxrateKbps, audioKbps, dryRun };
 }
 
 function isMissingObjectError(error) {
@@ -284,13 +284,26 @@ async function runConversion(args) {
       accessKeyId: process.env.S3_ACCESS_KEY_ID,
       secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
     },
+    requestChecksumCalculation: 'when_required',
+    responseChecksumValidation: 'when_required',
   });
+
+  let stableConvertedPath = null;
 
   try {
     await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
     let sourceProbe;
     let sourceSize;
-    if (options.input) {
+    if (options.uploadOnly) {
+      const uploadOnlyPath = await resolveLocalInput(options.uploadOnly);
+      stableConvertedPath = uploadOnlyPath.path;
+      if (!stableConvertedPath.startsWith(`${conversionDirectory}${path.sep}`)) {
+        throw new ConversionError('Upload-only files must remain inside /tmp/convert.');
+      }
+      if (uploadOnlyPath.size <= 0) {
+        throw new ConversionError('The upload-only file is empty.');
+      }
+    } else if (options.input) {
       const localInput = await resolveLocalInput(options.input);
       inputPath = localInput.path;
       const head = await client.send(new HeadObjectCommand({ Bucket: process.env.S3_BUCKET, Key: options.key }));
@@ -324,39 +337,51 @@ async function runConversion(args) {
       sourceProbe = await probe(inputPath);
     }
 
-    const sourceDuration = Number(sourceProbe.format.duration);
-    if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
-      throw new ConversionError('The source duration could not be determined.');
-    }
-    const ffmpegArgs = buildFfmpegArgs(inputPath, outputPath, sourceProbe.streams, options);
+    if (!options.uploadOnly) {
+      const sourceDuration = Number(sourceProbe.format.duration);
+      if (!Number.isFinite(sourceDuration) || sourceDuration <= 0) {
+        throw new ConversionError('The source duration could not be determined.');
+      }
+      const ffmpegArgs = buildFfmpegArgs(inputPath, outputPath, sourceProbe.streams, options);
 
-    if (options.dryRun) {
-      console.log(`New key: ${newKey}`);
-      console.log(`FFmpeg command: ${formatCommand('ffmpeg', ffmpegArgs)}`);
-      return;
+      if (options.dryRun) {
+        console.log(`New key: ${newKey}`);
+        console.log(`FFmpeg command: ${formatCommand('ffmpeg', ffmpegArgs)}`);
+        return;
+      }
+
+      try {
+        await execFileAsync('ffmpeg', ffmpegArgs, { maxBuffer: 1024 * 1024 });
+      } catch {
+        throw new ConversionError('ffmpeg conversion failed.');
+      }
+      const { size: outputSize } = await stat(outputPath);
+      if (Number.isFinite(sourceSize) && shouldWarnOutputIsLarger(sourceSize, outputSize)) {
+        console.error(`WARNING: Converted output is larger than the source; refusing upload. Source: ${sourceSize} bytes; output: ${outputSize} bytes.`);
+        process.exitCode = 1;
+        return;
+      }
+      const outputProbe = await probe(outputPath);
+      const verification = verifyConvertedMedia({
+        sourceDuration,
+        sourceStreams: sourceProbe.streams,
+        outputProbe,
+        outputSize,
+      });
+      if (!verification.valid) {
+        await unlink(outputPath);
+        throw new ConversionError(`Converted output verification failed: ${verification.reason}`);
+      }
+
+      stableConvertedPath = path.join(conversionDirectory, `${randomUUID()}.converted.mp4`);
+      await rename(outputPath, stableConvertedPath);
+      console.log(`Converted file preserved at: ${stableConvertedPath}`);
     }
 
-    try {
-      await execFileAsync('ffmpeg', ffmpegArgs, { maxBuffer: 1024 * 1024 });
-    } catch {
-      throw new ConversionError('ffmpeg conversion failed.');
-    }
-    const { size: outputSize } = await stat(outputPath);
-    if (Number.isFinite(sourceSize) && shouldWarnOutputIsLarger(sourceSize, outputSize)) {
-      console.error(`WARNING: Converted output is larger than the source; refusing upload. Source: ${sourceSize} bytes; output: ${outputSize} bytes.`);
-      process.exitCode = 1;
-      return;
-    }
-    const outputProbe = await probe(outputPath);
-    const verification = verifyConvertedMedia({
-      sourceDuration,
-      sourceStreams: sourceProbe.streams,
-      outputProbe,
-      outputSize,
-    });
-    if (!verification.valid) {
-      await unlink(outputPath);
-      throw new ConversionError(`Converted output verification failed: ${verification.reason}`);
+    const uploadSource = stableConvertedPath ?? outputPath;
+    const { size: uploadSize } = await stat(uploadSource);
+    if (!Number.isSafeInteger(uploadSize) || uploadSize <= 0) {
+      throw new ConversionError('The converted media is empty or unreadable.');
     }
 
     await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
@@ -365,8 +390,8 @@ async function runConversion(args) {
         new PutObjectCommand({
           Bucket: process.env.S3_BUCKET,
           Key: newKey,
-          Body: createReadStream(outputPath),
-          ContentLength: outputSize,
+          Body: createReadStream(uploadSource, { highWaterMark: 1024 * 1024 }),
+          ContentLength: uploadSize,
           ContentType: 'video/mp4',
           IfNoneMatch: '*',
         }),
@@ -380,21 +405,31 @@ async function runConversion(args) {
       ) {
         throw new ConversionError('The converted object key already exists; refusing to overwrite it.');
       }
+      console.error(
+        `Upload failed: name=${error?.name ?? 'unknown'} httpStatus=${error?.$metadata?.httpStatusCode ?? 'unknown'} message=${error?.message ?? 'unknown'}`,
+      );
+      if (uploadSource) {
+        console.error(`Converted file preserved at: ${uploadSource}`);
+      }
       throw new ConversionError('Upload to the new object key failed.');
     }
     let head;
     try {
       head = await client.send(new HeadObjectCommand({ Bucket: process.env.S3_BUCKET, Key: newKey }));
     } catch {
-      throw new ConversionError(`The new object was uploaded, but its size could not be verified. Inspect ${newKey} before retrying.`);
+      throw new ConversionError('The new object was uploaded, but its size could not be verified.');
     }
-    if (head.ContentLength !== outputSize) {
-      throw new ConversionError(`Uploaded object size mismatch for new key ${newKey}; local file has ${outputSize} bytes.`);
+    if (head.ContentLength !== uploadSize) {
+      throw new ConversionError('Uploaded object size mismatch during HEAD verification.');
     }
 
     console.log(`New key: ${newKey}`);
-    console.log(`New size: ${outputSize} bytes`);
-    console.log(`Duration: ${Number(outputProbe.format.duration).toFixed(3)} seconds`);
+    console.log(`New size: ${uploadSize} bytes`);
+    if (!options.uploadOnly) {
+      const convertedProbe = await probe(stableConvertedPath);
+      const convertedDuration = Number(convertedProbe.format.duration);
+      console.log(`Duration: ${Number.isFinite(convertedDuration) ? convertedDuration.toFixed(3) : 'unknown'} seconds`);
+    }
     console.log(`Old key: ${options.key}`);
     console.log('Database values:');
     console.log(`storage_key: ${newKey}`);
@@ -409,7 +444,13 @@ async function runConversion(args) {
     process.exitCode = 1;
   } finally {
     client.destroy();
-    const cleanupPaths = options.input ? [outputPath] : [downloadedInputPath, outputPath];
+    const cleanupPaths = [];
+    if (!options.input && downloadedInputPath) {
+      cleanupPaths.push(downloadedInputPath);
+    }
+    if (!options.uploadOnly && outputPath && outputPath !== stableConvertedPath) {
+      cleanupPaths.push(outputPath);
+    }
     for (const temporaryPath of cleanupPaths) {
       await unlink(temporaryPath).catch((error) => {
         if (error?.code !== 'ENOENT') {
