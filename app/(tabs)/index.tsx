@@ -110,6 +110,7 @@ export default function HomeScreen() {
       { key: 'Reels', label: 'Reels' },
       { key: 'TV', label: 'TV' },
       { key: 'Nollywood', label: 'Nollywood' },
+      { key: 'Hollywood', label: 'Hollywood' },
       { key: 'Football', label: 'Football' },
     ],
     [],
