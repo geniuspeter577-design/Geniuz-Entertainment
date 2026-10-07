@@ -96,6 +96,10 @@ export function PlayerHeader({
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const seekBarWidth = useRef(0);
   const [gestureSize, setGestureSize] = useState({ width: 1, height: 1 });
+  const gestureSizeRef = useRef(gestureSize);
+  const isLockedRef = useRef(isLocked);
+  const brightnessValueRef = useRef(1);
+  const volumeValueRef = useRef(1);
   const lastTapTimestamp = useRef(0);
   const lastTapZone = useRef<'left' | 'right' | 'center'>('center');
   const singleTapTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -104,6 +108,7 @@ export function PlayerHeader({
   const hold2xTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const brightnessStartRef = useRef(1);
   const volumeStartRef = useRef(1);
+  const swipeZoneRef = useRef<'left' | 'right' | 'center'>('center');
   const brightnessOriginalRef = useRef<number | null>(null);
   const [lockTapVisible, setLockTapVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -113,6 +118,22 @@ export function PlayerHeader({
   const [activePlaybackRate, setActivePlaybackRate] = useState(playbackSpeed);
   const progress = duration > 0 ? clampPlayerValue(currentTime / duration) : 0;
   const bufferedProgress = duration > 0 ? clampPlayerValue(bufferedPosition / duration) : 0;
+
+  useEffect(() => {
+    gestureSizeRef.current = gestureSize;
+  }, [gestureSize]);
+
+  useEffect(() => {
+    isLockedRef.current = isLocked;
+  }, [isLocked]);
+
+  useEffect(() => {
+    brightnessValueRef.current = brightnessValue;
+  }, [brightnessValue]);
+
+  useEffect(() => {
+    volumeValueRef.current = volumeValue;
+  }, [volumeValue]);
 
   useEffect(() => {
     let active = true;
@@ -204,54 +225,78 @@ export function PlayerHeader({
     seekBarWidth.current = event.nativeEvent.layout.width;
   };
 
-  // eslint-disable-next-line react-hooks/refs
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => !isLocked,
-    onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 8 || Math.abs(gestureState.dx) > 8,
-    onPanResponderGrant: (_, gestureState) => {
-      if (isLocked) {
-        return;
-      }
-      const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
-      if (zone === 'left') {
-        brightnessStartRef.current = brightnessValue;
-        setGestureHud({ kind: 'brightness', value: brightnessValue, side: 'left' });
-      } else if (zone === 'right') {
-        volumeStartRef.current = volumeValue;
-        setGestureHud({ kind: 'volume', value: volumeValue, side: 'right' });
-      }
-    },
-    onPanResponderMove: (_, gestureState) => {
-      if (isLocked) {
-        return;
-      }
-      const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
-      const nextValue = getSwipeValue(
-        zone === 'left' ? brightnessStartRef.current : volumeStartRef.current,
-        gestureState.dy,
-        gestureSize.height,
-      );
-      if (zone === 'left') {
-        const clamped = clampPlayerValue(nextValue);
-        setBrightnessValue(clamped);
-        void Brightness.setBrightnessAsync(clamped).catch(() => undefined);
-        setGestureHud({ kind: 'brightness', value: clamped, side: 'left' });
-      } else if (zone === 'right') {
-        const clamped = clampPlayerValue(nextValue);
-        setVolumeValue(clamped);
-        setGestureHud({ kind: 'volume', value: clamped, side: 'right' });
-      }
-    },
-    onPanResponderRelease: () => {
-      setGestureHud(null);
-    },
-  });
+  const panResponderRef = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  const [panHandlers, setPanHandlers] = useState<ReturnType<typeof PanResponder.create>['panHandlers'] | null>(null);
+
+  useEffect(() => {
+    if (panResponderRef.current) {
+      return undefined;
+    }
+
+    const panResponder = PanResponder.create({
+      onStartShouldSetPanResponder: () => !isLockedRef.current,
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 8 || Math.abs(gestureState.dx) > 8,
+      onPanResponderGrant: (_, gestureState) => {
+        if (isLockedRef.current) {
+          return;
+        }
+        const zone = getPlayerTapZone(gestureState.x0, gestureSizeRef.current.width);
+        swipeZoneRef.current = zone;
+        if (zone === 'left') {
+          brightnessStartRef.current = brightnessValueRef.current;
+          setGestureHud({ kind: 'brightness', value: brightnessValueRef.current, side: 'left' });
+        } else if (zone === 'right') {
+          volumeStartRef.current = volumeValueRef.current;
+          setGestureHud({ kind: 'volume', value: volumeValueRef.current, side: 'right' });
+        }
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (isLockedRef.current) {
+          return;
+        }
+        const zone = swipeZoneRef.current;
+        const nextValue = getSwipeValue(
+          zone === 'left' ? brightnessStartRef.current : volumeStartRef.current,
+          gestureState.dy,
+          gestureSizeRef.current.height,
+        );
+        if (zone === 'left') {
+          const clamped = clampPlayerValue(nextValue);
+          setBrightnessValue(clamped);
+          brightnessValueRef.current = clamped;
+          void Brightness.setBrightnessAsync(clamped).catch(() => undefined);
+          setGestureHud({ kind: 'brightness', value: clamped, side: 'left' });
+        } else if (zone === 'right') {
+          const clamped = clampPlayerValue(nextValue);
+          setVolumeValue(clamped);
+          volumeValueRef.current = clamped;
+          setGestureHud({ kind: 'volume', value: clamped, side: 'right' });
+        }
+      },
+      onPanResponderRelease: () => {
+        swipeZoneRef.current = 'center';
+        setGestureHud(null);
+      },
+      onPanResponderTerminate: () => {
+        swipeZoneRef.current = 'center';
+        setGestureHud(null);
+      },
+    });
+
+    panResponderRef.current = panResponder;
+    setPanHandlers(panResponder.panHandlers);
+
+    return () => {
+      panResponderRef.current = null;
+      setPanHandlers(null);
+    };
+  }, []);
 
   const handleSurfacePress = (event: GestureResponderEvent) => {
-    if (isLocked) {
+    if (isLockedRef.current) {
       return;
     }
-    const zone = getPlayerTapZone(event.nativeEvent.locationX ?? gestureSize.width / 2, gestureSize.width);
+    const zone = getPlayerTapZone(event.nativeEvent.locationX ?? gestureSizeRef.current.width / 2, gestureSizeRef.current.width);
     const now = Date.now();
     const tapDelta = now - lastTapTimestamp.current;
     lastTapTimestamp.current = now;
@@ -274,7 +319,7 @@ export function PlayerHeader({
   };
 
   const handleHoldStart = () => {
-    if (isLocked) {
+    if (isLockedRef.current) {
       return;
     }
     holdPreviousSpeedRef.current = playbackSpeed;
@@ -284,7 +329,7 @@ export function PlayerHeader({
   };
 
   const handleHoldEnd = () => {
-    if (isLocked) {
+    if (isLockedRef.current) {
       return;
     }
     const previousSpeed = holdPreviousSpeedRef.current ?? playbackSpeed;
@@ -359,8 +404,9 @@ export function PlayerHeader({
         onLayout={(event) => {
           const { width, height } = event.nativeEvent.layout;
           setGestureSize({ width, height });
+          gestureSizeRef.current = { width, height };
         }}
-        {...panResponder.panHandlers}
+        {...panHandlers}
       >
         <Pressable
           accessibilityRole="button"

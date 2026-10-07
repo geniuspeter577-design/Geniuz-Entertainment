@@ -53,6 +53,8 @@ test('player gesture helpers keep tap zones, skip totals, and swipe values bound
   assert.equal(getPlayerTapZone(10, 100), 'left');
   assert.equal(getPlayerTapZone(90, 100), 'right');
   assert.equal(getPlayerTapZone(50, 100), 'right');
+  assert.equal(getPlayerTapZone(790, 900), 'right');
+  assert.equal(getPlayerTapZone(790, 0), 'center');
   assert.equal(accumulateSkipSeconds(10, 10), 20);
   assert.equal(clampPlayerValue(-1), 0);
   assert.equal(clampPlayerValue(2), 1);
