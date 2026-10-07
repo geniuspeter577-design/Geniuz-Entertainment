@@ -446,7 +446,7 @@ export default function HomeScreen() {
                   accessibilityRole="button"
                   accessibilityLabel={`Continue ${entry.item.title}`}
                   onPress={() =>
-                    router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
+                    router.push({ pathname: '/watch/[id]', params: { id: entry.item.id } })
                   }
                   style={styles.continueCard}
                 >

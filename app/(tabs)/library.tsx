@@ -152,7 +152,7 @@ export default function LibraryScreen() {
             key={entry.item.id}
             style={styles.rowItem}
             onPress={() =>
-              router.push({ pathname: '/content/[id]', params: { id: entry.item.id } })
+              router.push({ pathname: '/watch/[id]', params: { id: entry.item.id } })
             }
           >
             <Image
