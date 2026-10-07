@@ -4,6 +4,7 @@ Updated: 2026-10-07
 
 ## Latest Work
 
+- Movie conversion profile (2026-10-07): centralized CRF 30, 350 kb/s video maxrate (`VIDEO_MAXRATE_KBPS` override), 2x VBV buffer, 64 kb/s AAC stereo, and scale-down-only 480p defaults for the conversion script and backend config. No media was converted.
 - Continue watching direct playback (2026-10-07): Home and Library Continue watching cards now open `/watch/[id]` with the saved entry ID, matching the detail page's Play route. Episode entries therefore open the specific saved episode; regular posters and watchlist cards remain on detail pages.
 - Continue watching save/resume (2026-10-07): the watch player resumes saved movie or episode progress when at least 10 seconds remain before the final 30 seconds, saves every 10 seconds and on pause/leave/background, and removes finished items from Continue watching at the last-30-second threshold. Home's existing bar and Library's new bar display persisted progress. Episode IDs are already independent in the existing library data shape; no migration or environment variables are needed.
 - Watch-player portrait/landscape fix (2026-10-06): removed the duplicated control layer in `src/components/detail/PlayerHeader.tsx`, leaving a single back button and a single TV/Help/Setting top row, and turned the landscape video into a full-bleed black canvas using `useWindowDimensions` with hidden system bars in immersive mode. The portrait 16:9 player box remains directly under the status bar with controls only inside the box, and the non-video layout stays unchanged.

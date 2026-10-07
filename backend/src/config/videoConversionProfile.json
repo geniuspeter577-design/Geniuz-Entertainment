@@ -1,0 +1,7 @@
+{
+  "crf": 30,
+  "VIDEO_MAXRATE_KBPS": 350,
+  "bufferMultiplier": 2,
+  "audioKbps": 64,
+  "scaleHeight": 480
+}

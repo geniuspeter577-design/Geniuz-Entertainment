@@ -471,6 +471,8 @@ test('server configuration validates port, cache TTL and HTTPS TMDB URL', () => 
   assert.equal(config.tmdbApiKey, 'server-key');
   assert.equal(config.tmdbBaseUrl, 'https://api.example.test/3');
   assert.equal(config.cacheTtlSeconds, 42);
+  assert.equal(config.videoMaxrateKbps, 350);
+  assert.equal(loadConfig({ VIDEO_MAXRATE_KBPS: '425' }).videoMaxrateKbps, 425);
   assert.throws(
     () => loadConfig({ TMDB_BASE_URL: 'http://not-secure.example.test' }),
     /HTTPS/,

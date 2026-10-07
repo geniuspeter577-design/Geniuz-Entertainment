@@ -1,3 +1,5 @@
+import videoConversionProfile from './videoConversionProfile.json';
+
 export const REQUIRED_BACKEND_ENV_VARS = [
   'S3_ENDPOINT',
   'S3_REGION',
@@ -17,6 +19,7 @@ export type Config = {
   corsOrigins: string[];
   cacheTtlSeconds: number;
   unusedMediaMinAgeHours: number;
+  videoMaxrateKbps: number;
   supabaseUrl?: string;
   supabasePublishableKey?: string;
   s3Endpoint?: string;
@@ -87,6 +90,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
       .filter(Boolean),
     cacheTtlSeconds,
     unusedMediaMinAgeHours,
+    videoMaxrateKbps: positiveInteger(
+      environment.VIDEO_MAXRATE_KBPS,
+      videoConversionProfile.VIDEO_MAXRATE_KBPS,
+    ),
     supabaseUrl: environment.SUPABASE_URL?.trim() || undefined,
     supabasePublishableKey:
       environment.SUPABASE_PUBLISHABLE_KEY?.trim() || undefined,

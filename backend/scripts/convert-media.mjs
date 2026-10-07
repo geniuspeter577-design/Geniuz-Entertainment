@@ -6,9 +6,12 @@ import { randomUUID } from 'node:crypto';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 import { downloadObjectToFile, isAllowedOutputPath } from './download-media.mjs';
 
+const require = createRequire(import.meta.url);
+const videoConversionProfile = require('../src/config/videoConversionProfile.json');
 const execFileAsync = promisify(execFile);
 const REQUIRED_S3_SETTINGS = [
   'S3_ENDPOINT',
@@ -19,8 +22,15 @@ const REQUIRED_S3_SETTINGS = [
 ];
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CONVERSION_DIRECTORY = '/tmp/convert';
+const USAGE = `Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--upload-only </tmp/convert/<uuid>.converted.mp4>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run] [--help]
+Defaults: --crf ${videoConversionProfile.crf}, --maxrate-kbps ${videoConversionProfile.VIDEO_MAXRATE_KBPS} kb/s (overridden by VIDEO_MAXRATE_KBPS when set), --audio-kbps ${videoConversionProfile.audioKbps} kb/s AAC stereo, buffer ${videoConversionProfile.bufferMultiplier}x maxrate, scale down to ${videoConversionProfile.scaleHeight}p only.`;
 
 class ConversionError extends Error {}
+
+function getVideoMaxrateKbps(environment = process.env) {
+  const configuredMaxrate = environment.VIDEO_MAXRATE_KBPS?.trim();
+  return configuredMaxrate ? Number(configuredMaxrate) : videoConversionProfile.VIDEO_MAXRATE_KBPS;
+}
 
 // This script only reads the old Backblaze object and creates a new object; it never changes the database or deletes remote data.
 export function getConvertedObjectKey(oldKey) {
@@ -37,7 +47,11 @@ export function buildFfmpegArgs(
   sourcePath,
   outputPath,
   streams,
-  { crf = 30, maxrateKbps = 200, audioKbps = 64 } = {},
+  {
+    crf = videoConversionProfile.crf,
+    maxrateKbps = getVideoMaxrateKbps(),
+    audioKbps = videoConversionProfile.audioKbps,
+  } = {},
 ) {
   const videoStreams = streams.filter((stream) => stream.codec_type === 'video');
   const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
@@ -49,7 +63,7 @@ export function buildFfmpegArgs(
     const height = Number.isFinite(stream.height) ? stream.height : 0;
     return Math.max(maxHeight, height);
   }, 0);
-  const shouldScaleVideo = sourceHeight > 480;
+  const shouldScaleVideo = sourceHeight > videoConversionProfile.scaleHeight;
 
   const canRemux =
     videoStreams.every((stream) => stream.codec_name === 'h264') &&
@@ -60,10 +74,12 @@ export function buildFfmpegArgs(
   } else {
     args.push(
       '-c:v', 'libx264', '-preset', 'veryfast', '-crf', String(crf),
-      '-maxrate', `${maxrateKbps}k`, '-bufsize', `${maxrateKbps * 2}k`, '-pix_fmt', 'yuv420p',
+      '-maxrate', `${maxrateKbps}k`,
+      '-bufsize', `${maxrateKbps * videoConversionProfile.bufferMultiplier}k`,
+      '-pix_fmt', 'yuv420p',
     );
     if (shouldScaleVideo) {
-      args.push('-vf', 'scale=-2:480');
+      args.push('-vf', `scale=-2:${videoConversionProfile.scaleHeight}`);
     }
     args.push('-c:a', 'aac', '-b:a', `${audioKbps}k`, '-ac', '2');
   }
@@ -105,21 +121,20 @@ export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outpu
   return { valid: true };
 }
 
-export function parseArguments(args) {
+export function parseArguments(args, environment = process.env) {
   const options = new Map();
   let dryRun = false;
-  const usage = 'Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--upload-only </tmp/convert/<uuid>.converted.mp4>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run]';
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--dry-run') {
       if (dryRun) {
-        throw new Error(usage);
+        throw new Error(USAGE);
       }
       dryRun = true;
       continue;
     }
     if (!['--key', '--input', '--upload-only', '--crf', '--maxrate-kbps', '--audio-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
-      throw new Error(usage);
+      throw new Error(USAGE);
     }
     options.set(argument, args[index + 1]);
     index += 1;
@@ -127,13 +142,17 @@ export function parseArguments(args) {
 
   const key = options.get('--key');
   if (!key) {
-    throw new Error(usage);
+    throw new Error(USAGE);
   }
-  const crf = options.has('--crf') ? Number(options.get('--crf')) : 30;
-  const maxrateKbps = options.has('--maxrate-kbps') ? Number(options.get('--maxrate-kbps')) : 200;
-  const audioKbps = options.has('--audio-kbps') ? Number(options.get('--audio-kbps')) : 64;
+  const crf = options.has('--crf') ? Number(options.get('--crf')) : videoConversionProfile.crf;
+  const maxrateKbps = options.has('--maxrate-kbps')
+    ? Number(options.get('--maxrate-kbps'))
+    : getVideoMaxrateKbps(environment);
+  const audioKbps = options.has('--audio-kbps')
+    ? Number(options.get('--audio-kbps'))
+    : videoConversionProfile.audioKbps;
   if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0 || !Number.isSafeInteger(audioKbps) || audioKbps <= 0) {
-    throw new Error(usage);
+    throw new Error(USAGE);
   }
   return { key, input: options.get('--input'), uploadOnly: options.get('--upload-only'), crf, maxrateKbps, audioKbps, dryRun };
 }
@@ -245,6 +264,11 @@ async function resolveLocalInput(inputPath) {
 }
 
 async function runConversion(args) {
+  if (args.length === 1 && args[0] === '--help') {
+    console.log(USAGE);
+    return;
+  }
+
   let options;
   let newKey;
   try {

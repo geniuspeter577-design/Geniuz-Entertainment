@@ -64,6 +64,18 @@ test('player gesture helpers keep tap zones, skip totals, and swipe values bound
 
 test('media conversion parser accepts upload-only and other quality flags', async () => {
   const { parseArguments } = await import('../backend/scripts/convert-media.mjs');
+  const defaults = parseArguments([
+    '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+  ], {});
+  assert.equal(defaults.crf, 30);
+  assert.equal(defaults.maxrateKbps, 350);
+  assert.equal(defaults.audioKbps, 64);
+
+  const environmentOverride = parseArguments([
+    '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+  ], { VIDEO_MAXRATE_KBPS: '425' });
+  assert.equal(environmentOverride.maxrateKbps, 425);
+
   const parsed = parseArguments([
     '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
     '--upload-only', '/tmp/convert/f157edce-7fcf-4ab2-a80c-365306fae850.converted.mp4',
@@ -121,7 +133,7 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
   assert.ok(scaledReencodeArgs.includes('libx264'));
   assert.deepEqual(
     scaledReencodeArgs.slice(scaledReencodeArgs.indexOf('-crf'), scaledReencodeArgs.indexOf('-pix_fmt')),
-    ['-crf', '30', '-maxrate', '200k', '-bufsize', '400k'],
+    ['-crf', '30', '-maxrate', '350k', '-bufsize', '700k'],
   );
   assert.deepEqual(
     scaledReencodeArgs.slice(scaledReencodeArgs.indexOf('-vf'), scaledReencodeArgs.indexOf('-c:a')),
