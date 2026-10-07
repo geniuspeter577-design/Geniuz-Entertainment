@@ -536,7 +536,10 @@ async function handleRequest(
     if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
       throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This movie is missing its video file.');
     }
-    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key);
+    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key, {
+      routeKind: 'movie',
+      contentId: movieId,
+    });
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
     return;
   }
@@ -579,7 +582,10 @@ async function handleRequest(
     if (typeof data.storage_key !== 'string' || !data.storage_key.trim()) {
       throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This episode is missing its video file.');
     }
-    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key);
+    const playbackUrl = await getStorage(config).createPlayUrl(data.storage_key, {
+      routeKind: 'episode',
+      contentId: episodeId,
+    });
     writeJson(response, 200, { url: playbackUrl, expiresIn: 7200 });
     return;
   }
@@ -618,7 +624,7 @@ async function handleRequest(
     if (typeof data.trailer_storage_key !== 'string' || !data.trailer_storage_key.trim()) {
       throw new HttpError(404, 'TRAILER_NOT_FOUND', 'This title does not have a trailer.');
     }
-    const trailerUrl = await getStorage(config).createTrailerPlayUrl(data.trailer_storage_key);
+    const trailerUrl = await getStorage(config).createTrailerPlayUrl(data.trailer_storage_key, titleId);
     writeJson(response, 200, { url: trailerUrl, expiresIn: 900 });
     return;
   }

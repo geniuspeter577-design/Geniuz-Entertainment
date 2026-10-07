@@ -240,7 +240,10 @@ const {
   validatePartNumbers,
   validateUploadInput,
 } = require('../.test-build/backend/backend/src/storage/uploadValidation.js');
-const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+const {
+  B2StorageService,
+  redactB2LogValue,
+} = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
 const { deleteAdminTitle } = require('../.test-build/backend/backend/src/services/adminTitleDeletion.js');
 const {
   collectReferencedMediaKeys,
@@ -324,14 +327,17 @@ test('B2 playback verifies the object and signs a two-hour GET URL with Range-co
     return {};
   };
 
-  const signedUrl = new URL(await storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'));
+  const signedUrl = new URL(await storage.createPlayUrl(
+    'movies/00000000-0000-4000-8000-000000000001.mp4',
+    { routeKind: 'movie', contentId: '00000000-0000-4000-8000-000000000001' },
+  ));
   assert.equal(commands[0].constructor.name, 'HeadObjectCommand');
   assert.equal(commands[0].input.Key, 'movies/00000000-0000-4000-8000-000000000001.mp4');
   assert.equal(signedUrl.searchParams.get('X-Amz-Expires'), '7200');
   assert.equal(signedUrl.searchParams.get('X-Amz-SignedHeaders'), 'host');
 });
 
-test('B2 playback reports missing storage objects without exposing provider details', async () => {
+test('B2 playback logs missing storage objects and preserves the client error', async () => {
   const storage = new B2StorageService({
     s3Endpoint: 'https://s3.example.test',
     s3Region: 'us-east-1',
@@ -340,16 +346,28 @@ test('B2 playback reports missing storage objects without exposing provider deta
     s3Bucket: 'test-bucket',
   });
   storage.client.send = async () => {
-    const error = new Error('provider response must not reach the client');
+    const error = new Error('provider response for movies/private-key.mp4 must not reach the client');
     error.name = 'NotFound';
     error.$metadata = { httpStatusCode: 404 };
     throw error;
   };
 
-  await assert.rejects(
-    storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'),
-    (error) => error.status === 404 && error.code === 'PLAYBACK_FILE_NOT_FOUND' && !/provider response/.test(error.message),
-  );
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    await assert.rejects(
+      storage.createPlayUrl('movies/private-key.mp4', { routeKind: 'episode', contentId: 'episode-id' }),
+      (error) => error.status === 404 && error.code === 'PLAYBACK_FILE_NOT_FOUND' && !/provider response/.test(error.message),
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /"routeKind":"episode"/);
+  assert.match(logs[0], /"contentId":"episode-id"/);
+  assert.doesNotMatch(logs[0], /private-key/);
+  assert.match(logs[0], /"httpStatusCode":404/);
 });
 
 test('B2 playback gives an actionable error when the backend key cannot read objects', async () => {
@@ -361,21 +379,85 @@ test('B2 playback gives an actionable error when the backend key cannot read obj
     s3Bucket: 'test-bucket',
   });
   storage.client.send = async () => {
-    const error = new Error('provider response must not reach the client');
+    const error = new Error('provider response for movies/private-key.mp4 must not reach the client');
     error.name = 'AccessDenied';
+    error.Code = 'AccessDenied';
     error.$metadata = { httpStatusCode: 403 };
     throw error;
   };
 
-  await assert.rejects(
-    storage.createPlayUrl('movies/00000000-0000-4000-8000-000000000001.mp4'),
-    (error) =>
-      error.status === 502 &&
-      error.code === 'B2_READ_ACCESS_DENIED' &&
-      /daily download cap/.test(error.message) &&
-      /readFiles/.test(error.message) &&
-      !/provider response/.test(error.message),
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    await assert.rejects(
+      storage.createPlayUrl('movies/private-key.mp4', { routeKind: 'movie', contentId: 'movie-id' }),
+      (error) =>
+        error.status === 502 &&
+        error.code === 'B2_READ_ACCESS_DENIED' &&
+        /daily download cap/.test(error.message) &&
+        /readFiles/.test(error.message) &&
+        !/provider response/.test(error.message),
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /"routeKind":"movie"/);
+  assert.match(logs[0], /"contentId":"movie-id"/);
+  assert.match(logs[0], /"s3ErrorName":"AccessDenied"/);
+  assert.match(logs[0], /"s3Code":"AccessDenied"/);
+  assert.match(logs[0], /"httpStatusCode":403/);
+  assert.doesNotMatch(logs[0], /private-key/);
+});
+
+test('B2 playback logs sanitized provider details and preserves timeout mapping', async () => {
+  const storage = new B2StorageService({
+    s3Endpoint: 'https://s3.example.test',
+    s3Region: 'us-east-1',
+    s3AccessKeyId: 'test-key',
+    s3SecretAccessKey: 'test-secret',
+    s3Bucket: 'test-bucket',
+  });
+  storage.client.send = async () => {
+    const error = new Error('timeout for movies/private-key.mp4 https://s3.example.test/path?X-Amz-Signature=secret test-key test-secret');
+    error.name = 'TimeoutError';
+    error.Code = 'RequestTimeout';
+    error.$metadata = {
+      httpStatusCode: 408,
+      requestId: 'request-id',
+      extendedRequestId: 'extended-request-id',
+    };
+    throw error;
+  };
+
+  const logs = [];
+  const originalConsoleError = console.error;
+  console.error = (...args) => logs.push(args.join(' '));
+  try {
+    await assert.rejects(
+      storage.createTrailerPlayUrl('trailers/00000000-0000-4000-8000-000000000003.mp4', 'title-id'),
+      (error) => error.status === 502 && error.code === 'B2_PLAYBACK_CHECK_FAILED',
+    );
+  } finally {
+    console.error = originalConsoleError;
+  }
+  assert.equal(logs.length, 1);
+  assert.match(logs[0], /"routeKind":"trailer"/);
+  assert.match(logs[0], /"s3Code":"RequestTimeout"/);
+  assert.match(logs[0], /"requestId":"request-id"/);
+  assert.match(logs[0], /"extendedRequestId":"extended-request-id"/);
+  assert.doesNotMatch(logs[0], /private-key|test-key|test-secret|X-Amz-Signature|s3\.example\.test/);
+});
+
+test('B2 log redaction removes credential-shaped values, URLs, and query strings', () => {
+  const redacted = redactB2LogValue(
+    'id=AKIA1234567890ABCDEF b2=0012345678901234567890123 secret=test-secret url=https://host.test/file?token=private',
+    ['test-secret'],
   );
+  assert.doesNotMatch(redacted, /AKIA1234567890ABCDEF|0012345678901234567890123|test-secret|host\.test|token=private/);
+  assert.match(redacted, /REDACTED_ACCESS_KEY_ID/);
+  assert.match(redacted, /REDACTED_URL/);
 });
 
 test('upload validation enforces names, video content types, and the shared 1 GiB limit', () => {

@@ -27,6 +27,30 @@ const TRAILER_URL_EXPIRY_SECONDS = 15 * 60;
 const MEDIA_PREFIXES = ['movies/', 'episodes/', 'trailers/', 'subtitles/'] as const;
 const MAX_LIST_KEYS = 1000;
 
+type PlaybackErrorContext = {
+  routeKind: 'movie' | 'trailer' | 'episode';
+  contentId: string;
+};
+
+export function redactB2LogValue(value: unknown, sensitiveValues: readonly (string | undefined)[] = []) {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  let redacted = value;
+  for (const sensitiveValue of sensitiveValues) {
+    if (sensitiveValue) {
+      redacted = redacted.replaceAll(sensitiveValue, '[REDACTED]');
+    }
+  }
+  return redacted
+    .replace(/https?:\/\/[^\s"'<>]+/gi, '[REDACTED_URL]')
+    .replace(/\?[^\s"'<>]*/g, '?[REDACTED]')
+    .replace(/\b(?:movies|episodes|trailers|subtitles)\/[^\s"'<>?]+/gi, '[REDACTED_OBJECT_KEY]')
+    .replace(/\b(?:AKIA|ASIA)[A-Z0-9]{16}\b/gi, '[REDACTED_ACCESS_KEY_ID]')
+    .replace(/\b00[A-Za-z0-9]{23}\b/g, '[REDACTED_ACCESS_KEY_ID]');
+}
+
 export class B2StorageService {
   private readonly client: S3Client;
 
@@ -131,8 +155,8 @@ export class B2StorageService {
     );
   }
 
-  async createPlayUrl(key: string) {
-    await this.verifyObjectExists(key);
+  async createPlayUrl(key: string, context: PlaybackErrorContext) {
+    await this.verifyObjectExists(key, context);
     return getSignedUrl(
       this.client,
       new GetObjectCommand({
@@ -250,11 +274,11 @@ export class B2StorageService {
     );
   }
 
-  async createTrailerPlayUrl(key: string) {
+  async createTrailerPlayUrl(key: string, contentId: string) {
     if (!/^trailers\/[a-f0-9-]+(?:\.[a-z0-9]{1,12})?$/i.test(key)) {
       throw new HttpError(400, 'INVALID_TRAILER_KEY', 'The trailer object key is invalid.');
     }
-    await this.verifyObjectExists(key);
+    await this.verifyObjectExists(key, { routeKind: 'trailer', contentId });
     return getSignedUrl(
       this.client,
       new GetObjectCommand({
@@ -319,7 +343,7 @@ export class B2StorageService {
     }
   }
 
-  private async verifyObjectExists(key: string) {
+  private async verifyObjectExists(key: string, context: PlaybackErrorContext) {
     try {
       await this.client.send(
         new HeadObjectCommand({
@@ -330,12 +354,32 @@ export class B2StorageService {
     } catch (error) {
       const candidate = error as {
         name?: string;
+        message?: string;
         code?: string;
         Code?: string;
-        $metadata?: { httpStatusCode?: number };
+        $metadata?: {
+          httpStatusCode?: number;
+          requestId?: string;
+          extendedRequestId?: string;
+        };
       };
       const status = candidate.$metadata?.httpStatusCode;
       const code = candidate.code ?? candidate.Code ?? candidate.name;
+      const sensitiveValues = [this.config.s3AccessKeyId, this.config.s3SecretAccessKey, key];
+      const logDetails = {
+        routeKind: context.routeKind,
+        contentId: context.contentId,
+        s3ErrorName: redactB2LogValue(candidate.name, sensitiveValues),
+        s3Code: redactB2LogValue(candidate.Code ?? candidate.code ?? candidate.name, sensitiveValues),
+        httpStatusCode: status,
+        requestId: redactB2LogValue(candidate.$metadata?.requestId, sensitiveValues),
+        extendedRequestId: redactB2LogValue(candidate.$metadata?.extendedRequestId, sensitiveValues),
+        message: redactB2LogValue(
+          candidate.message ?? (error instanceof Error ? error.message : String(error)),
+          sensitiveValues,
+        ),
+      };
+      console.error(`[B2StorageService] Playback object HEAD failed ${JSON.stringify(logDetails)}`);
       if (status === 404 || code === 'NoSuchKey' || code === 'NotFound') {
         throw new HttpError(404, 'PLAYBACK_FILE_NOT_FOUND', 'The video file is missing from storage.');
       }
