@@ -1,4 +1,5 @@
 import * as ScreenOrientation from 'expo-screen-orientation';
+import { StatusBar } from 'expo-status-bar';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { createVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -112,8 +113,16 @@ export default function WatchScreen() {
     void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
     return () => {
       void ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
+      StatusBar.setHidden(false, 'fade');
     };
   }, []);
+
+  useEffect(() => {
+    StatusBar.setHidden(isLandscape, 'fade');
+    return () => {
+      StatusBar.setHidden(false, 'fade');
+    };
+  }, [isLandscape]);
 
   useEffect(() => {
     setPlayerTimeUpdateInterval(player, 0.25);
@@ -445,7 +454,7 @@ export default function WatchScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, isLandscape && styles.landscapeSafeArea]}>
       <Stack.Screen
         options={{
           orientation: 'all',
@@ -560,6 +569,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: theme.background,
+  },
+  landscapeSafeArea: {
+    backgroundColor: '#000000',
   },
   downloadButton: {
     alignSelf: 'flex-start',

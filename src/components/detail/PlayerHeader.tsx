@@ -10,8 +10,10 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type GestureResponderEvent,
   type LayoutChangeEvent,
+  type ViewStyle,
 } from 'react-native';
 
 import { theme } from '../../theme';
@@ -24,6 +26,7 @@ import {
   getPlayerSpeedLabel,
   getPlayerTapZone,
   getSeekBarTarget,
+  getSwipeValue,
   type PlayerFitMode,
 } from '../../utils/playerControls';
 
@@ -90,6 +93,7 @@ export function PlayerHeader({
   onSeekingChange,
   onRetry,
 }: PlayerHeaderProps) {
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const seekBarWidth = useRef(0);
   const [gestureSize, setGestureSize] = useState({ width: 1, height: 1 });
   const lastTapTimestamp = useRef(0);
@@ -177,14 +181,6 @@ export function PlayerHeader({
     }
   };
 
-  const getSwipeAmount = (startValue: number, deltaY: number, trackHeight: number) => {
-    if (!Number.isFinite(startValue) || !Number.isFinite(deltaY) || !Number.isFinite(trackHeight) || trackHeight <= 0) {
-      return clampPlayerValue(startValue);
-    }
-    const deltaRatio = deltaY / trackHeight;
-    return clampPlayerValue(startValue + (-deltaRatio));
-  };
-
   const triggerSkip = (zone: 'left' | 'right') => {
     const direction = zone === 'right' ? 1 : -1;
     const nextDelta = direction * 10;
@@ -230,8 +226,11 @@ export function PlayerHeader({
         return;
       }
       const zone = getPlayerTapZone(gestureState.x0, gestureSize.width);
-      const baseValue = zone === 'left' ? brightnessStartRef.current : volumeStartRef.current;
-      const nextValue = getSwipeAmount(baseValue, gestureState.dy, gestureSize.height);
+      const nextValue = getSwipeValue(
+        zone === 'left' ? brightnessStartRef.current : volumeStartRef.current,
+        gestureState.dy,
+        gestureSize.height,
+      );
       if (zone === 'left') {
         const clamped = clampPlayerValue(nextValue);
         setBrightnessValue(clamped);
@@ -294,9 +293,25 @@ export function PlayerHeader({
     setGestureHud(null);
   };
 
+  const playerContainerStyle: ViewStyle = isLandscape
+    ? {
+        ...styles.container,
+        ...styles.landscapeContainer,
+        backgroundColor: '#000000',
+        width: windowWidth,
+        height: windowHeight,
+      }
+    : {
+        ...styles.container,
+        backgroundColor: '#000000',
+        width: '100%',
+        height: windowWidth * (9 / 16),
+        aspectRatio: undefined,
+      };
+
   if (isLocked) {
     return (
-      <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
+      <View style={playerContainerStyle}>
         {playbackUrl ? (
           <VideoView
             player={player}
@@ -328,7 +343,7 @@ export function PlayerHeader({
   }
 
   return (
-    <View style={[styles.container, isLandscape && styles.landscapeContainer]}>
+    <View style={playerContainerStyle}>
       {playbackUrl ? (
         <VideoView
           player={player}
@@ -398,7 +413,7 @@ export function PlayerHeader({
       {showControls ? (
         <View style={styles.controls} pointerEvents="box-none">
           <LinearGradient colors={['rgba(0,0,0,0.72)', 'rgba(0,0,0,0.12)', 'rgba(0,0,0,0)']} style={styles.topGradient} pointerEvents="none" />
-          <View style={styles.topBar} pointerEvents="box-none">
+          <View style={[styles.topBar, !isLandscape && styles.portraitTopBar]} pointerEvents="box-none">
             <View style={styles.topLeftGroup} pointerEvents="box-none">
               <Pressable
                 accessibilityRole="button"
@@ -409,70 +424,52 @@ export function PlayerHeader({
               >
                 <Ionicons name="arrow-back" size={22} color={theme.text} />
               </Pressable>
-              <Text style={styles.title} numberOfLines={1}>{title}</Text>
+              {isLandscape ? <Text style={styles.title} numberOfLines={1}>{title}</Text> : null}
             </View>
             <View style={styles.rightControls} pointerEvents="box-none">
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open TV"
                 onPress={() => setToastMessage('Coming soon')}
-                style={styles.iconLabelButton}
+                style={isLandscape ? styles.iconLabelButton : styles.iconButton}
               >
-                <Ionicons name="tv-outline" size={22} color={theme.text} />
-                <Text style={styles.iconLabel}>TV</Text>
+                {isLandscape ? (
+                  <>
+                    <Ionicons name="tv-outline" size={22} color={theme.text} />
+                    <Text style={styles.iconLabel}>TV</Text>
+                  </>
+                ) : (
+                  <Ionicons name="tv-outline" size={22} color={theme.text} />
+                )}
               </Pressable>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Open help"
                 onPress={() => setToastMessage('Coming soon')}
-                style={styles.iconLabelButton}
+                style={isLandscape ? styles.iconLabelButton : styles.iconButton}
               >
-                <Ionicons name="help-circle-outline" size={22} color={theme.text} />
-                <Text style={styles.iconLabel}>Help</Text>
+                {isLandscape ? (
+                  <>
+                    <Ionicons name="help-circle-outline" size={22} color={theme.text} />
+                    <Text style={styles.iconLabel}>Help</Text>
+                  </>
+                ) : (
+                  <Ionicons name="help-circle-outline" size={22} color={theme.text} />
+                )}
               </Pressable>
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Open settings"
-                onPress={() => setToastMessage('Coming soon')}
-                style={styles.iconLabelButton}
-              >
-                <Ionicons name="settings-outline" size={22} color={theme.text} />
-                <Text style={styles.iconLabel}>Setting</Text>
-              </Pressable>
+              {isLandscape ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Open settings"
+                  onPress={() => setToastMessage('Coming soon')}
+                  style={styles.iconLabelButton}
+                >
+                  <Ionicons name="settings-outline" size={22} color={theme.text} />
+                  <Text style={styles.iconLabel}>Setting</Text>
+                </Pressable>
+              ) : null}
             </View>
           </View>
-
-          {!isLandscape ? (
-            <View style={styles.portraitTopBar} pointerEvents="box-none">
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-                onPress={onBack}
-                style={styles.iconButton}
-                hitSlop={8}
-              >
-                <Ionicons name="arrow-back" size={22} color={theme.text} />
-              </Pressable>
-              <View style={styles.portraitActions} pointerEvents="box-none">
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open TV"
-                  onPress={() => setToastMessage('Coming soon')}
-                  style={styles.iconButton}
-                >
-                  <Ionicons name="tv-outline" size={22} color={theme.text} />
-                </Pressable>
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel="Open help"
-                  onPress={() => setToastMessage('Coming soon')}
-                  style={styles.iconButton}
-                >
-                  <Ionicons name="help-circle-outline" size={22} color={theme.text} />
-                </Pressable>
-              </View>
-            </View>
-          ) : null}
 
           {error ? (
             <View style={styles.errorPanel}>
