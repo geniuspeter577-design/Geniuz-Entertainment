@@ -11,6 +11,7 @@ import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
+import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
 import { logger } from '../../src/utils/logger';
@@ -34,6 +35,7 @@ export default function WatchScreen() {
   const isTrailer = routeTrailer === '1';
   const player = useMemo(() => createVideoPlayer(null), []);
   const downloads = useDownloads();
+  const { continueWatching, isLoading: isLibraryLoading, recordProgress } = useLibrary();
   const { isOnline } = useNetwork();
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -60,12 +62,42 @@ export default function WatchScreen() {
   const playerReleasedRef = useRef(false);
   const expiredLinkRetryRef = useRef(false);
   const failureHandledRef = useRef(false);
+  const resumeAppliedRef = useRef(false);
+  const finishedProgressRef = useRef(false);
+  const saveProgressRef = useRef<() => void>(() => {});
+
+  const saveProgress = useCallback(() => {
+    if (isTrailer || !movie || finishedProgressRef.current) {
+      return;
+    }
+
+    const durationSeconds = Number.isFinite(player.duration) && player.duration > 0
+      ? player.duration
+      : movie.durationSeconds ?? 0;
+    const positionSeconds = Number.isFinite(player.currentTime) ? player.currentTime : 0;
+    if (durationSeconds <= 0 || positionSeconds <= 0) {
+      return;
+    }
+
+    if (durationSeconds - positionSeconds <= 30) {
+      finishedProgressRef.current = true;
+      void recordProgress(movie, durationSeconds, durationSeconds);
+      return;
+    }
+
+    void recordProgress(movie, Math.min(positionSeconds, durationSeconds), durationSeconds);
+  }, [isTrailer, movie, player, recordProgress]);
+
+  useEffect(() => {
+    saveProgressRef.current = saveProgress;
+  }, [saveProgress]);
 
   const releasePlayer = useCallback(() => {
     if (playerReleasedRef.current) {
       return;
     }
     playerReleasedRef.current = true;
+    saveProgressRef.current();
     player.pause();
     player.release();
     setIsPlaying(false);
@@ -128,15 +160,30 @@ export default function WatchScreen() {
     setPlayerTimeUpdateInterval(player, 0.25);
     const timeSubscription = player.addListener('timeUpdate', ({ currentTime: time }) => {
       setCurrentTime(time);
+      if (duration > 0 && time > 0 && duration - time <= 30) {
+        saveProgressRef.current();
+      }
     });
     const playingSubscription = player.addListener('playingChange', ({ isPlaying: playing }) => {
       setIsPlaying(playing);
+      if (!playing) {
+        saveProgressRef.current();
+      }
     });
     return () => {
       timeSubscription.remove();
       playingSubscription.remove();
     };
-  }, [player]);
+  }, [duration, player]);
+
+  useEffect(() => {
+    if (!isPlaying) {
+      return;
+    }
+
+    const interval = setInterval(() => saveProgressRef.current(), 10_000);
+    return () => clearInterval(interval);
+  }, [isPlaying]);
 
   useEffect(() => {
     if (isPlayerLocked || !showControls || !shouldAutoHidePlayerControls(isPlaying, isSeeking)) {
@@ -241,12 +288,23 @@ export default function WatchScreen() {
       setPlayerStatus(status);
       if (status === 'readyToPlay') {
         setIsLoading(false);
+        if (!resumeAppliedRef.current && !isTrailer && movie) {
+          resumeAppliedRef.current = true;
+          const savedEntry = continueWatching.find((entry) => entry.item.id === movie.id);
+          const savedDuration = player.duration > 0 ? player.duration : movie.durationSeconds ?? 0;
+          const savedPosition = savedEntry?.positionSeconds ??
+            (savedEntry && savedDuration > 0 ? (savedDuration * savedEntry.progress) / 100 : 0);
+          if (savedPosition >= 10 && savedDuration - savedPosition > 30) {
+            setPlayerCurrentTime(player, savedPosition);
+            setCurrentTime(savedPosition);
+          }
+        }
       } else if (status === 'error') {
         handlePlayerFailure(playerError);
       }
     });
     return () => subscription.remove();
-  }, [handlePlayerFailure, player]);
+  }, [continueWatching, handlePlayerFailure, isTrailer, movie, player]);
 
   useEffect(() => {
     let active = true;
@@ -263,6 +321,8 @@ export default function WatchScreen() {
       setSeriesTitle(undefined);
       setIsOfflinePlayback(false);
       setCurrentTime(0);
+      resumeAppliedRef.current = false;
+      finishedProgressRef.current = false;
       setShowControls(true);
       setSpeedMenuOpen(false);
       expiredLinkRetryRef.current = false;
@@ -391,6 +451,9 @@ export default function WatchScreen() {
   }, [downloads.isLoading, id, isOnline, isTrailer, localDownload, retryAttempt]);
 
   useEffect(() => {
+    if (isLibraryLoading) {
+      return;
+    }
     if (!playbackUrl || playerReleasedRef.current) {
       return;
     }
@@ -418,7 +481,7 @@ export default function WatchScreen() {
         player.pause();
       }
     };
-  }, [handlePlayerFailure, player, playbackUrl]);
+  }, [handlePlayerFailure, isLibraryLoading, player, playbackUrl]);
 
   const retryPlayback = () => {
     expiredLinkRetryRef.current = false;

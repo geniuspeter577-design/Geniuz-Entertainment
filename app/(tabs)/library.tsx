@@ -167,6 +167,9 @@ export default function LibraryScreen() {
             <View style={styles.rowInfo}>
               <Text style={styles.rowTitle}>{entry.item.title}</Text>
               <Text style={styles.rowMeta}>{entry.item.type} • {entry.progress}% complete</Text>
+              <View style={styles.rowProgressTrack}>
+                <View style={[styles.rowProgressFill, { width: `${entry.progress}%` }]} />
+              </View>
             </View>
             <Text style={styles.rowProgress}>{entry.progress}%</Text>
           </Pressable>
@@ -256,6 +259,17 @@ const styles = StyleSheet.create({
   rowMeta: {
     color: theme.secondaryText,
     fontSize: 12,
+  },
+  rowProgressTrack: {
+    height: 4,
+    backgroundColor: theme.surfaceAlt,
+    borderRadius: 2,
+    marginTop: 8,
+    overflow: 'hidden',
+  },
+  rowProgressFill: {
+    height: '100%',
+    backgroundColor: theme.accent,
   },
   rowProgress: {
     color: theme.accent,

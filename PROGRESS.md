@@ -1,9 +1,10 @@
 # Progress
 
-Updated: 2026-10-06
+Updated: 2026-10-07
 
 ## Latest Work
 
+- Continue watching save/resume (2026-10-07): the watch player resumes saved movie or episode progress when at least 10 seconds remain before the final 30 seconds, saves every 10 seconds and on pause/leave/background, and removes finished items from Continue watching at the last-30-second threshold. Home's existing bar and Library's new bar display persisted progress. Episode IDs are already independent in the existing library data shape; no migration or environment variables are needed.
 - Watch-player portrait/landscape fix (2026-10-06): removed the duplicated control layer in `src/components/detail/PlayerHeader.tsx`, leaving a single back button and a single TV/Help/Setting top row, and turned the landscape video into a full-bleed black canvas using `useWindowDimensions` with hidden system bars in immersive mode. The portrait 16:9 player box remains directly under the status bar with controls only inside the box, and the non-video layout stays unchanged.
 - Watch-player swipe fix (2026-10-06): confirmed the right-half/left-half swipe mapping and kept the real Expo 57 brightness/volume behavior intact in `src/components/detail/PlayerHeader.tsx`, including the correct upward/downward direction, a one-second HUD timeout, and the cap at the real `expo-video` volume range (`0` to `1.0`). The layout and lifecycle cleanup remain untouched.
 - Watch-player swipe regression fix (2026-10-07): stabilized the single swipe responder so it is created once and reads live gesture state only through refs, preventing the stale PanResponder recreation bug where a right-side swipe could flip into the left-side brightness branch and leave volume unchanged. The zone is locked on grant and reused for the move/release cycle, with the HUD reset on release and terminate. Added regression coverage for the tap-zone edge cases in `tests/backend-storage.test.cjs` and kept all layout and lock behavior unchanged.
