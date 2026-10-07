@@ -517,6 +517,21 @@ export function PlayerHeader({
             </View>
           </View>
 
+          {isLandscape ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Lock playback controls"
+              onPress={() => {
+                setLockTapVisible(false);
+                onToggleLock();
+              }}
+              style={styles.lockStartButton}
+              hitSlop={8}
+            >
+              <Ionicons name="lock-closed-outline" size={22} color={theme.text} />
+              <Text style={styles.iconLabel}>Tap to Lock</Text>
+            </Pressable>
+          ) : null}
           {error ? (
             <View style={styles.errorPanel}>
               <Ionicons name="alert-circle-outline" size={30} color={theme.text} />
@@ -808,6 +823,19 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '600',
     marginTop: 4,
+  },
+  lockStartButton: {
+    position: 'absolute',
+    left: 16,
+    top: '50%',
+    marginTop: -28,
+    minHeight: 56,
+    minWidth: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    paddingHorizontal: 12,
   },
   lockRevealButton: {
     position: 'absolute',
