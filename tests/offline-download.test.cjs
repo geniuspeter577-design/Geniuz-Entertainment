@@ -189,6 +189,29 @@ test('download service checks free space and prevents duplicate active downloads
   assert.equal(pending.service.getRecords()[0].status, 'canceled');
 });
 
+test('received files are size-verified, persisted as received, and reject duplicates', async () => {
+  const { service, files } = createDownloadService();
+  const item = downloadableItem();
+  const filePath = '/documents/received-movie.mkv';
+  files.set(filePath, 1024);
+
+  await service.registerReceived(item, filePath, 1024);
+  assert.deepEqual(
+    (({ origin, size, status }) => ({ origin, size, status }))(service.getRecords()[0]),
+    { origin: 'received', size: 1024, status: 'downloaded' },
+  );
+  await service.load();
+  assert.equal(service.getRecords()[0].origin, 'received');
+  await assert.rejects(
+    service.registerReceived(item, filePath, 1024),
+    /already saved on this device/i,
+  );
+  await assert.rejects(
+    service.registerReceived(downloadableItem({ id: 'other-title' }), filePath, 2048),
+    /could not be verified/i,
+  );
+});
+
 test('download service pauses and resumes an active download', async () => {
   const { service } = createDownloadService({ pauseDownload: true });
   const item = downloadableItem();

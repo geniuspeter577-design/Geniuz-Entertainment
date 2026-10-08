@@ -43,7 +43,7 @@ export async function authenticatePlayback(
   });
 
   if (!accessToken) {
-    return { client, isAdmin: false };
+    return { client, isAdmin: false, userId: undefined };
   }
 
   const { data, error } = await client.auth.getUser(accessToken);
@@ -51,7 +51,11 @@ export async function authenticatePlayback(
     throw new HttpError(401, 'UNAUTHENTICATED', 'A valid Supabase access token is required.');
   }
 
-  return { client, isAdmin: data.user.app_metadata?.role === 'admin' };
+  return {
+    client,
+    isAdmin: data.user.app_metadata?.role === 'admin',
+    userId: data.user.id,
+  };
 }
 
 export async function authenticateAdmin(config: Config, authorization: string | undefined) {

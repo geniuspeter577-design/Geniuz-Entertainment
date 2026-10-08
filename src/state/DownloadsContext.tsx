@@ -68,6 +68,7 @@ type DownloadsContextValue = {
   error?: string;
   download: (item: ContentItem) => Promise<void>;
   downloadSequentially: (items: readonly ContentItem[]) => Promise<void>;
+  registerReceived: (item: ContentItem, filePath: string, size: number) => Promise<void>;
   cancel: (itemId: string) => Promise<void>;
   pause: (itemId: string) => Promise<void>;
   resume: (itemId: string) => Promise<void>;
@@ -183,6 +184,21 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
     }
   }, [enforceWifiPreference]);
 
+  const registerReceived = useCallback(async (item: ContentItem, filePath: string, size: number) => {
+    setError(undefined);
+    try {
+      await service.registerReceived(item, filePath, size);
+    } catch (registerError) {
+      console.error('[Downloads] Could not register a received file.', registerError);
+      setError(
+        registerError instanceof Error
+          ? registerError.message
+          : 'The received file could not be added to Downloads.',
+      );
+      throw registerError;
+    }
+  }, []);
+
   const remove = useCallback(async (itemId: string) => {
     setError(undefined);
     try {
@@ -221,6 +237,7 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
         error,
         download,
         downloadSequentially,
+        registerReceived,
         cancel,
         pause,
         resume,

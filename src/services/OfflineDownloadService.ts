@@ -17,6 +17,7 @@ export type OfflineDownloadRecord = {
   item: ContentItem;
   filePath: string;
   posterFilePath?: string;
+  origin?: 'download' | 'received';
   size: number;
   status: OfflineDownloadStatus;
   progress: number;
@@ -69,6 +70,7 @@ function isDownloadRecord(value: unknown): value is OfflineDownloadRecord {
     typeof value.item.title === 'string' &&
     typeof value.filePath === 'string' &&
     (value.posterFilePath === undefined || typeof value.posterFilePath === 'string') &&
+    (value.origin === undefined || value.origin === 'download' || value.origin === 'received') &&
     typeof value.size === 'number' &&
     Number.isFinite(value.size) &&
     value.size > 0 &&
@@ -172,6 +174,38 @@ export class OfflineDownloadService {
   async download(item: ContentItem) {
     const size = this.validateDownload(item);
     await this.startDownload(item, size, false);
+  }
+
+  async registerReceived(item: ContentItem, filePath: string, size: number) {
+    if (
+      !filePath ||
+      !Number.isSafeInteger(size) ||
+      size <= 0 ||
+      size > this.maxFileSize ||
+      !this.fileSystem.fileExists(filePath) ||
+      this.fileSystem.getFileSize(filePath) !== size
+    ) {
+      throw new Error('The received file could not be verified on this device.');
+    }
+    const existing = this.records.find((record) => record.item.id === item.id);
+    if (existing && this.fileSystem.fileExists(existing.filePath)) {
+      throw new Error(`${item.title} is already saved on this device. Delete the existing copy first.`);
+    }
+    const record: OfflineDownloadRecord = {
+      item,
+      filePath,
+      origin: 'received',
+      size,
+      status: 'downloaded',
+      progress: 100,
+      date: new Date().toISOString(),
+    };
+    this.records = [
+      record,
+      ...this.records.filter((candidate) => candidate.item.id !== item.id),
+    ];
+    this.emit();
+    await this.persist();
   }
 
   async downloadSequentially(items: readonly ContentItem[]) {

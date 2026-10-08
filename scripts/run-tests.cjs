@@ -42,6 +42,7 @@ const sources = [
   'src/utils/episodeSelection.ts',
   'src/utils/episodePlayback.ts',
   'src/utils/subtitles.ts',
+  'src/utils/deviceTransferProtocol.ts',
   'src/utils/playbackError.ts',
   'src/utils/secureStorage.ts',
   'src/utils/accountAuth.ts',
@@ -114,6 +115,7 @@ try {
       'tests/backend-storage.test.cjs',
       'tests/detail-features.test.cjs',
       'tests/category-notifications.test.cjs',
+      'tests/device-transfer.test.cjs',
     ]);
   }
 } finally {

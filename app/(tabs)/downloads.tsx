@@ -14,6 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
+import { DeviceTransferPanel } from '../../src/components/downloads/DeviceTransferPanel';
 import { formatBytes, type OfflineDownloadRecord } from '../../src/services/OfflineDownloadService';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useLibrary } from '../../src/state/LibraryContext';
@@ -122,7 +123,11 @@ export default function DownloadsScreen() {
     Alert.alert('Download options', record.item.title, buttons);
   };
 
-  const visibleRecords = selectedTab === 'geniuz' ? records : [];
+  const visibleRecords = selectedTab === 'geniuz'
+    ? records.filter((record) => record.origin !== 'received')
+    : selectedTab === 'received'
+      ? records.filter((record) => record.origin === 'received')
+      : [];
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -173,24 +178,30 @@ export default function DownloadsScreen() {
         {error ? <ContentNotice message={error} tone="error" /> : null}
         {isLoading ? <ContentNotice message="Loading your downloads…" /> : null}
 
-        {selectedTab !== 'geniuz' ? (
+        {selectedTab === 'local' ? (
           <View style={styles.emptyState}>
             <Ionicons name="time-outline" size={34} color={theme.secondaryText} />
             <Text style={styles.emptyTitle}>Coming soon</Text>
-            <Text style={styles.emptyText}>
-              {selectedTab === 'local'
-                ? 'Browsing local video files is not available yet.'
-                : 'Received files will appear here when device transfer is available.'}
-            </Text>
+            <Text style={styles.emptyText}>Browsing local video files is not available yet.</Text>
           </View>
         ) : null}
 
-        {!isLoading && selectedTab === 'geniuz' && visibleRecords.length === 0 ? (
+        {selectedTab === 'received' ? <DeviceTransferPanel /> : null}
+
+        {!isLoading && selectedTab !== 'local' && visibleRecords.length === 0 ? (
           <View style={styles.emptyState}>
-            <Ionicons name="cloud-download-outline" size={36} color={theme.accent} />
-            <Text style={styles.emptyTitle}>No downloads yet</Text>
+            <Ionicons
+              name={selectedTab === 'received' ? 'swap-horizontal-outline' : 'cloud-download-outline'}
+              size={36}
+              color={theme.accent}
+            />
+            <Text style={styles.emptyTitle}>
+              {selectedTab === 'received' ? 'No received files yet' : 'No downloads yet'}
+            </Text>
             <Text style={styles.emptyText}>
-              Titles you download will be ready to watch here, even when you’re offline.
+              {selectedTab === 'received'
+                ? 'Verified files received from another device will appear here.'
+                : 'Titles you download will be ready to watch here, even when you’re offline.'}
             </Text>
           </View>
         ) : null}

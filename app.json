@@ -34,7 +34,10 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.geniuz.entertainment"
+      "bundleIdentifier": "com.geniuz.entertainment",
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "Geniuz+ uses your local network to send and receive videos between your devices."
+      }
     },
     "android": {
       "package": "com.geniuz.entertainment",

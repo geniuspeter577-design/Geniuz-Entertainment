@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 import type { Config } from '../config/config';
 import type { ContentPage } from '../models/content';
@@ -217,6 +217,27 @@ function requiredString(body: Record<string, unknown>, field: string, maximumLen
     throw new HttpError(400, 'INVALID_REQUEST', `The "${field}" field is invalid.`);
   }
   return value.trim();
+}
+
+function transferTokenHash(value: string) {
+  return createHash('sha256').update(value, 'utf8').digest('hex');
+}
+
+function throwTransferRpcError(error: { message?: string } | null, operation: string): never {
+  const message = error?.message ?? '';
+  if (message.includes('MEMBERSHIP_REQUIRED')) {
+    throw new HttpError(403, 'MEMBERSHIP_REQUIRED', 'An active membership is required to send files.');
+  }
+  if (message.includes('TRANSFER_SESSION_UNAVAILABLE') || message.includes('TRANSFER_PERMIT_INVALID')) {
+    throw new HttpError(409, 'TRANSFER_SESSION_UNAVAILABLE', 'This transfer session is invalid or expired.');
+  }
+  if (message.includes('INVALID_TRANSFER_MANIFEST')) {
+    throw new HttpError(400, 'INVALID_TRANSFER_MANIFEST', 'The transfer file details are invalid.');
+  }
+  if (message.includes('TRANSFER_PROGRESS_INVALID') || message.includes('TRANSFER_INCOMPLETE')) {
+    throw new HttpError(409, 'TRANSFER_STATE_INVALID', 'The transfer could not be updated in its current state.');
+  }
+  throw new HttpError(502, 'TRANSFER_OPERATION_FAILED', `Could not ${operation}.`);
 }
 
 function isMovieId(value: string) {
@@ -777,6 +798,155 @@ async function handleRequest(
       }),
     );
     writeJson(response, 200, { tracks: signedTracks });
+    return;
+  }
+
+  if (pathname === '/api/transfers/sessions') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, userId } = await authenticatePlayback(config, request.headers.authorization);
+    if (!userId) {
+      throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to receive a transfer.');
+    }
+    const body = await readJson(request);
+    const sessionToken = requiredString(body, 'sessionToken', 128);
+    if (!/^[a-f0-9]{64}$/i.test(sessionToken)) {
+      throw new HttpError(400, 'INVALID_TRANSFER_TOKEN', 'The transfer session token is invalid.');
+    }
+    const { data, error } = await client
+      .from('transfer_sessions')
+      .insert({
+        receiver_user_id: userId,
+        session_token_hash: transferTokenHash(sessionToken),
+      })
+      .select('id,expires_at')
+      .single();
+    if (error || !data) {
+      throw new HttpError(502, 'TRANSFER_SESSION_CREATE_FAILED', 'Could not create a receive session.');
+    }
+    writeJson(response, 201, { sessionId: data.id, expiresAt: data.expires_at });
+    return;
+  }
+
+  const transferRoute = /^\/api\/transfers\/sessions\/([^/]+)\/(authorize|verify|progress|complete)$/.exec(
+    pathname,
+  );
+  if (transferRoute) {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const sessionId = transferRoute[1];
+    if (!isMovieId(sessionId)) {
+      throw new HttpError(400, 'INVALID_TRANSFER_SESSION', 'The transfer session ID is invalid.');
+    }
+    const { client, userId } = await authenticatePlayback(config, request.headers.authorization);
+    if (!userId) {
+      throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to use device transfer.');
+    }
+    const operation = transferRoute[2];
+    const body = await readJson(request);
+
+    if (operation === 'authorize') {
+      const sessionToken = requiredString(body, 'sessionToken', 128);
+      const contentId = requiredString(body, 'contentId', 64);
+      const itemType = requiredString(body, 'itemType', 16);
+      const fileName = requiredString(body, 'fileName', 160);
+      const title = requiredString(body, 'title', 200);
+      const parentSeriesId =
+        typeof body.parentSeriesId === 'string' && body.parentSeriesId.trim()
+          ? body.parentSeriesId.trim()
+          : null;
+      const fileSizeBytes = body.fileSizeBytes;
+      const fileSha256 = requiredString(body, 'fileSha256', 64).toLowerCase();
+      if (!/^[a-f0-9]{64}$/i.test(sessionToken)) {
+        throw new HttpError(400, 'INVALID_TRANSFER_TOKEN', 'The transfer session token is invalid.');
+      }
+      if (!isMovieId(contentId)) {
+        throw new HttpError(400, 'INVALID_CONTENT_ID', 'The transfer content ID is invalid.');
+      }
+      if (
+        (itemType !== 'movie' && itemType !== 'series') ||
+        (parentSeriesId !== null && !isMovieId(parentSeriesId)) ||
+        (itemType === 'movie' && parentSeriesId !== null)
+      ) {
+        throw new HttpError(400, 'INVALID_TRANSFER_MANIFEST', 'The transfer item type is invalid.');
+      }
+      if (
+        !/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,159}$/.test(fileName) ||
+        !Number.isSafeInteger(fileSizeBytes) ||
+        Number(fileSizeBytes) <= 0 ||
+        Number(fileSizeBytes) > 1024 ** 3 ||
+        !/^[a-f0-9]{64}$/.test(fileSha256)
+      ) {
+        throw new HttpError(400, 'INVALID_TRANSFER_MANIFEST', 'The transfer file details are invalid.');
+      }
+      const permit = randomBytes(32).toString('hex');
+      const { data, error } = await client.rpc('authorize_device_transfer', {
+        p_session_id: sessionId,
+        p_session_token_hash: transferTokenHash(sessionToken),
+        p_sender_permit_hash: transferTokenHash(permit),
+        p_content_id: contentId,
+        p_item_type: itemType,
+        p_parent_series_id: parentSeriesId,
+        p_file_name: fileName,
+        p_title: title,
+        p_file_size_bytes: Number(fileSizeBytes),
+        p_file_sha256: fileSha256,
+      });
+      if (error) {
+        throwTransferRpcError(error, 'authorize the transfer');
+      }
+      writeJson(response, 200, { permit, transfer: data });
+      return;
+    }
+
+    if (operation === 'verify') {
+      const permit = requiredString(body, 'permit', 128);
+      if (!/^[a-f0-9]{64}$/i.test(permit)) {
+        throw new HttpError(400, 'INVALID_TRANSFER_PERMIT', 'The transfer permit is invalid.');
+      }
+      const { data, error } = await client.rpc('verify_device_transfer', {
+        p_session_id: sessionId,
+        p_sender_permit_hash: transferTokenHash(permit),
+      });
+      if (error) {
+        throwTransferRpcError(error, 'verify the transfer permit');
+      }
+      writeJson(response, 200, { transfer: data });
+      return;
+    }
+
+    if (operation === 'progress') {
+      const nextChunk = body.nextChunk;
+      const receivedBytes = body.receivedBytes;
+      if (
+        !Number.isSafeInteger(nextChunk) ||
+        Number(nextChunk) < 0 ||
+        !Number.isSafeInteger(receivedBytes) ||
+        Number(receivedBytes) < 0
+      ) {
+        throw new HttpError(400, 'INVALID_TRANSFER_PROGRESS', 'The transfer progress is invalid.');
+      }
+      const { error } = await client.rpc('update_device_transfer_progress', {
+        p_session_id: sessionId,
+        p_next_chunk: Number(nextChunk),
+        p_received_bytes: Number(receivedBytes),
+      });
+      if (error) {
+        throwTransferRpcError(error, 'save transfer progress');
+      }
+      writeJson(response, 200, { status: 'ok' });
+      return;
+    }
+
+    const { error } = await client.rpc('complete_device_transfer', {
+      p_session_id: sessionId,
+    });
+    if (error) {
+      throwTransferRpcError(error, 'complete the transfer');
+    }
+    writeJson(response, 200, { status: 'completed' });
     return;
   }
 

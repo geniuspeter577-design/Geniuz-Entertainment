@@ -577,6 +577,61 @@ test('subtitle endpoints return signed tracks only for published movies and publ
   assert.equal(draftSeries.status, 403);
 });
 
+test('device transfer sending is rejected by the backend until a real membership entitlement exists', async (context) => {
+  const originalFetch = global.fetch;
+  let authorizationRpcCalled = false;
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000021',
+        app_metadata: { role: 'user' },
+      });
+    }
+    if (url.pathname === '/rest/v1/rpc/authorize_device_transfer') {
+      authorizationRpcCalled = true;
+      return makeResponse({ message: 'MEMBERSHIP_REQUIRED', code: 'P0001' }, 400);
+    }
+    return makeResponse({}, 404);
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+  });
+  context.after(api.close);
+
+  const response = await originalFetch(
+    `${api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/authorize`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer test-access-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        sessionToken: 'a'.repeat(64),
+        contentId: '00000000-0000-4000-8000-000000000023',
+        itemType: 'movie',
+        fileName: 'geniuz-00000000-0000-4000-8000-000000000023.mp4',
+        title: 'Transfer test movie',
+        fileSizeBytes: 1024,
+        fileSha256: 'b'.repeat(64),
+      }),
+    },
+  );
+
+  assert.equal(response.status, 403);
+  assert.deepEqual((await response.json()).error, {
+    code: 'MEMBERSHIP_REQUIRED',
+    message: 'An active membership is required to send files.',
+  });
+  assert.equal(authorizationRpcCalled, true);
+});
+
 test('system status is admin-only and reports only check states', async (context) => {
   const originalFetch = global.fetch;
   const originalCheckBucket = B2StorageService.prototype.checkBucket;
