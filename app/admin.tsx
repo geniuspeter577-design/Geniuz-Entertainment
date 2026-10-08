@@ -39,6 +39,7 @@ import {
 } from '../src/services/supabase';
 import { theme } from '../src/theme';
 import { detectVideoFileType, validateVideoFileSize } from '../src/utils/videoFile';
+import { getConversionStatusBadge } from '../src/utils/conversionStatus';
 import {
   getTitleCleanupFailureMessage,
   logTitleCleanupFailures,
@@ -64,6 +65,28 @@ type AdminMovie = ContentItem & {
   createdAt: string;
   allowDownload: boolean;
 };
+
+function ConversionStatusBadge({ status }: { status?: ContentItem['conversionStatus'] }) {
+  const badge = getConversionStatusBadge(status);
+  const containerStyle = {
+    green: styles.conversionStatusGreen,
+    grey: styles.conversionStatusGrey,
+    yellow: styles.conversionStatusYellow,
+    red: styles.conversionStatusRed,
+  }[badge.color];
+  const textStyle = {
+    green: styles.conversionStatusGreenText,
+    grey: styles.conversionStatusGreyText,
+    yellow: styles.conversionStatusYellowText,
+    red: styles.conversionStatusRedText,
+  }[badge.color];
+
+  return (
+    <View accessibilityLabel={`Conversion status: ${badge.label}`} style={[styles.conversionStatusBadge, containerStyle]}>
+      <Text style={[styles.conversionStatusBadgeText, textStyle]}>{badge.label}</Text>
+    </View>
+  );
+}
 
 type SelectedMovieFile = {
   file: File | ExpoFile;
@@ -2600,6 +2623,7 @@ export default function AdminScreen() {
                 <TitleImage uri={movie.posterUrl} style={styles.catalogPoster} iconSize={18} />
                 <View style={styles.grow}>
                   <Text style={styles.movieTitle}>{movie.title}</Text>
+                  <ConversionStatusBadge status={movie.conversionStatus} />
                   <Text style={styles.helper}>
                     {movie.year ?? 'Year not set'} · {movie.published ? 'Published' : 'Draft'}
                   </Text>
@@ -3136,6 +3160,41 @@ const styles = StyleSheet.create({
     color: theme.text,
     fontSize: 15,
     fontWeight: '700',
+  },
+  conversionStatusBadge: {
+    alignSelf: 'flex-start',
+    borderRadius: 5,
+    marginTop: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  conversionStatusBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  conversionStatusGreen: {
+    backgroundColor: 'rgba(114,240,106,0.14)',
+  },
+  conversionStatusGreenText: {
+    color: theme.accent,
+  },
+  conversionStatusGrey: {
+    backgroundColor: 'rgba(148,163,165,0.14)',
+  },
+  conversionStatusGreyText: {
+    color: theme.secondaryText,
+  },
+  conversionStatusYellow: {
+    backgroundColor: 'rgba(244,201,93,0.15)',
+  },
+  conversionStatusYellowText: {
+    color: theme.warning,
+  },
+  conversionStatusRed: {
+    backgroundColor: 'rgba(255,141,141,0.15)',
+  },
+  conversionStatusRedText: {
+    color: theme.error,
   },
   statusPill: {
     borderRadius: 999,

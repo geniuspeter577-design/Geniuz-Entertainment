@@ -17,6 +17,7 @@ const sources = [
   'src/constants/video.ts',
   'src/config/features.ts',
   'src/utils/videoFile.ts',
+  'src/utils/conversionStatus.ts',
   'src/utils/watchlist.ts',
   'src/utils/adminCatalog.ts',
   'src/utils/adminAccess.ts',

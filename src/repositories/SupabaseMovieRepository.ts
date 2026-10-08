@@ -6,11 +6,23 @@ import { supabase } from '../services/supabase';
 import { PlaybackError } from '../utils/playbackError';
 import { loadAllPages } from '../utils/publishedCatalog';
 import { logSupabaseError } from '../utils/supabaseError';
+import { getConversionStatusBadge, type ConversionStatus } from '../utils/conversionStatus';
 
 const MOVIE_BUCKET = 'movie-assets';
 const PUBLISHED_CATALOG_PAGE_SIZE = 500;
 const MOVIE_COLUMNS =
-  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type';
+  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type,conversion_status';
+const LEGACY_MOVIE_COLUMNS =
+  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_content_type';
+const MOVIE_COLUMNS_WITH_CREATED_AT =
+  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type,conversion_status,created_at';
+const LEGACY_MOVIE_COLUMNS_WITH_CREATED_AT =
+  'id,title,description,release_year,genres,categories,poster_url,cover_url,runtime_minutes,content_rating,video_path,published,file_extension,mime_type,file_size_bytes,allow_download,storage_provider,storage_key,content_type,trailer_storage_key,trailer_size_bytes,trailer_duration_seconds,trailer_content_type,created_at';
+type MovieColumnList =
+  | typeof MOVIE_COLUMNS
+  | typeof LEGACY_MOVIE_COLUMNS
+  | typeof MOVIE_COLUMNS_WITH_CREATED_AT
+  | typeof LEGACY_MOVIE_COLUMNS_WITH_CREATED_AT;
 const TITLE_IMAGE_BUCKET = 'title-images';
 const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
@@ -39,7 +51,37 @@ type MovieRecord = {
   trailer_size_bytes?: number | null;
   trailer_duration_seconds?: number | null;
   trailer_content_type?: string | null;
+  conversion_status?: ConversionStatus | null;
 };
+
+type MovieQueryError = {
+  code?: string;
+  message?: string;
+  details?: string;
+};
+
+type MovieQueryResponse<T> = {
+  data: T;
+  error: MovieQueryError | null;
+};
+
+function isMissingConversionStatusColumn(error: MovieQueryError | null) {
+  if (error?.code !== '42703' && error?.code !== 'PGRST204') {
+    return false;
+  }
+  return `${error.message ?? ''} ${error.details ?? ''}`.toLowerCase().includes('conversion_status');
+}
+
+async function queryMovieRows<T>(
+  queryForColumns: (columns: MovieColumnList) => PromiseLike<MovieQueryResponse<T>>,
+  includeCreatedAt = false,
+) {
+  const result = await queryForColumns(includeCreatedAt ? MOVIE_COLUMNS_WITH_CREATED_AT : MOVIE_COLUMNS);
+  if (!isMissingConversionStatusColumn(result.error)) {
+    return result;
+  }
+  return queryForColumns(includeCreatedAt ? LEGACY_MOVIE_COLUMNS_WITH_CREATED_AT : LEGACY_MOVIE_COLUMNS);
+}
 
 type StoredTusUpload = {
   size: number | null;
@@ -166,6 +208,7 @@ function toContentItem(movie: MovieRecord): ContentItem {
     ...(movie.file_extension ? { fileExtension: movie.file_extension } : {}),
     ...(movie.mime_type ? { mimeType: movie.mime_type } : {}),
     ...(movie.file_size_bytes === null ? {} : { fileSizeBytes: Number(movie.file_size_bytes) }),
+    conversionStatus: getConversionStatusBadge(movie.conversion_status).status,
     ...(movie.trailer_storage_key ? { trailerStorageKey: movie.trailer_storage_key } : {}),
     ...(movie.trailer_size_bytes == null ? {} : { trailerSizeBytes: Number(movie.trailer_size_bytes) }),
     ...(movie.trailer_duration_seconds == null
@@ -256,20 +299,22 @@ export class SupabaseMovieRepository {
     const contentLabel = contentType === 'short' ? 'shorts' : contentType === 'series' ? 'series' : 'movies';
 
     const records = await loadAllPages(async (offset, pageSize) => {
-      let query = this.client
-        .from('movies')
-        .select(`${MOVIE_COLUMNS},created_at`)
-        .eq('published', true)
-        .eq('content_type', contentType);
+      const { data, error } = await queryMovieRows((columns) => {
+        let query = this.client
+          .from('movies')
+          .select(columns as typeof MOVIE_COLUMNS)
+          .eq('published', true)
+          .eq('content_type', contentType);
 
-      if (contentType !== 'series') {
-        query = query.or('video_path.not.is.null,storage_key.not.is.null');
-      }
+        if (contentType !== 'series') {
+          query = query.or('video_path.not.is.null,storage_key.not.is.null');
+        }
 
-      const { data, error } = await query
-        .order('created_at', { ascending: false })
-        .order('id', { ascending: false })
-        .range(offset, offset + pageSize - 1);
+        return query
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+          .range(offset, offset + pageSize - 1);
+      }, true);
 
       if (error) {
         logSupabaseError(`[SupabaseMovieRepository] Could not load published ${contentLabel}.`, error, {
@@ -314,34 +359,36 @@ export class SupabaseMovieRepository {
   ): Promise<PublishedTitlesPage> {
     const start = Math.max(0, Math.floor(offset));
     const size = Math.max(1, Math.min(50, Math.floor(pageSize)));
-    let query = this.client
-      .from('movies')
-      .select(`${MOVIE_COLUMNS},created_at`)
-      .eq('published', true)
-      .in('content_type', ['movie', 'series', 'short']);
+    const { data, error } = await queryMovieRows((columns) => {
+      let query = this.client
+        .from('movies')
+        .select(columns as typeof MOVIE_COLUMNS)
+        .eq('published', true)
+        .in('content_type', ['movie', 'series', 'short']);
 
-    if (filter.kind === 'movies') {
-      query = query.eq('content_type', 'movie').or('video_path.not.is.null,storage_key.not.is.null');
-    } else if (filter.kind === 'series') {
-      query = query.eq('content_type', 'series');
-    } else if (filter.kind === 'shorts') {
-      query = query.eq('content_type', 'short').or('video_path.not.is.null,storage_key.not.is.null');
-    } else if (filter.kind === 'category') {
-      query = query.contains('categories', [filter.value]);
-    } else if (filter.kind === 'genre') {
-      query = query.contains('genres', [filter.value]);
-    }
+      if (filter.kind === 'movies') {
+        query = query.eq('content_type', 'movie').or('video_path.not.is.null,storage_key.not.is.null');
+      } else if (filter.kind === 'series') {
+        query = query.eq('content_type', 'series');
+      } else if (filter.kind === 'shorts') {
+        query = query.eq('content_type', 'short').or('video_path.not.is.null,storage_key.not.is.null');
+      } else if (filter.kind === 'category') {
+        query = query.contains('categories', [filter.value]);
+      } else if (filter.kind === 'genre') {
+        query = query.contains('genres', [filter.value]);
+      }
 
-    if (filter.kind === 'trending' || filter.kind === 'category' || filter.kind === 'genre') {
-      query = query.or(
-        'content_type.eq.series,and(content_type.eq.movie,video_path.not.is.null),and(content_type.eq.movie,storage_key.not.is.null),and(content_type.eq.short,video_path.not.is.null),and(content_type.eq.short,storage_key.not.is.null)',
-      );
-    }
+      if (filter.kind === 'trending' || filter.kind === 'category' || filter.kind === 'genre') {
+        query = query.or(
+          'content_type.eq.series,and(content_type.eq.movie,video_path.not.is.null),and(content_type.eq.movie,storage_key.not.is.null),and(content_type.eq.short,video_path.not.is.null),and(content_type.eq.short,storage_key.not.is.null)',
+        );
+      }
 
-    const { data, error } = await query
-      .order('created_at', { ascending: false })
-      .order('id', { ascending: false })
-      .range(start, start + size);
+      return query
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+        .range(start, start + size);
+    }, true);
 
     if (error) {
       logSupabaseError('[SupabaseMovieRepository] Could not load a published title page.', error, {
@@ -383,11 +430,13 @@ export class SupabaseMovieRepository {
     }
     const movieId = match[1];
 
-    const { data, error } = await this.client
-      .from('movies')
-      .select(MOVIE_COLUMNS)
-      .eq('id', movieId)
-      .maybeSingle();
+    const { data, error } = await queryMovieRows((columns) =>
+      this.client
+        .from('movies')
+        .select(columns as typeof MOVIE_COLUMNS)
+        .eq('id', movieId)
+        .maybeSingle(),
+    );
 
     if (error) {
       logSupabaseError('[SupabaseMovieRepository] Could not load this movie.', error, {
@@ -406,10 +455,14 @@ export class SupabaseMovieRepository {
   }
 
   async getAdminMovies() {
-    const { data, error } = await this.client
-      .from('movies')
-      .select(`${MOVIE_COLUMNS},created_at`)
-      .order('created_at', { ascending: false });
+    const { data, error } = await queryMovieRows(
+      (columns) =>
+        this.client
+          .from('movies')
+          .select(columns as typeof MOVIE_COLUMNS)
+          .order('created_at', { ascending: false }),
+      true,
+    );
 
     if (error) {
       throw new Error('Could not load the admin movie catalog.', { cause: error });

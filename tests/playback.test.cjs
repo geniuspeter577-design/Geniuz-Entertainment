@@ -16,6 +16,7 @@ Module._load = function (request, parent, isMain) {
   return originalLoad.call(this, request, parent, isMain);
 };
 const { SupabaseMovieRepository } = require('../.test-build/src/repositories/SupabaseMovieRepository.js');
+const { getConversionStatusBadge } = require('../.test-build/src/utils/conversionStatus.js');
 Module._load = originalLoad;
 
 function createRepository(options = {}) {
@@ -41,6 +42,81 @@ function createRepository(options = {}) {
     signedCalls,
   };
 }
+
+function createMovieQueryClient(responses) {
+  const selectedColumns = [];
+  return {
+    selectedColumns,
+    client: {
+      from(table) {
+        assert.equal(table, 'movies');
+        return {
+          select(columns) {
+            selectedColumns.push(columns);
+            return { order: async () => responses.shift() };
+          },
+        };
+      },
+    },
+  };
+}
+
+test('movie repository retries without conversion_status and defaults legacy rows to ready', async () => {
+  const row = {
+    id: 'movie-1',
+    created_at: '2026-10-08T00:00:00.000Z',
+    title: 'Test movie',
+    description: null,
+    release_year: null,
+    genres: [],
+    categories: [],
+    poster_url: null,
+    cover_url: null,
+    runtime_minutes: null,
+    content_rating: null,
+    video_path: null,
+    published: false,
+    file_extension: 'mp4',
+    mime_type: 'video/mp4',
+    file_size_bytes: 1200,
+    allow_download: false,
+    storage_provider: 'b2',
+    storage_key: 'movies/movie-1.mp4',
+    content_type: 'movie',
+  };
+  const queryClient = createMovieQueryClient([
+    { data: null, error: { code: '42703', message: 'column movies.conversion_status does not exist' } },
+    { data: [row], error: null },
+  ]);
+  const repository = new SupabaseMovieRepository(
+    queryClient.client,
+    'https://supabase.example.test',
+    'publishable-test-key',
+  );
+
+  const movies = await repository.getAdminMovies();
+
+  assert.equal(queryClient.selectedColumns.length, 2);
+  assert.match(queryClient.selectedColumns[0], /conversion_status/);
+  assert.doesNotMatch(queryClient.selectedColumns[1], /conversion_status/);
+  assert.equal(movies[0].conversionStatus, 'ready');
+});
+
+test('conversion status badge maps every status to its requested label and color', () => {
+  for (const [status, label, color] of [
+    ['ready', 'Ready', 'green'],
+    ['uploaded', 'Uploaded', 'grey'],
+    ['converting', 'Converting', 'yellow'],
+    ['failed', 'Failed', 'red'],
+  ]) {
+    assert.deepEqual(getConversionStatusBadge(status), { status, label, color });
+  }
+  assert.deepEqual(getConversionStatusBadge(undefined), {
+    status: 'ready',
+    label: 'Ready',
+    color: 'green',
+  });
+});
 
 test('Supabase movies and episodes keep using Supabase signed URLs while B2 uses the public backend route', async (context) => {
   const previousApiUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL;

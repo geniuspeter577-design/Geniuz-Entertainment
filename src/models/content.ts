@@ -1,3 +1,5 @@
+import type { ConversionStatus } from '../utils/conversionStatus';
+
 export type ContentType =
   | 'movie'
   | 'series'
@@ -40,6 +42,7 @@ export interface ContentItem {
   fileExtension?: string;
   mimeType?: string;
   fileSizeBytes?: number;
+  conversionStatus?: ConversionStatus;
   trailerStorageKey?: string;
   trailerSizeBytes?: number;
   trailerDurationSeconds?: number;
