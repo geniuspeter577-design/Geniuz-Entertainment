@@ -217,6 +217,19 @@ test('Me gear opens Settings, which exposes real account actions and configured 
   assert.match(settings, /EXPO_PUBLIC_TERMS_URL[\s\S]*?EXPO_PUBLIC_PRIVACY_URL/);
 });
 
+test('Me Transfer row opens the existing Received tab without a sign-in gate', () => {
+  const profile = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+  const downloads = fs.readFileSync('app/(tabs)/downloads.tsx', 'utf8');
+  assert.match(
+    profile,
+    /title="Transfer"[\s\S]*?router\.push\(\{ pathname: '\/\(tabs\)\/downloads', params: \{ tab: 'received' \} \}\)/,
+  );
+  assert.doesNotMatch(profile, /onPress=\{\(\) => showComingSoon\('Transfer'\)\}/);
+  assert.match(downloads, /useLocalSearchParams/);
+  assert.match(downloads, /const selectedTab: DownloadTab = tab === 'local' \|\| tab === 'received'/);
+  assert.match(downloads, /router\.setParams\(\{ tab: tab\.id \}\)/);
+});
+
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
   const migration = fs.readFileSync('supabase/migrations/20261014000000_profile_date_of_birth.sql', 'utf8');
   assert.match(migration, /add column if not exists date_of_birth date/i);

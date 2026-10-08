@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { router, useLocalSearchParams } from 'expo-router';
+import React, { useMemo } from 'react';
 import {
   Alert,
   Image,
@@ -52,6 +52,7 @@ function showDownloadDetails(record: OfflineDownloadRecord) {
 }
 
 export default function DownloadsScreen() {
+  const { tab } = useLocalSearchParams<{ tab?: DownloadTab }>();
   const { isOnline } = useNetwork();
   const library = useLibrary();
   const {
@@ -67,7 +68,7 @@ export default function DownloadsScreen() {
     remove,
     refresh,
   } = useDownloads();
-  const [selectedTab, setSelectedTab] = useState<DownloadTab>('geniuz');
+  const selectedTab: DownloadTab = tab === 'local' || tab === 'received' ? tab : 'geniuz';
   const watchHistory = useMemo(
     () => getMeScreenData({ watchlist: [], continueWatching: library.continueWatching }, []).watchHistory,
     [library.continueWatching],
@@ -165,7 +166,7 @@ export default function DownloadsScreen() {
               key={tab.id}
               accessibilityRole="tab"
               accessibilityState={{ selected: selectedTab === tab.id }}
-              onPress={() => setSelectedTab(tab.id)}
+              onPress={() => router.setParams({ tab: tab.id })}
               style={[styles.tab, selectedTab === tab.id && styles.selectedTab]}
             >
               <Text style={[styles.tabText, selectedTab === tab.id && styles.selectedTabText]}>

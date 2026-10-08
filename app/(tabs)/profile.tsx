@@ -309,8 +309,8 @@ export default function ProfileScreen() {
           <MeRow
             icon="swap-horizontal-outline"
             title="Transfer"
-            subtitle="Coming soon"
-            onPress={() => showComingSoon('Transfer')}
+            subtitle="Receive or send files"
+            onPress={() => router.push({ pathname: '/(tabs)/downloads', params: { tab: 'received' } })}
           />
         </View>
       </ScrollView>
