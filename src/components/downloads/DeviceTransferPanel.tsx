@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 
@@ -153,18 +154,26 @@ export function DeviceTransferPanel() {
   const progressPercent = progress?.total
     ? Math.min(100, Math.floor((progress.current / progress.total) * 100))
     : 0;
+  const openMemberOptions = () => {
+    if (!auth.session) {
+      auth.openSignInSheet('sign-in');
+      return;
+    }
+    router.push('/(tabs)/profile');
+  };
 
   return (
     <View style={styles.card}>
       <Text style={styles.title}>Device-to-device transfer</Text>
       <Text style={styles.description}>
-        Receiving is free. Sending requires active Member access, verified by the server.
+        Both sending and receiving require active Member access, verified by the server.
       </Text>
-      {!auth.session ? (
-        <Pressable onPress={() => auth.openSignInSheet()} style={styles.action}>
-          <Text style={styles.actionText}>Sign in to transfer</Text>
+      <View style={styles.memberNotice}>
+        <Text style={styles.memberNoticeTitle}>Transfer is for Members</Text>
+        <Pressable onPress={openMemberOptions} style={styles.action}>
+          <Text style={styles.actionText}>{auth.session ? 'View Member card' : 'Sign in'}</Text>
         </Pressable>
-      ) : null}
+      </View>
       {!isOnline ? (
         <Text style={styles.muted}>
           Internet access is needed to authorize the transfer. Devices must also share a Wi-Fi network or hotspot.
@@ -263,6 +272,15 @@ const styles = StyleSheet.create({
   },
   title: { color: theme.text, fontSize: 18, fontWeight: '700' },
   description: { color: theme.secondaryText, fontSize: 13, lineHeight: 19 },
+  memberNotice: {
+    backgroundColor: theme.background,
+    borderColor: theme.border,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+    padding: 12,
+  },
+  memberNoticeTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
   section: { borderTopColor: theme.border, borderTopWidth: StyleSheet.hairlineWidth, gap: 10, paddingTop: 14 },
   sectionTitle: { color: theme.text, fontSize: 15, fontWeight: '700' },
   muted: { color: theme.secondaryText, fontSize: 12, lineHeight: 17 },

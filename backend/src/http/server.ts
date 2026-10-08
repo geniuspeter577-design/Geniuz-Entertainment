@@ -1,5 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Config } from '../config/config';
 import type { ContentPage } from '../models/content';
@@ -254,8 +255,11 @@ function transferTokenHash(value: string) {
 
 function throwTransferRpcError(error: { message?: string } | null, operation: string): never {
   const message = error?.message ?? '';
+  if (message.includes('UNAUTHENTICATED')) {
+    throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to use device transfer.');
+  }
   if (message.includes('MEMBERSHIP_REQUIRED')) {
-    throw new HttpError(403, 'MEMBERSHIP_REQUIRED', 'An active membership is required to send files.');
+    throw new HttpError(403, 'MEMBERSHIP_REQUIRED', 'An active membership is required for device transfer.');
   }
   if (message.includes('TRANSFER_SESSION_UNAVAILABLE') || message.includes('TRANSFER_PERMIT_INVALID')) {
     throw new HttpError(409, 'TRANSFER_SESSION_UNAVAILABLE', 'This transfer session is invalid or expired.');
@@ -267,6 +271,13 @@ function throwTransferRpcError(error: { message?: string } | null, operation: st
     throw new HttpError(409, 'TRANSFER_STATE_INVALID', 'The transfer could not be updated in its current state.');
   }
   throw new HttpError(502, 'TRANSFER_OPERATION_FAILED', `Could not ${operation}.`);
+}
+
+async function requireActiveTransferMembership(client: SupabaseClient) {
+  const { error } = await client.rpc('require_active_transfer_membership');
+  if (error) {
+    throwTransferRpcError(error, 'verify transfer membership');
+  }
 }
 
 function isMovieId(value: string) {
@@ -862,6 +873,7 @@ async function handleRequest(
     if (!userId) {
       throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to receive a transfer.');
     }
+    await requireActiveTransferMembership(client);
     const body = await readJson(request);
     const sessionToken = requiredString(body, 'sessionToken', 128);
     if (!/^[a-f0-9]{64}$/i.test(sessionToken)) {
@@ -897,6 +909,7 @@ async function handleRequest(
     if (!userId) {
       throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to use device transfer.');
     }
+    await requireActiveTransferMembership(client);
     const operation = transferRoute[2];
     const body = await readJson(request);
 

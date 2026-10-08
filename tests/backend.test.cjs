@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { once } = require('node:events');
 const { test } = require('node:test');
 
@@ -10,6 +11,7 @@ const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/provide
 const { FootballMatchesService } = require('../.test-build/backend/backend/src/services/FootballMatchesService.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+const requestFetch = global.fetch;
 
 const tmdbRecord = {
   id: 101,
@@ -145,6 +147,50 @@ async function startApi(options = {}) {
       server.close((error) => (error ? reject(error) : resolve()));
     }),
   };
+}
+
+async function startTransferApi(context, activeMember = false) {
+  const originalFetch = global.fetch;
+  const calls = { membership: 0, createSession: 0, authorizeSend: 0 };
+  global.fetch = async (input, init = {}) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000021',
+        app_metadata: { role: 'user' },
+      });
+    }
+    if (url.pathname === '/rest/v1/rpc/require_active_transfer_membership') {
+      calls.membership += 1;
+      return activeMember
+        ? makeResponse(true)
+        : makeResponse({ message: 'MEMBERSHIP_REQUIRED', code: 'P0001' }, 400);
+    }
+    if (url.pathname === '/rest/v1/rpc/authorize_device_transfer') {
+      calls.authorizeSend += 1;
+      return makeResponse({ sessionId: '00000000-0000-4000-8000-000000000022', receivedBytes: 0 });
+    }
+    if (url.pathname === '/rest/v1/rpc/verify_device_transfer') {
+      return makeResponse({ verified: true });
+    }
+    if (url.pathname === '/rest/v1/transfer_sessions' && init.method === 'POST') {
+      calls.createSession += 1;
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000022',
+        expires_at: '2026-10-08T20:00:00.000Z',
+      }, 201);
+    }
+    return makeResponse({}, 404);
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+  });
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+  });
+  context.after(api.close);
+  return { api, originalFetch: requestFetch, calls };
 }
 
 test('upload preflight allows the configured app origin and auth headers', async (context) => {
@@ -597,59 +643,137 @@ test('subtitle endpoints return signed tracks only for published movies and publ
   assert.equal(draftSeries.status, 403);
 });
 
-test('device transfer sending is rejected by the backend until a real membership entitlement exists', async (context) => {
-  const originalFetch = global.fetch;
-  let authorizationRpcCalled = false;
-  global.fetch = async (input) => {
-    const url = new URL(String(input));
-    if (url.pathname === '/auth/v1/user') {
-      return makeResponse({
-        id: '00000000-0000-4000-8000-000000000021',
-        app_metadata: { role: 'user' },
-      });
-    }
-    if (url.pathname === '/rest/v1/rpc/authorize_device_transfer') {
-      authorizationRpcCalled = true;
-      return makeResponse({ message: 'MEMBERSHIP_REQUIRED', code: 'P0001' }, 400);
-    }
-    return makeResponse({}, 404);
-  };
-  context.after(() => {
-    global.fetch = originalFetch;
+test('signed-out users cannot create or join a receive session', async (context) => {
+  const { api, originalFetch, calls } = await startTransferApi(context);
+  const create = await originalFetch(`${api.baseUrl}/api/transfers/sessions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionToken: 'a'.repeat(64) }),
   });
-
-  const api = await startApi({
-    supabaseUrl: 'https://supabase.example.test',
-    supabasePublishableKey: 'test-publishable-key',
-  });
-  context.after(api.close);
-
-  const response = await originalFetch(
+  const join = await originalFetch(
+    `${api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/verify`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ permit: 'b'.repeat(64) }) },
+  );
+  const send = await originalFetch(
     `${api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/authorize`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' },
+  );
+
+  assert.equal(create.status, 401);
+  assert.equal(join.status, 401);
+  assert.equal(send.status, 401);
+  assert.equal(calls.membership, 0);
+});
+
+test('free accounts cannot create or join a receive session', async (context) => {
+  const { api, originalFetch, calls } = await startTransferApi(context);
+  const headers = {
+    Authorization: 'Bearer test-access-token',
+    'Content-Type': 'application/json',
+  };
+  const create = await originalFetch(`${api.baseUrl}/api/transfers/sessions`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ sessionToken: 'a'.repeat(64) }),
+  });
+  const join = await originalFetch(
+    `${api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/verify`,
+    { method: 'POST', headers, body: JSON.stringify({ permit: 'b'.repeat(64) }) },
+  );
+
+  for (const response of [create, join]) {
+    assert.equal(response.status, 403);
+    assert.equal((await response.json()).error.code, 'MEMBERSHIP_REQUIRED');
+  }
+  assert.equal(calls.membership, 2);
+  assert.equal(calls.createSession, 0);
+});
+
+test('active members can create a receive session', async (context) => {
+  const { api, originalFetch, calls } = await startTransferApi(context, true);
+  const response = await originalFetch(`${api.baseUrl}/api/transfers/sessions`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Bearer test-access-token',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ sessionToken: 'a'.repeat(64) }),
+  });
+
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).sessionId, '00000000-0000-4000-8000-000000000022');
+  assert.equal(calls.membership, 1);
+  assert.equal(calls.createSession, 1);
+
+  const join = await originalFetch(
+    `${api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/verify`,
     {
       method: 'POST',
       headers: {
         Authorization: 'Bearer test-access-token',
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        sessionToken: 'a'.repeat(64),
-        contentId: '00000000-0000-4000-8000-000000000023',
-        itemType: 'movie',
-        fileName: 'geniuz-00000000-0000-4000-8000-000000000023.mp4',
-        title: 'Transfer test movie',
-        fileSizeBytes: 1024,
-        fileSha256: 'b'.repeat(64),
-      }),
+      body: JSON.stringify({ permit: 'b'.repeat(64) }),
     },
   );
+  assert.equal(join.status, 200);
+  assert.equal(calls.membership, 2);
+});
 
-  assert.equal(response.status, 403);
-  assert.deepEqual((await response.json()).error, {
-    code: 'MEMBERSHIP_REQUIRED',
-    message: 'An active membership is required to send files.',
-  });
-  assert.equal(authorizationRpcCalled, true);
+test('free accounts cannot send', async (context) => {
+  const payload = {
+    sessionToken: 'a'.repeat(64),
+    contentId: '00000000-0000-4000-8000-000000000023',
+    itemType: 'movie',
+    fileName: 'geniuz-00000000-0000-4000-8000-000000000023.mp4',
+    title: 'Transfer test movie',
+    fileSizeBytes: 1024,
+    fileSha256: 'b'.repeat(64),
+  };
+  const free = await startTransferApi(context);
+  const freeResponse = await free.originalFetch(
+    `${free.api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/authorize`,
+    {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-access-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  assert.equal(freeResponse.status, 403);
+  assert.equal((await freeResponse.json()).error.code, 'MEMBERSHIP_REQUIRED');
+  assert.equal(free.calls.authorizeSend, 0);
+});
+
+test('active members can send', async (context) => {
+  const member = await startTransferApi(context, true);
+  const payload = {
+    sessionToken: 'a'.repeat(64),
+    contentId: '00000000-0000-4000-8000-000000000023',
+    itemType: 'movie',
+    fileName: 'geniuz-00000000-0000-4000-8000-000000000023.mp4',
+    title: 'Transfer test movie',
+    fileSizeBytes: 1024,
+    fileSha256: 'b'.repeat(64),
+  };
+  const memberResponse = await member.originalFetch(
+    `${member.api.baseUrl}/api/transfers/sessions/00000000-0000-4000-8000-000000000022/authorize`,
+    {
+      method: 'POST',
+      headers: { Authorization: 'Bearer test-access-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    },
+  );
+  assert.equal(memberResponse.status, 200);
+  assert.equal(member.calls.membership, 1);
+  assert.equal(member.calls.authorizeSend, 1);
+});
+
+test('new transfer migration gates session reads and inserts through the membership check', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261021000000_transfer_membership_required.sql', 'utf8');
+  assert.match(migration, /public\.has_active_membership\(auth\.uid\(\)\)/);
+  assert.match(migration, /create policy "Members can view their transfer sessions"[\s\S]*?public\.require_active_transfer_membership\(\)/);
+  assert.match(migration, /create policy "Members can create their own receive sessions"[\s\S]*?public\.require_active_transfer_membership\(\)/);
+  assert.match(migration, /TODO\(plans\):[\s\S]*real paid membership data/);
 });
 
 test('system status is admin-only and reports only check states', async (context) => {

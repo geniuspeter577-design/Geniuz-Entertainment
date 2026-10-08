@@ -139,6 +139,14 @@ test('Football Home category shows score states and notes without match stream a
   assert.doesNotMatch(panel, /router\.push|\/watch\//);
 });
 
+test('transfer panel explains Member access and routes visitors to sign-in or the existing Member card', () => {
+  const panel = fs.readFileSync('src/components/downloads/DeviceTransferPanel.tsx', 'utf8');
+  assert.match(panel, /Transfer is for Members/);
+  assert.match(panel, /auth\.openSignInSheet\('sign-in'\)/);
+  assert.match(panel, /router\.push\('\/\(tabs\)\/profile'\)/);
+  assert.match(panel, /Both sending and receiving require active Member access/);
+});
+
 test('mobile Geniuz repository rejects malformed normalized responses', async () => {
   const apiClient = {
     get: async () => ({ items: [{ title: 'Missing required fields' }], page: 1, totalPages: 1 }),
