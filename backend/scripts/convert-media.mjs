@@ -23,7 +23,7 @@ const REQUIRED_S3_SETTINGS = [
 ];
 const REPOSITORY_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
 const CONVERSION_DIRECTORY = '/tmp/convert';
-const USAGE = `Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--upload-only </tmp/convert/<uuid>.converted.mp4>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--dry-run] [--help]
+const USAGE = `Usage: npm --prefix backend run media:convert -- --key <movies/<uuid>.mkv> [--input <local_path>] [--upload-only </tmp/convert/<uuid>.converted.mp4>] [--crf <0-51>] [--maxrate-kbps <positive_integer>] [--audio-kbps <positive_integer>] [--replace] [--dry-run] [--help]
 Defaults: --crf ${videoConversionProfile.crf}, --maxrate-kbps ${videoConversionProfile.VIDEO_MAXRATE_KBPS} kb/s (overridden by VIDEO_MAXRATE_KBPS when set), --audio-kbps ${videoConversionProfile.audioKbps} kb/s AAC stereo, buffer ${videoConversionProfile.bufferMultiplier}x maxrate, scale down to ${videoConversionProfile.scaleHeight}p only.`;
 
 class ConversionError extends Error {}
@@ -152,9 +152,40 @@ export function verifyConvertedMedia({ sourceDuration, sourceStreams = [], outpu
   return { valid: true };
 }
 
+export function verifyUploadOnlyMedia({ outputProbe, outputSize, sourceSize }) {
+  if (!Number.isSafeInteger(outputSize) || outputSize <= 0) {
+    return { valid: false, reason: 'The upload-only file is empty or unreadable.' };
+  }
+  const streams = Array.isArray(outputProbe?.streams) ? outputProbe.streams : [];
+  const videoStreams = streams.filter((stream) => stream.codec_type === 'video');
+  const audioStreams = streams.filter((stream) => stream.codec_type === 'audio');
+  if (videoStreams.length === 0 || videoStreams.some((stream) => stream.codec_name !== 'h264')) {
+    return { valid: false, reason: 'The upload-only video stream is not h264.' };
+  }
+  if (audioStreams.length === 0 || audioStreams.some((stream) => stream.codec_name !== 'aac')) {
+    return { valid: false, reason: 'The upload-only audio stream is not aac.' };
+  }
+  if (Number.isSafeInteger(sourceSize) && shouldWarnOutputIsLarger(sourceSize, outputSize)) {
+    return { valid: false, reason: 'The upload-only file is larger than the source MKV.' };
+  }
+  return { valid: true };
+}
+
+export function buildTargetUploadPlan({ key, targetExists, replace, dryRun }) {
+  if (targetExists && !replace) {
+    throw new ConversionError('The converted object key already exists; refusing to overwrite it.');
+  }
+  return {
+    dryRun,
+    willUpload: !dryRun,
+    replacementMessage: targetExists && replace ? `REPLACING a live file: ${key}` : undefined,
+  };
+}
+
 export function parseArguments(args, environment = process.env) {
   const options = new Map();
   let dryRun = false;
+  let replace = false;
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
     if (argument === '--dry-run') {
@@ -162,6 +193,13 @@ export function parseArguments(args, environment = process.env) {
         throw new Error(USAGE);
       }
       dryRun = true;
+      continue;
+    }
+    if (argument === '--replace') {
+      if (replace) {
+        throw new Error(USAGE);
+      }
+      replace = true;
       continue;
     }
     if (!['--key', '--input', '--upload-only', '--crf', '--maxrate-kbps', '--audio-kbps'].includes(argument) || options.has(argument) || !args[index + 1] || args[index + 1].startsWith('--')) {
@@ -185,7 +223,7 @@ export function parseArguments(args, environment = process.env) {
   if (!Number.isInteger(crf) || crf < 0 || crf > 51 || !Number.isSafeInteger(maxrateKbps) || maxrateKbps <= 0 || !Number.isSafeInteger(audioKbps) || audioKbps <= 0) {
     throw new Error(USAGE);
   }
-  return { key, input: options.get('--input'), uploadOnly: options.get('--upload-only'), crf, maxrateKbps, audioKbps, dryRun };
+  return { key, input: options.get('--input'), uploadOnly: options.get('--upload-only'), crf, maxrateKbps, audioKbps, replace, dryRun };
 }
 
 export function buildUploadObjectParams({ bucket, key, body, contentLength }) {
@@ -208,16 +246,30 @@ function isMissingObjectError(error) {
   );
 }
 
-async function assertObjectDoesNotExist(client, bucket, key) {
+async function objectExists(client, bucket, key) {
   try {
     await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return true;
   } catch (error) {
     if (isMissingObjectError(error)) {
-      return;
+      return false;
     }
     throw new ConversionError('Could not confirm the new object key is unused.');
   }
-  throw new ConversionError('The converted object key already exists; refusing to overwrite it.');
+}
+
+async function getObjectSizeIfPresent(client, bucket, key) {
+  try {
+    const head = await client.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
+    return Number.isSafeInteger(head.ContentLength) && head.ContentLength >= 0
+      ? head.ContentLength
+      : undefined;
+  } catch (error) {
+    if (isMissingObjectError(error)) {
+      return undefined;
+    }
+    throw new ConversionError('Could not verify the source MKV size for upload-only validation.');
+  }
 }
 
 async function prepareConversionDirectory(create) {
@@ -354,7 +406,16 @@ async function runConversion(args) {
   let stableConvertedPath = null;
 
   try {
-    await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
+    const targetExistsInitially = await objectExists(client, process.env.S3_BUCKET, newKey);
+    const initialPlan = buildTargetUploadPlan({
+      key: newKey,
+      targetExists: targetExistsInitially,
+      replace: options.replace,
+      dryRun: options.dryRun,
+    });
+    if (options.dryRun && initialPlan.replacementMessage) {
+      console.log(initialPlan.replacementMessage);
+    }
     let sourceProbe;
     let sourceSize;
     if (options.uploadOnly) {
@@ -366,6 +427,17 @@ async function runConversion(args) {
       if (uploadOnlyPath.size <= 0) {
         throw new ConversionError('The upload-only file is empty.');
       }
+      sourceSize = await getObjectSizeIfPresent(client, process.env.S3_BUCKET, options.key);
+      sourceProbe = await probe(stableConvertedPath);
+      const verification = verifyUploadOnlyMedia({
+        outputProbe: sourceProbe,
+        outputSize: uploadOnlyPath.size,
+        sourceSize,
+      });
+      if (!verification.valid) {
+        throw new ConversionError(`Upload-only file verification failed: ${verification.reason}`);
+      }
+      console.log(`Upload-only file verified: ${formatFileSize(uploadOnlyPath.size)}; video h264, audio aac.`);
     } else if (options.input) {
       const localInput = await resolveLocalInput(options.input);
       inputPath = localInput.path;
@@ -447,7 +519,22 @@ async function runConversion(args) {
       throw new ConversionError('The converted media is empty or unreadable.');
     }
 
-    await assertObjectDoesNotExist(client, process.env.S3_BUCKET, newKey);
+    if (options.dryRun) {
+      console.log(`New key: ${newKey}`);
+      console.log('Dry run: no files were written and no upload was performed.');
+      return;
+    }
+
+    const targetExistsBeforeUpload = await objectExists(client, process.env.S3_BUCKET, newKey);
+    const uploadPlan = buildTargetUploadPlan({
+      key: newKey,
+      targetExists: targetExistsBeforeUpload,
+      replace: options.replace,
+      dryRun: false,
+    });
+    if (uploadPlan.replacementMessage) {
+      console.log(uploadPlan.replacementMessage);
+    }
     try {
       await client.send(
         new PutObjectCommand(buildUploadObjectParams({

@@ -91,9 +91,83 @@ test('media conversion parser accepts upload-only and other quality flags', asyn
     crf: 26,
     maxrateKbps: 1500,
     audioKbps: 96,
+    replace: false,
     dryRun: false,
   });
   assert.throws(() => parseArguments(['--upload-only']), /Usage/);
+
+  const replaceOptions = parseArguments([
+    '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+    '--upload-only', '/tmp/convert/f157edce-7fcf-4ab2-a80c-365306fae850.converted.mp4',
+    '--replace',
+    '--dry-run',
+  ]);
+  assert.equal(replaceOptions.replace, true);
+  assert.equal(replaceOptions.uploadOnly, '/tmp/convert/f157edce-7fcf-4ab2-a80c-365306fae850.converted.mp4');
+  assert.equal(replaceOptions.dryRun, true);
+  assert.throws(() => parseArguments([
+    '--key', 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+    '--replace', '--replace',
+  ]), /Usage/);
+});
+
+test('dry-run refuses an existing target by default and reports a no-upload replacement plan with --replace', async () => {
+  const { buildTargetUploadPlan } = await import('../backend/scripts/convert-media.mjs');
+  const key = 'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mp4';
+
+  assert.throws(
+    () => buildTargetUploadPlan({ key, targetExists: true, replace: false, dryRun: true }),
+    { message: 'The converted object key already exists; refusing to overwrite it.' },
+  );
+  assert.deepEqual(
+    buildTargetUploadPlan({ key, targetExists: true, replace: true, dryRun: true }),
+    {
+      dryRun: true,
+      willUpload: false,
+      replacementMessage: `REPLACING a live file: ${key}`,
+    },
+  );
+  assert.deepEqual(
+    buildTargetUploadPlan({ key, targetExists: false, replace: false, dryRun: false }),
+    { dryRun: false, willUpload: true, replacementMessage: undefined },
+  );
+});
+
+test('upload-only validation requires h264 video, aac audio, and no size increase when source size is known', async () => {
+  const { verifyUploadOnlyMedia } = await import('../backend/scripts/convert-media.mjs');
+  const validProbe = {
+    streams: [
+      { codec_type: 'video', codec_name: 'h264' },
+      { codec_type: 'audio', codec_name: 'aac' },
+    ],
+  };
+
+  assert.deepEqual(
+    verifyUploadOnlyMedia({ outputProbe: validProbe, outputSize: 900, sourceSize: 1000 }),
+    { valid: true },
+  );
+  assert.match(
+    verifyUploadOnlyMedia({
+      outputProbe: validProbe,
+      outputSize: 1001,
+      sourceSize: 1000,
+    }).reason,
+    /larger than the source MKV/,
+  );
+  assert.match(
+    verifyUploadOnlyMedia({
+      outputProbe: { streams: [{ codec_type: 'video', codec_name: 'hevc' }, ...validProbe.streams.slice(1)] },
+      outputSize: 900,
+    }).reason,
+    /video stream is not h264/,
+  );
+  assert.match(
+    verifyUploadOnlyMedia({
+      outputProbe: { streams: [validProbe.streams[0]] },
+      outputSize: 900,
+    }).reason,
+    /audio stream is not aac/,
+  );
 });
 
 test('media conversion upload params omit conditional headers unsupported by Backblaze', async () => {
