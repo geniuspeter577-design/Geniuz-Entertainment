@@ -15,6 +15,14 @@ export type Config = {
   port: number;
   tmdbApiKey: string | undefined;
   footballDataApiKey?: string;
+  paystackSecretKey?: string;
+  supabaseServiceRoleKey?: string;
+  membershipCronSecret?: string;
+  membershipPriceNgn: number;
+  membershipGraceDays: number;
+  subscription1500Enabled: boolean;
+  // TODO: implement Paystack dedicated virtual accounts only when this is enabled.
+  dedicatedAccountEnabled: boolean;
   tmdbBaseUrl: string;
   anilistApiUrl: string;
   corsOrigins: string[];
@@ -84,6 +92,13 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     port,
     tmdbApiKey: environment.TMDB_API_KEY?.trim() || undefined,
     footballDataApiKey: environment.FOOTBALL_DATA_API_KEY?.trim() || undefined,
+    paystackSecretKey: environment.PAYSTACK_SECRET_KEY?.trim() || undefined,
+    supabaseServiceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined,
+    membershipCronSecret: environment.MEMBERSHIP_CRON_SECRET?.trim() || undefined,
+    membershipPriceNgn: positiveInteger(environment.MEMBERSHIP_PRICE_NGN, 900),
+    membershipGraceDays: positiveInteger(environment.MEMBERSHIP_GRACE_DAYS, 3),
+    subscription1500Enabled: (environment.SUBSCRIPTION_1500_ENABLED ?? 'false').trim().toLowerCase() === 'true',
+    dedicatedAccountEnabled: (environment.DEDICATED_ACCOUNT_ENABLED ?? 'false').trim().toLowerCase() === 'true',
     tmdbBaseUrl: parsedTmdbBaseUrl.toString().replace(/\/+$/, ''),
     anilistApiUrl: environment.ANILIST_API_URL?.trim() || 'https://graphql.anilist.co',
     corsOrigins: (environment.CORS_ORIGIN ?? defaultCorsOrigins.join(','))

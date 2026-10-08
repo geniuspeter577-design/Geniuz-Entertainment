@@ -45,6 +45,7 @@ export default function RootLayout() {
                 <Stack.Screen name="admin" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="admin-status" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="settings" options={{ presentation: 'modal' }} />
+                <Stack.Screen name="membership" options={{ presentation: 'fullScreenModal' }} />
                 <Stack.Screen name="watch/[id]" options={{ presentation: 'fullScreenModal' }} />
                 <Stack.Screen name="edit-profile" options={{ presentation: 'modal' }} />
                 <Stack.Screen name="shorts" options={{ presentation: 'fullScreenModal' }} />

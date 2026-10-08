@@ -48,6 +48,15 @@ export function DeviceTransferPanel() {
     return token;
   }, [auth.session]);
 
+  const handleTransferError = (transferError: unknown) => {
+    const message = transferError instanceof Error ? transferError.message : 'The transfer could not be completed.';
+    if (message.toLocaleLowerCase().includes('membership_required') || message.toLocaleLowerCase().includes('active membership')) {
+      router.push('/membership');
+      return;
+    }
+    setError(message);
+  };
+
   useEffect(() => () => {
     senderController.current?.abort();
     void deviceTransferService.stopReceiver().catch((stopError: unknown) => {
@@ -59,7 +68,7 @@ export function DeviceTransferPanel() {
     setError(undefined);
     setNotice(undefined);
     if (!auth.session) {
-      auth.openSignInSheet();
+      router.push('/membership');
       return;
     }
     if (!isOnline) {
@@ -81,14 +90,14 @@ export function DeviceTransferPanel() {
           setProgress(undefined);
           setNotice(`${title} was verified and added to Received.`);
         },
-        onError: setError,
+        onError: handleTransferError,
       });
       setReceiveCode(receiver.code);
       setReceiveExpiresAt(receiver.expiresAt);
       setIsReceiving(true);
       setNotice('Keep this screen open and share the receive code with the sender on the same Wi-Fi or hotspot.');
     } catch (startError) {
-      setError(startError instanceof Error ? startError.message : 'The receive session could not be started.');
+      handleTransferError(startError);
     }
   };
 
@@ -110,7 +119,7 @@ export function DeviceTransferPanel() {
     setError(undefined);
     setNotice(undefined);
     if (!auth.session) {
-      auth.openSignInSheet();
+      router.push('/membership');
       return;
     }
     if (!isOnline) {
@@ -143,7 +152,7 @@ export function DeviceTransferPanel() {
       });
       setNotice(`${selectedRecord.item.title} was sent and verified by the receiving device.`);
     } catch (sendError) {
-      setError(sendError instanceof Error ? sendError.message : 'The file could not be sent.');
+      handleTransferError(sendError);
     } finally {
       senderController.current = null;
       setProgress(undefined);
@@ -155,11 +164,7 @@ export function DeviceTransferPanel() {
     ? Math.min(100, Math.floor((progress.current / progress.total) * 100))
     : 0;
   const openMemberOptions = () => {
-    if (!auth.session) {
-      auth.openSignInSheet('sign-in');
-      return;
-    }
-    router.push('/(tabs)/profile');
+    router.push('/membership');
   };
 
   return (

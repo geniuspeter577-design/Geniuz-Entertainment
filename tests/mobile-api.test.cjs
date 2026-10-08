@@ -148,10 +148,21 @@ test('Football Home category shows score states and notes without match stream a
 
 test('transfer panel explains Member access and routes visitors to sign-in or the existing Member card', () => {
   const panel = fs.readFileSync('src/components/downloads/DeviceTransferPanel.tsx', 'utf8');
+  const memberPage = fs.readFileSync('app/membership.tsx', 'utf8');
+  const profile = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
   assert.match(panel, /Transfer is for Members/);
-  assert.match(panel, /auth\.openSignInSheet\('sign-in'\)/);
-  assert.match(panel, /router\.push\('\/\(tabs\)\/profile'\)/);
+  assert.match(panel, /router\.push\('\/membership'\)/);
   assert.match(panel, /Both sending and receiving require active Member access/);
+  assert.match(memberPage, /Become a Member/);
+  assert.match(memberPage, /loadMemberPlan|useMembership/);
+  assert.match(memberPage, /Sign in to continue/);
+  assert.match(memberPage, /createMemberCheckout/);
+  assert.match(memberPage, /Payment pending/);
+  assert.match(memberPage, /You are a Member until/);
+  assert.match(memberPage, /eligible to earn are coming soon/);
+  assert.doesNotMatch(memberPage, /NGN\s+900/);
+  assert.match(profile, /useMembership\(\)/);
+  assert.match(profile, /Member until \$\{formatMembershipDate/);
 });
 
 test('mobile Geniuz repository rejects malformed normalized responses', async () => {

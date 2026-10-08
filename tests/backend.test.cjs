@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const { createHmac } = require('node:crypto');
 const fs = require('node:fs');
 const { once } = require('node:events');
 const { test } = require('node:test');
@@ -9,6 +10,8 @@ const { TMDBContentRepository } = require('../.test-build/backend/backend/src/re
 const { MemoryCache } = require('../.test-build/backend/backend/src/repositories/MemoryCache.js');
 const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
 const { FootballMatchesService } = require('../.test-build/backend/backend/src/services/FootballMatchesService.js');
+const { MembershipService, getMembershipAccessStatus } = require('../.test-build/backend/backend/src/services/MembershipService.js');
+const { PaystackService, isValidPaystackSignature } = require('../.test-build/backend/backend/src/services/PaystackService.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
 const requestFetch = global.fetch;
@@ -117,6 +120,13 @@ async function startApi(options = {}) {
     anilistApiUrl: 'https://anilist.example.test/graphql',
     corsOrigins: options.corsOrigins ?? ['http://localhost:8081'],
     cacheTtlSeconds: 30,
+    membershipPriceNgn: options.membershipPriceNgn ?? 900,
+    membershipGraceDays: options.membershipGraceDays ?? 3,
+    subscription1500Enabled: options.subscription1500Enabled ?? false,
+    dedicatedAccountEnabled: options.dedicatedAccountEnabled ?? false,
+    ...(options.paystackSecretKey ? { paystackSecretKey: options.paystackSecretKey } : {}),
+    ...(options.supabaseServiceRoleKey ? { supabaseServiceRoleKey: options.supabaseServiceRoleKey } : {}),
+    ...(options.membershipCronSecret ? { membershipCronSecret: options.membershipCronSecret } : {}),
     ...(Object.hasOwn(options, 'footballDataApiKey')
       ? { footballDataApiKey: options.footballDataApiKey }
       : {}),
@@ -135,7 +145,10 @@ async function startApi(options = {}) {
   const server = createApiServer(
     config,
     new ContentService(repository, 30_000),
-    options.footballMatchesService ? { footballMatchesService: options.footballMatchesService } : undefined,
+    {
+      ...(options.footballMatchesService ? { footballMatchesService: options.footballMatchesService } : {}),
+      ...(options.membershipService ? { membershipService: options.membershipService } : {}),
+    },
   );
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
@@ -191,6 +204,37 @@ async function startTransferApi(context, activeMember = false) {
   });
   context.after(api.close);
   return { api, originalFetch: requestFetch, calls };
+}
+
+function makeMembershipOperations() {
+  const seenEvents = new Set();
+  const calls = { checkout: [], webhooks: 0 };
+  return {
+    calls,
+    getPlan: () => ({ id: 'member', name: 'Member', currency: 'NGN', priceNgn: 900, amountKobo: 90_000, intervalMonths: 1 }),
+    getStatus: async () => ({ status: 'visitor' }),
+    createCheckout: async (userId, email) => {
+      calls.checkout.push({ userId, email });
+      return {
+        authorizationUrl: 'https://checkout.paystack.com/test-session',
+        accessCode: 'test-access-code',
+        reference: 'geniuz-test-reference',
+        amountKobo: 90_000,
+        currency: 'NGN',
+      };
+    },
+    processWebhook: async (event, payload) => {
+      calls.webhooks += 1;
+      if (seenEvents.has(event.id)) {
+        return { status: 'duplicate' };
+      }
+      seenEvents.add(event.id);
+      const data = payload.data;
+      return { status: event.event === 'charge.success' && data.amount === 90_000 ? 'activated' : 'wrong_amount' };
+    },
+    refund: async (_adminUserId, reference) => ({ status: 'refunded', reference }),
+    runDailyMaintenance: async () => ({ checked: 0, remindersCreated: 0 }),
+  };
 }
 
 test('upload preflight allows the configured app origin and auth headers', async (context) => {
@@ -910,6 +954,227 @@ test('health endpoint does not require catalog credentials', async (context) => 
   const response = await fetch(`http://127.0.0.1:${server.address().port}/health`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', service: 'geniuz-api' });
+});
+
+test('membership plan price comes from backend configuration and exposes only Visitor and Member', async (context) => {
+  const api = await startApi({ membershipPriceNgn: 1250 });
+  context.after(api.close);
+
+  const response = await fetch(`${api.baseUrl}/api/membership/plan`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.plans.map(({ id }) => id), ['visitor', 'member']);
+  assert.equal(body.plans[1].priceNgn, 1250);
+});
+
+test('membership defaults to NGN 900 monthly, three grace days, and a disabled legacy plan', () => {
+  const config = loadConfig({});
+  assert.equal(config.membershipPriceNgn, 900);
+  assert.equal(config.membershipGraceDays, 3);
+  assert.equal(config.subscription1500Enabled, false);
+  assert.equal(config.dedicatedAccountEnabled, false);
+  assert.equal(loadConfig({ MEMBERSHIP_PRICE_NGN: '1250', MEMBERSHIP_GRACE_DAYS: '5' }).membershipPriceNgn, 1250);
+});
+
+test('Paystack checkout uses server-provided NGN kobo amount and card/bank transfer in TEST mode', async () => {
+  let request;
+  const paystack = new PaystackService('sk_test_payments', async (url, init) => {
+    request = { url: String(url), init };
+    return makeResponse({
+      status: true,
+      data: { authorization_url: 'https://checkout.paystack.com/session', access_code: 'access', reference: 'server-ref' },
+    });
+  });
+  const result = await paystack.initializeTransaction({ email: 'member@example.test', amountKobo: 90_000, reference: 'server-ref' });
+  const body = JSON.parse(request.init.body);
+  assert.equal(result.authorizationUrl, 'https://checkout.paystack.com/session');
+  assert.equal(body.amount, 90_000);
+  assert.equal(body.currency, 'NGN');
+  assert.deepEqual(body.channels, ['card', 'bank_transfer']);
+  assert.equal(Object.hasOwn(body, 'plan'), false);
+  assert.equal(new Headers(request.init.headers).get('Authorization'), 'Bearer sk_test_payments');
+
+  const liveKeyService = new PaystackService('sk_live_not_allowed', async () => {
+    throw new Error('Live mode must never be called.');
+  });
+  await assert.rejects(
+    liveKeyService.initializeTransaction({ email: 'member@example.test', amountKobo: 90_000, reference: 'server-ref' }),
+    (error) => error.code === 'NOT_CONFIGURED',
+  );
+});
+
+test('membership checkout requires sign-in and ignores client-supplied amounts', async (context) => {
+  const originalFetch = global.fetch;
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/auth/v1/user') {
+      return makeResponse({
+        id: '00000000-0000-4000-8000-000000000031',
+        email: 'member@example.test',
+        app_metadata: { role: 'user' },
+      });
+    }
+    return makeResponse({}, 404);
+  };
+  context.after(() => { global.fetch = originalFetch; });
+  const membershipService = makeMembershipOperations();
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+    membershipService,
+  });
+  context.after(api.close);
+
+  const signedOut = await originalFetch(`${api.baseUrl}/api/membership/create-checkout`, { method: 'POST' });
+  assert.equal(signedOut.status, 401);
+  const response = await originalFetch(`${api.baseUrl}/api/membership/create-checkout`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer test-access-token', 'Content-Type': 'application/json' },
+    body: JSON.stringify({ amount: 1, amountKobo: 1, priceNgn: 1 }),
+  });
+  assert.equal(response.status, 201);
+  assert.equal((await response.json()).amountKobo, 90_000);
+  assert.deepEqual(membershipService.calls.checkout, [{
+    userId: '00000000-0000-4000-8000-000000000031',
+    email: 'member@example.test',
+  }]);
+});
+
+test('Paystack webhook rejects a bad signature before processing', async (context) => {
+  const membershipService = makeMembershipOperations();
+  const api = await startApi({ paystackSecretKey: 'sk_test_example', membershipService });
+  context.after(api.close);
+  const response = await fetch(`${api.baseUrl}/webhooks/paystack`, {
+    method: 'POST',
+    headers: { 'x-paystack-signature': '0'.repeat(128), 'Content-Type': 'application/json' },
+    body: JSON.stringify({ event: 'charge.success', data: { id: 12, reference: 'ref-1' } }),
+  });
+  assert.equal(response.status, 401);
+  assert.equal((await response.json()).error.code, 'INVALID_PAYSTACK_SIGNATURE');
+  assert.equal(membershipService.calls.webhooks, 0);
+});
+
+test('Paystack HMAC signatures are valid only for exact payloads and TEST keys', () => {
+  const secret = 'sk_test_hmac_secret';
+  const body = Buffer.from('{"event":"charge.success"}');
+  const signature = createHmac('sha512', secret).update(body).digest('hex');
+  assert.equal(isValidPaystackSignature(body, signature, secret), true);
+  assert.equal(isValidPaystackSignature(Buffer.from('{"event":"charge.failed"}'), signature, secret), false);
+  assert.equal(isValidPaystackSignature(body, signature, 'sk_live_not_allowed'), false);
+});
+
+test('Paystack webhook is idempotent and distinguishes success from a wrong amount', async (context) => {
+  const secret = 'sk_test_webhook_secret';
+  const membershipService = makeMembershipOperations();
+  const api = await startApi({ paystackSecretKey: secret, membershipService });
+  context.after(api.close);
+  const postEvent = async (id, amount) => {
+    const body = JSON.stringify({ event: 'charge.success', data: { id, reference: `ref-${id}`, amount } });
+    const signature = createHmac('sha512', secret).update(body).digest('hex');
+    return fetch(`${api.baseUrl}/webhooks/paystack`, {
+      method: 'POST',
+      headers: { 'x-paystack-signature': signature, 'Content-Type': 'application/json' },
+      body,
+    });
+  };
+  const success = await postEvent(401, 90_000);
+  assert.equal((await success.json()).status, 'activated');
+  const duplicate = await postEvent(401, 90_000);
+  assert.equal((await duplicate.json()).status, 'duplicate');
+  const wrongAmount = await postEvent(402, 1);
+  assert.equal((await wrongAmount.json()).status, 'wrong_amount');
+  assert.equal(membershipService.calls.webhooks, 3);
+});
+
+test('membership service verifies success with Paystack before applying the event to the ledger RPC', async () => {
+  const secret = 'sk_test_verify_secret';
+  const requests = [];
+  const rpcCalls = [];
+  const adminClient = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+    }),
+    rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      return { data: 'activated', error: null };
+    },
+  };
+  const paystack = new PaystackService(secret, async (input, init) => {
+    requests.push({ url: String(input), init });
+    return makeResponse({
+      status: true,
+      data: { status: 'success', reference: 'verify-reference', amount: 90_000, currency: 'NGN', channel: 'card' },
+    });
+  });
+  const membership = new MembershipService(loadConfig({ MEMBERSHIP_GRACE_DAYS: '3' }), { adminClient, paystack });
+  const result = await membership.processWebhook(
+    { id: 'event-900', event: 'charge.success', data: { reference: 'verify-reference' } },
+    { event: 'charge.success', data: { reference: 'verify-reference', amount: 1 } },
+  );
+
+  assert.equal(result.status, 'activated');
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].url, /transaction\/verify\/verify-reference$/);
+  assert.equal(new Headers(requests[0].init.headers).get('Authorization'), `Bearer ${secret}`);
+  assert.equal(rpcCalls[0].name, 'apply_paystack_event');
+  assert.equal(rpcCalls[0].args.p_verified_amount_kobo, 90_000);
+  assert.equal(rpcCalls[0].args.p_grace_days, 3);
+});
+
+test('membership service forwards Paystack verified wrong amount for database rejection', async () => {
+  const rpcCalls = [];
+  const adminClient = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }),
+    }),
+    rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      return { data: 'wrong_amount', error: null };
+    },
+  };
+  const paystack = new PaystackService('sk_test_verify_secret', async () => makeResponse({
+    status: true,
+    data: { status: 'success', reference: 'wrong-reference', amount: 1, currency: 'NGN' },
+  }));
+  const membership = new MembershipService(loadConfig({}), { adminClient, paystack });
+  const result = await membership.processWebhook(
+    { id: 'event-901', event: 'charge.success', data: { reference: 'wrong-reference' } },
+    { event: 'charge.success', data: { reference: 'wrong-reference', amount: 90_000 } },
+  );
+  assert.equal(result.status, 'wrong_amount');
+  assert.equal(rpcCalls[0].args.p_verified_amount_kobo, 1);
+});
+
+test('membership period status covers active, grace, and expired states', () => {
+  const now = new Date('2026-10-08T00:00:00.000Z');
+  assert.equal(getMembershipAccessStatus(null, now), 'visitor');
+  assert.equal(getMembershipAccessStatus({
+    status: 'active', current_period_end: '2026-10-09T00:00:00.000Z', grace_until: '2026-10-12T00:00:00.000Z',
+  }, now), 'active');
+  assert.equal(getMembershipAccessStatus({
+    status: 'active', current_period_end: '2026-10-07T00:00:00.000Z', grace_until: '2026-10-11T00:00:00.000Z',
+  }, now), 'grace');
+  assert.equal(getMembershipAccessStatus({
+    status: 'active', current_period_end: '2026-10-07T00:00:00.000Z', grace_until: '2026-10-07T12:00:00.000Z',
+  }, now), 'expired');
+});
+
+test('membership migration verifies event idempotency, amount, activation, ledger, RLS, and grace', () => {
+  const migration = fs.readFileSync('supabase/migrations/20261022000000_memberships_payments.sql', 'utf8');
+  assert.match(migration, /create table if not exists public\.memberships/);
+  assert.match(migration, /create table if not exists public\.payments[\s\S]*reference text not null unique/);
+  assert.match(migration, /create table if not exists public\.revenue_ledger[\s\S]*amount_kobo bigint/);
+  assert.match(migration, /create table if not exists public\.refunds/);
+  assert.match(migration, /create table if not exists public\.membership_audit_log/);
+  assert.match(migration, /create table if not exists public\.webhook_events[\s\S]*event_id text primary key/);
+  assert.match(migration, /revoke all on public\.memberships, public\.payments[\s\S]*from anon, authenticated/);
+  assert.match(migration, /grant all on public\.memberships, public\.payments[\s\S]*to service_role/);
+  assert.match(migration, /using \(user_id = \(select auth\.uid\(\)\)\)/);
+  assert.match(migration, /on conflict \(event_id\) do nothing/);
+  assert.match(migration, /p_verified_currency <> 'NGN' or p_verified_amount_kobo <> payment_row\.amount_kobo/);
+  assert.match(migration, /insert into public\.revenue_ledger/);
+  assert.match(migration, /'Welcome, Member'/);
+  assert.match(migration, /public\.has_active_membership\(p_user_id uuid\)[\s\S]*m\.grace_until > now\(\)/);
 });
 
 test('football matches endpoint validates and returns a real calendar date', async (context) => {

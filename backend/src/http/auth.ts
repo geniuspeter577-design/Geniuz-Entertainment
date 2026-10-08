@@ -55,6 +55,7 @@ export async function authenticatePlayback(
     client,
     isAdmin: data.user.app_metadata?.role === 'admin',
     userId: data.user.id,
+    email: data.user.email,
   };
 }
 

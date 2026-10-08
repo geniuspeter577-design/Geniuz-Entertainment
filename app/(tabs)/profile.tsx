@@ -19,8 +19,10 @@ import type { AppNotification } from '../../src/services/NotificationsStore';
 import { loadNotifications } from '../../src/services/NotificationsStore';
 import { useAuth } from '../../src/state/AuthContext';
 import { useLibrary } from '../../src/state/LibraryContext';
+import { useMembership } from '../../src/hooks/useMembership';
 import { theme } from '../../src/theme';
 import { getProfileInitial } from '../../src/utils/accountAuth';
+import { formatMembershipDate } from '../../src/utils/membership';
 import { getMeScreenData, getShortPublicId } from '../../src/utils/meScreen';
 
 const officialSiteUrl = process.env.EXPO_PUBLIC_OFFICIAL_SITE_URL?.trim();
@@ -51,11 +53,24 @@ function MeRow({ icon, title, subtitle, onPress, trailing }: MeRowProps) {
 export default function ProfileScreen() {
   const auth = useAuth();
   const library = useLibrary();
+  const membership = useMembership();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notificationError, setNotificationError] = useState<string>();
   const [profileMessage, setProfileMessage] = useState<string>();
   const meData = getMeScreenData(library, notifications);
+  const hasMemberAccess = membership.status?.status === 'active' || membership.status?.status === 'grace';
+  const memberCardSubtitle = membership.isLoading || auth.isLoading
+    ? 'Loading membership status…'
+    : membership.status?.pendingPayment
+      ? 'Payment pending'
+      : membership.status?.status === 'active'
+        ? `Member until ${formatMembershipDate(membership.status.currentPeriodEnd)}`
+        : membership.status?.status === 'grace'
+          ? `Grace period until ${formatMembershipDate(membership.status.graceUntil)}`
+          : membership.error
+            ? 'Membership status unavailable'
+            : 'Become a Member';
 
   useFocusEffect(
     useCallback(() => {
@@ -121,10 +136,6 @@ export default function ProfileScreen() {
         error instanceof Error ? error.message : 'Please try again.',
       );
     }
-  };
-
-  const showComingSoon = (feature: string) => {
-    Alert.alert(feature, 'Coming soon');
   };
 
   const displayName = auth.session
@@ -201,6 +212,7 @@ export default function ProfileScreen() {
 
         {auth.isLoading ? <ContentNotice message="Loading your account…" /> : null}
         {auth.profileError ? <ContentNotice message={auth.profileError} tone="error" /> : null}
+        {membership.error ? <ContentNotice message={membership.error} tone="error" /> : null}
         {notificationError ? <ContentNotice message={notificationError} tone="error" /> : null}
         {library.error ? (
           <ContentNotice
@@ -220,19 +232,18 @@ export default function ProfileScreen() {
           />
         </View>
 
-        {/* TODO: Keep this visual-only until membership and payment requirements are defined. */}
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Member card, coming soon"
-          onPress={() => showComingSoon('Membership')}
-          style={styles.memberCard}
+          accessibilityLabel={hasMemberAccess ? 'Member status' : 'View membership'}
+          onPress={() => router.push('/membership')}
+          style={[styles.memberCard, !hasMemberAccess && styles.visitorMemberCard]}
         >
           <View style={styles.memberTopLine}>
-            <Ionicons name="star" size={18} color={theme.gold} />
-            <Text style={styles.memberEyebrow}>MEMBER</Text>
+            <Ionicons name={hasMemberAccess ? 'star' : 'person-outline'} size={18} color={hasMemberAccess ? theme.gold : theme.accent} />
+            <Text style={[styles.memberEyebrow, !hasMemberAccess && styles.visitorMemberEyebrow]}>{hasMemberAccess ? 'MEMBER' : 'VISITOR'}</Text>
           </View>
-          <Text style={styles.memberTitle}>Geniuz+ membership</Text>
-          <Text style={styles.memberSubtitle}>Membership benefits are coming soon.</Text>
+          <Text style={[styles.memberTitle, !hasMemberAccess && styles.visitorMemberTitle]}>Geniuz+ membership</Text>
+          <Text style={styles.memberSubtitle}>{memberCardSubtitle}</Text>
         </Pressable>
 
         <View style={styles.historySection}>
@@ -411,9 +422,12 @@ const styles = StyleSheet.create({
     padding: 17,
     marginBottom: 14,
   },
+  visitorMemberCard: { borderColor: theme.border },
   memberTopLine: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   memberEyebrow: { color: theme.gold, fontSize: 11, fontWeight: '900', letterSpacing: 1.3 },
+  visitorMemberEyebrow: { color: theme.accent },
   memberTitle: { color: theme.gold, fontSize: 19, fontWeight: '800' },
+  visitorMemberTitle: { color: theme.text },
   memberSubtitle: { color: theme.secondaryText, fontSize: 12, marginTop: 5 },
   historySection: {
     backgroundColor: theme.surface,

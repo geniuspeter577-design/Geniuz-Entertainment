@@ -1,5 +1,5 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { Config } from '../config/config';
@@ -23,6 +23,8 @@ import { ContentNotFoundError, ContentService } from '../services/ContentService
 import { FootballMatchesService } from '../services/FootballMatchesService';
 import { FootballDataProvider } from '../providers/FootballDataProvider';
 import { SportsProviderError } from '../providers/SportsProvider';
+import { isValidPaystackSignature } from '../services/PaystackService';
+import { MembershipService, type MembershipOperations } from '../services/MembershipService';
 import { authenticateAdmin, authenticatePlayback, requirePublishedOrAdmin } from './auth';
 import { HttpError, mapProviderError } from './errors';
 
@@ -30,6 +32,7 @@ const MAX_PAGE = 500;
 const MAX_QUERY_LENGTH = 120;
 const MAX_GENRE_LENGTH = 80;
 const MAX_JSON_BODY_BYTES = 256 * 1024;
+const MAX_WEBHOOK_BODY_BYTES = 1024 * 1024;
 const CORS_METHODS = 'GET, POST, PUT, DELETE, OPTIONS';
 const CORS_HEADERS = ['authorization', 'content-type', 'apikey', 'x-client-info'];
 const publicRateLimit = new Map<string, { count: number; windowStart: number }>();
@@ -47,6 +50,7 @@ type UnusedMediaScan = {
 type ApiServerOptions = {
   storageFactory?: StorageFactory;
   footballMatchesService?: FootballMatchesService;
+  membershipService?: MembershipOperations;
   now?: () => number;
 };
 
@@ -241,6 +245,26 @@ async function readJson(request: IncomingMessage): Promise<Record<string, unknow
   return value as Record<string, unknown>;
 }
 
+async function readRawBody(request: IncomingMessage, maximumBytes: number) {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of request) {
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maximumBytes) {
+      throw new HttpError(413, 'REQUEST_TOO_LARGE', 'The request is too large.');
+    }
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
+function constantTimeStringEqual(left: string, right: string) {
+  const leftHash = createHash('sha256').update(left).digest();
+  const rightHash = createHash('sha256').update(right).digest();
+  return timingSafeEqual(leftHash, rightHash);
+}
+
 function requiredString(body: Record<string, unknown>, field: string, maximumLength = 2048) {
   const value = body[field];
   if (typeof value !== 'string' || !value.trim() || value.length > maximumLength) {
@@ -290,6 +314,7 @@ async function handleRequest(
   config: Config,
   content: ContentService,
   footballMatches: FootballMatchesService,
+  membership: MembershipOperations,
   getStorage: StorageFactory,
   unusedMediaScans: Map<string, UnusedMediaScan>,
   activeMultipartUploads: Set<string>,
@@ -1055,6 +1080,114 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/membership/plan') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    writeJson(response, 200, {
+      plans: [
+        { id: 'visitor', name: 'Visitor', priceNgn: 0, intervalMonths: 0 },
+        membership.getPlan(),
+      ],
+    });
+    return;
+  }
+
+  if (pathname === '/api/membership/status') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, userId } = await authenticatePlayback(config, request.headers.authorization);
+    if (!userId) {
+      throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to check membership status.');
+    }
+    writeJson(response, 200, await membership.getStatus(client, userId));
+    return;
+  }
+
+  if (pathname === '/api/membership/create-checkout') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { userId, email } = await authenticatePlayback(config, request.headers.authorization);
+    if (!userId) {
+      throw new HttpError(401, 'UNAUTHENTICATED', 'Sign in to become a Member.');
+    }
+    if (!email) {
+      throw new HttpError(400, 'EMAIL_REQUIRED', 'Add an email address to your account before checkout.');
+    }
+    writeJson(response, 201, await membership.createCheckout(userId, email));
+    return;
+  }
+
+  if (pathname === '/webhooks/paystack') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    if (!config.paystackSecretKey?.startsWith('sk_test_')) {
+      throw new HttpError(503, 'PAYSTACK_TEST_NOT_CONFIGURED', 'Paystack TEST mode is not configured.');
+    }
+    const rawBody = await readRawBody(request, MAX_WEBHOOK_BODY_BYTES);
+    const signatureHeader = request.headers['x-paystack-signature'];
+    const signature = typeof signatureHeader === 'string' ? signatureHeader : undefined;
+    if (!isValidPaystackSignature(rawBody, signature, config.paystackSecretKey)) {
+      throw new HttpError(401, 'INVALID_PAYSTACK_SIGNATURE', 'The Paystack signature is invalid.');
+    }
+    let payload: unknown;
+    try {
+      payload = JSON.parse(rawBody.toString('utf8'));
+    } catch {
+      throw new HttpError(400, 'INVALID_WEBHOOK', 'The Paystack event body is invalid.');
+    }
+    if (
+      typeof payload !== 'object' || payload === null || Array.isArray(payload) ||
+      typeof (payload as Record<string, unknown>).event !== 'string' ||
+      typeof (payload as Record<string, unknown>).data !== 'object' ||
+      (payload as Record<string, unknown>).data === null
+    ) {
+      throw new HttpError(400, 'INVALID_WEBHOOK', 'The Paystack event body is invalid.');
+    }
+    const body = payload as Record<string, unknown>;
+    const data = body.data as Record<string, unknown>;
+    const eventId = typeof data.id === 'string' || typeof data.id === 'number' ? String(data.id) : '';
+    const reference = typeof data.reference === 'string' ? data.reference.trim() : '';
+    if (!eventId || !reference) {
+      throw new HttpError(400, 'INVALID_WEBHOOK', 'The Paystack event is missing its ID or reference.');
+    }
+    writeJson(response, 200, await membership.processWebhook(
+      { id: eventId, event: body.event as string, data: { reference } },
+      body,
+    ));
+    return;
+  }
+
+  if (pathname === '/admin/memberships/refund') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { userId } = await authenticateAdmin(config, request.headers.authorization);
+    const body = await readJson(request);
+    const reference = requiredString(body, 'reference', 120);
+    const reason = requiredString(body, 'reason', 500);
+    writeJson(response, 200, await membership.refund(userId, reference, reason));
+    return;
+  }
+
+  if (pathname === '/internal/membership/daily') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const suppliedSecret = request.headers['x-membership-cron-secret'];
+    if (!config.membershipCronSecret) {
+      throw new HttpError(503, 'MEMBERSHIP_JOB_NOT_CONFIGURED', 'Membership maintenance is not configured.');
+    }
+    if (typeof suppliedSecret !== 'string' || !constantTimeStringEqual(suppliedSecret, config.membershipCronSecret)) {
+      throw new HttpError(401, 'UNAUTHENTICATED', 'The membership job credential is invalid.');
+    }
+    writeJson(response, 200, await membership.runDailyMaintenance());
+    return;
+  }
+
   if (pathname === '/api/playback/session') {
     if (request.method !== 'POST') {
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
@@ -1149,12 +1282,13 @@ export function createApiServer(config: Config, content: ContentService, options
   const unusedMediaScans = new Map<string, UnusedMediaScan>();
   const activeMultipartUploads = new Set<string>();
   const now = options.now ?? Date.now;
+  const membership = options.membershipService ?? new MembershipService(config);
   const footballMatches = options.footballMatchesService ?? new FootballMatchesService(
     new FootballDataProvider(config.footballDataApiKey),
     now,
   );
   return createServer((request, response) => {
-    void handleRequest(request, response, config, content, footballMatches, getStorage, unusedMediaScans, activeMultipartUploads, now).catch((error: unknown) => {
+    void handleRequest(request, response, config, content, footballMatches, membership, getStorage, unusedMediaScans, activeMultipartUploads, now).catch((error: unknown) => {
       const httpError =
         error instanceof HttpError
           ? error
