@@ -5,7 +5,13 @@ import type { ContentItem } from '../models/content';
 import { downloadInOrder } from '../utils/downloadQueue';
 import { formatFileSize } from '../utils/formatFileSize.cjs';
 
-export type OfflineDownloadStatus = 'queued' | 'downloading' | 'downloaded' | 'failed' | 'canceled';
+export type OfflineDownloadStatus =
+  | 'queued'
+  | 'downloading'
+  | 'paused'
+  | 'downloaded'
+  | 'failed'
+  | 'canceled';
 
 export type OfflineDownloadRecord = {
   item: ContentItem;
@@ -24,6 +30,9 @@ export type DownloadStorage = {
 
 export type DownloadTask = {
   downloadAsync(): Promise<{ uri: string } | null>;
+  pauseAsync?(): Promise<void>;
+  resumeAsync?(): Promise<{ uri: string } | null>;
+  cancel?(): void;
 };
 
 export type DownloadFileSystem = {
@@ -65,6 +74,7 @@ function isDownloadRecord(value: unknown): value is OfflineDownloadRecord {
     value.size > 0 &&
     (value.status === 'queued' ||
       value.status === 'downloading' ||
+      value.status === 'paused' ||
       value.status === 'downloaded' ||
       value.status === 'failed' ||
       value.status === 'canceled') &&
@@ -81,7 +91,14 @@ export class OfflineDownloadService {
   private readonly listeners = new Set<(records: OfflineDownloadRecord[]) => void>();
   private readonly activeDownloads = new Map<
     string,
-    { controller: AbortController; operation?: Promise<void>; size: number }
+    {
+      controller: AbortController;
+      operation?: Promise<void>;
+      size: number;
+      task?: DownloadTask;
+      resolveResume?: () => void;
+      rejectResume?: (error: Error) => void;
+    }
   >();
   private writeQueue: Promise<void> = Promise.resolve();
 
@@ -123,7 +140,12 @@ export class OfflineDownloadService {
 
     const restored: OfflineDownloadRecord[] = [];
     for (const record of savedDownloads) {
-      if (record.status === 'downloading') {
+      if (
+        (record.status === 'downloading' || record.status === 'paused') &&
+        this.activeDownloads.has(record.item.id)
+      ) {
+        restored.push(record);
+      } else if (record.status === 'downloading' || record.status === 'paused') {
         if (this.fileSystem.fileExists(record.filePath)) {
           this.fileSystem.deleteFile(record.filePath);
         }
@@ -248,6 +270,9 @@ export class OfflineDownloadService {
       controller: AbortController;
       operation?: Promise<void>;
       size: number;
+      task?: DownloadTask;
+      resolveResume?: () => void;
+      rejectResume?: (error: Error) => void;
     } = {
       controller: new AbortController(),
       size,
@@ -272,7 +297,33 @@ export class OfflineDownloadService {
       return;
     }
     active.controller.abort();
+    active.task?.cancel?.();
+    active.rejectResume?.(new Error('Download canceled.'));
     await active.operation;
+  }
+
+  async pause(itemId: string) {
+    const active = this.activeDownloads.get(itemId);
+    if (!active?.task?.pauseAsync || !active.task.resumeAsync) {
+      throw new Error('Pausing is not supported for this download on this device.');
+    }
+    await active.task.pauseAsync();
+    const record = this.records.find((candidate) => candidate.item.id === itemId);
+    if (record?.status === 'downloading') {
+      await this.setRecord({ ...record, status: 'paused' });
+    }
+  }
+
+  async resume(itemId: string) {
+    const active = this.activeDownloads.get(itemId);
+    const record = this.records.find((candidate) => candidate.item.id === itemId);
+    if (!active || !record || record.status !== 'paused' || !active.resolveResume) {
+      throw new Error('This download cannot be resumed. Retry it to start again.');
+    }
+    await this.setRecord({ ...record, status: 'downloading' });
+    active.resolveResume();
+    active.resolveResume = undefined;
+    active.rejectResume = undefined;
   }
 
   async delete(itemId: string) {
@@ -323,11 +374,33 @@ export class OfflineDownloadService {
           this.updateProgress(item.id, progress);
         },
       });
-      let result: { uri: string } | null;
+      const active = this.activeDownloads.get(item.id);
+      if (active) {
+        active.task = task;
+      }
+      let result: { uri: string } | null = null;
       try {
         result = await task.downloadAsync();
+        while (!result && !signal.aborted) {
+          await new Promise<void>((resolve, reject) => {
+            const current = this.activeDownloads.get(item.id);
+            if (!current) {
+              reject(new Error('The download task is no longer active.'));
+              return;
+            }
+            current.resolveResume = resolve;
+            current.rejectResume = reject;
+          });
+          const current = this.activeDownloads.get(item.id);
+          if (!current?.task?.resumeAsync) {
+            throw new Error('This download cannot be resumed. Retry it to start again.');
+          }
+          result = await current.task.resumeAsync();
+        }
       } catch {
-        throw new Error('The download failed. Check your connection and retry.');
+        if (!signal.aborted) {
+          throw new Error('The download failed. Check your connection and retry.');
+        }
       }
       if (!result || signal.aborted) {
         throw new Error('Download canceled.');

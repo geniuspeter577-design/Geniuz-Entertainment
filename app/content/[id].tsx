@@ -168,6 +168,7 @@ export default function ContentDetailsScreen() {
   const saved = media ? library.isInWatchlist(media.id) : false;
   const downloadRecord = downloads.records.find((record) => record.item.id === media?.id);
   const isDownloading = downloadRecord?.status === 'downloading';
+  const isDownloadPaused = downloadRecord?.status === 'paused';
   const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
   const downloadPlatform =
@@ -190,8 +191,10 @@ export default function ContentDetailsScreen() {
     ? 'Downloaded'
     : isDownloading
       ? `${downloadRecord.progress}%`
-      : isQueued
-        ? 'Queued'
+    : isDownloadPaused
+      ? `Paused ${downloadRecord.progress}%`
+    : isQueued
+      ? 'Queued'
       : downloadRecord?.status === 'failed'
         ? 'Retry download'
         : 'Download';
@@ -269,6 +272,12 @@ export default function ContentDetailsScreen() {
     }
   };
   const handleDownload = () => {
+    if (isDownloadPaused) {
+      void downloads.resume(media.id).catch((error: unknown) =>
+        Alert.alert('Download error', error instanceof Error ? error.message : 'Could not resume this download.'),
+      );
+      return;
+    }
     if (isDownloading || isQueued) {
       void downloads.cancel(media.id).catch((error: unknown) =>
         Alert.alert('Download error', error instanceof Error ? error.message : 'Could not cancel this download.'),
@@ -282,7 +291,12 @@ export default function ContentDetailsScreen() {
     if (downloadUnavailableReason) {
       return;
     }
-    void downloads.download(media).catch(() => undefined);
+    void downloads.download(media).catch((error: unknown) =>
+      Alert.alert(
+        'Download error',
+        error instanceof Error ? error.message : 'The download could not be started.',
+      ),
+    );
   };
 
   if (!isOnline) {
@@ -459,6 +473,13 @@ export default function ContentDetailsScreen() {
                         error instanceof Error ? error.message : 'The episode download could not be canceled.',
                       ),
                     );
+                  } else if (record?.status === 'paused') {
+                    void downloads.resume(episode.id).catch((error: unknown) =>
+                      Alert.alert(
+                        'Download error',
+                        error instanceof Error ? error.message : 'The episode download could not be resumed.',
+                      ),
+                    );
                   } else if (record?.status === 'downloaded') {
                     router.push({ pathname: '/watch/[id]', params: { id: episode.id } });
                   } else {
@@ -521,7 +542,20 @@ export default function ContentDetailsScreen() {
         unavailableReason={downloadUnavailableReason}
         onClose={() => setShowDownloadSheet(false)}
         onDownload={() => handleDownload()}
-        onCancel={() => void downloads.cancel(media.id).catch(() => undefined)}
+        onPause={() =>
+          void downloads.pause(media.id).catch((error: unknown) =>
+            Alert.alert('Download error', error instanceof Error ? error.message : 'Could not pause this download.'),
+          )
+        }
+        onResume={() => handleDownload()}
+        onCancel={() =>
+          void downloads.cancel(media.id).catch((error: unknown) =>
+            Alert.alert(
+              'Download error',
+              error instanceof Error ? error.message : 'The download could not be canceled.',
+            ),
+          )
+        }
         onPlayOffline={playTitle}
       />
       {isSeries && selectedSeason ? (
@@ -548,6 +582,22 @@ export default function ContentDetailsScreen() {
                 Alert.alert(
                   'Download error',
                   error instanceof Error ? error.message : 'The episode download could not be canceled.',
+                ),
+              )
+            }
+            onPause={(episodeId) =>
+              void downloads.pause(episodeId).catch((error: unknown) =>
+                Alert.alert(
+                  'Download error',
+                  error instanceof Error ? error.message : 'The episode download could not be paused.',
+                ),
+              )
+            }
+            onResume={(episodeId) =>
+              void downloads.resume(episodeId).catch((error: unknown) =>
+                Alert.alert(
+                  'Download error',
+                  error instanceof Error ? error.message : 'The episode download could not be resumed.',
                 ),
               )
             }

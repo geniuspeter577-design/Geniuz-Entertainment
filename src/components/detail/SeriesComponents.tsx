@@ -98,6 +98,7 @@ export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload
       {ordered.map((episode) => {
         const record = records.find((candidate) => candidate.item.id === episode.id);
         const isDownloading = record?.status === 'downloading';
+        const isPaused = record?.status === 'paused';
         const isQueued = record?.status === 'queued';
         const isDownloaded = record?.status === 'downloaded';
         const hasFailed = record?.status === 'failed' || record?.status === 'canceled';
@@ -129,6 +130,8 @@ export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload
                 accessibilityLabel={
                   isDownloading || isQueued
                     ? `Cancel episode ${episode.episodeNumber} download`
+                    : isPaused
+                      ? `Resume episode ${episode.episodeNumber} download`
                     : isDownloaded
                       ? `Play downloaded episode ${episode.episodeNumber}`
                       : hasFailed
@@ -144,7 +147,9 @@ export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload
                       ? 'checkmark-circle'
                       : isDownloading || isQueued
                         ? 'close'
-                        : hasFailed
+                          : isPaused
+                            ? 'play'
+                          : hasFailed
                           ? 'refresh'
                           : 'download-outline'
                   }
@@ -167,6 +172,8 @@ type SeriesDownloadSheetProps = {
   onClose: () => void;
   onQueue: (episodes: EpisodeItem[]) => void;
   onCancel: (episodeId: string) => void;
+  onPause: (episodeId: string) => void;
+  onResume: (episodeId: string) => void;
 };
 
 export function SeriesDownloadSheet({
@@ -176,6 +183,8 @@ export function SeriesDownloadSheet({
   onClose,
   onQueue,
   onCancel,
+  onPause,
+  onResume,
 }: SeriesDownloadSheetProps) {
   const downloadable = season.episodes.filter((episode) => episode.availability.download);
   const queueable = downloadable.filter(
@@ -185,6 +194,7 @@ export function SeriesDownloadSheet({
           record.item.id === episode.id &&
           (record.status === 'queued' ||
             record.status === 'downloading' ||
+            record.status === 'paused' ||
             record.status === 'downloaded'),
       ),
   );
@@ -243,7 +253,9 @@ export function SeriesDownloadSheet({
               const record = records.find((download) => download.item.id === episode.id);
               const alreadyDownloaded = record?.status === 'downloaded';
               const isActive =
-                record?.status === 'queued' || record?.status === 'downloading';
+                record?.status === 'queued' ||
+                record?.status === 'downloading' ||
+                record?.status === 'paused';
               const checked = selected.some((selectedEpisode) => selectedEpisode.id === episode.id);
               return (
                 <Pressable
@@ -281,16 +293,39 @@ export function SeriesDownloadSheet({
                       {episode.runtimeMinutes ? ` · ${episode.runtimeMinutes} min` : ''}
                       {record?.status === 'queued' ? ' · Queued' : ''}
                       {record?.status === 'downloading' ? ` · ${record.progress}%` : ''}
+                      {record?.status === 'paused' ? ` · Paused at ${record.progress}%` : ''}
                       {record?.status === 'downloaded' ? ' · Downloaded' : ''}
                       {record?.status === 'failed' ? ' · Failed · Retry' : ''}
                       {!episode.availability.download ? ' · Downloads not available' : ''}
                     </Text>
-                    {record?.status === 'downloading' ? (
+                    {record?.status === 'downloading' || record?.status === 'paused' ? (
                       <View style={styles.progressTrack}>
                         <View style={[styles.progressFill, { width: `${record.progress}%` }]} />
                       </View>
                     ) : null}
                   </View>
+                  {record?.status === 'downloading' || record?.status === 'paused' ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={
+                        record.status === 'paused'
+                          ? `Resume episode ${episode.episodeNumber} download`
+                          : `Pause episode ${episode.episodeNumber} download`
+                      }
+                      onPress={() =>
+                        record.status === 'paused'
+                          ? onResume(episode.id)
+                          : onPause(episode.id)
+                      }
+                      style={styles.cancelButton}
+                    >
+                      <Ionicons
+                        name={record.status === 'paused' ? 'play' : 'pause'}
+                        size={17}
+                        color={theme.text}
+                      />
+                    </Pressable>
+                  ) : null}
                   {isActive ? (
                     <Pressable
                       accessibilityRole="button"

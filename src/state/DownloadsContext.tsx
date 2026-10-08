@@ -56,20 +56,21 @@ const service = new OfflineDownloadService(
     if (!supabaseMovieRepository || !item.mediaPath) {
       throw new Error('Connect to the internet to prepare this download.');
     }
-    return item.id.startsWith('geniuz:episode:')
-      ? supabaseMovieRepository.getEpisodePlaybackUrl(item)
-      : supabaseMovieRepository.getPlaybackUrl(item);
+    return supabaseMovieRepository.getDownloadUrl(item);
   },
 );
 
 type DownloadsContextValue = {
   records: OfflineDownloadRecord[];
+  availableSpaceBytes: number | null;
   isLoading: boolean;
   isRefreshing: boolean;
   error?: string;
   download: (item: ContentItem) => Promise<void>;
   downloadSequentially: (items: readonly ContentItem[]) => Promise<void>;
   cancel: (itemId: string) => Promise<void>;
+  pause: (itemId: string) => Promise<void>;
+  resume: (itemId: string) => Promise<void>;
   remove: (itemId: string) => Promise<void>;
   refresh: () => Promise<void>;
   dismissError: () => void;
@@ -119,6 +120,29 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
       unsubscribe();
     };
   }, []);
+
+  const pause = useCallback(async (itemId: string) => {
+    setError(undefined);
+    try {
+      await service.pause(itemId);
+    } catch (pauseError) {
+      console.error('[Downloads] Could not pause this download.', pauseError);
+      setError(pauseError instanceof Error ? pauseError.message : 'The download could not be paused.');
+      throw pauseError;
+    }
+  }, []);
+
+  const resume = useCallback(async (itemId: string) => {
+    setError(undefined);
+    try {
+      await enforceWifiPreference();
+      await service.resume(itemId);
+    } catch (resumeError) {
+      console.error('[Downloads] Could not resume this download.', resumeError);
+      setError(resumeError instanceof Error ? resumeError.message : 'The download could not be resumed.');
+      throw resumeError;
+    }
+  }, [enforceWifiPreference]);
 
   const download = useCallback(async (item: ContentItem) => {
     setError(undefined);
@@ -189,12 +213,17 @@ export function DownloadsProvider({ children }: React.PropsWithChildren) {
     <DownloadsContext.Provider
       value={{
         records,
+        availableSpaceBytes: Number.isFinite(Paths.availableDiskSpace)
+          ? Paths.availableDiskSpace
+          : null,
         isLoading,
         isRefreshing,
         error,
         download,
         downloadSequentially,
         cancel,
+        pause,
+        resume,
         remove,
         refresh,
         dismissError,

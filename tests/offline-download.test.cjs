@@ -20,10 +20,16 @@ function createDownloadService(options = {}) {
   const fileSystem = {
     availableDiskSpace: () => options.availableDiskSpace ?? 4 * 1024 ** 3,
     getFilePath: (item) => `/documents/${item.sourceId}.${item.fileExtension ?? 'mp4'}`,
-    createDownloadTask: (url, filePath, downloadOptions) => ({
-      downloadAsync: () =>
-        new Promise((resolve, reject) => {
+    createDownloadTask: (url, filePath, downloadOptions) => {
+      let finishPausedDownload;
+      return {
+        downloadAsync: () =>
+          new Promise((resolve, reject) => {
           downloadOptions.onProgress({ bytesWritten: 512, totalBytes: 1024 });
+          if (options.pauseDownload) {
+            finishPausedDownload = resolve;
+            return;
+          }
           const abort = () => {
             const error = new Error('aborted');
             error.name = 'AbortError';
@@ -43,8 +49,19 @@ function createDownloadService(options = {}) {
           }
           files.set(filePath, 1024);
           resolve({ uri: filePath });
-        }),
-    }),
+          }),
+        pauseAsync: async () => {
+          if (!options.pauseDownload || !finishPausedDownload) {
+            throw new Error('Download is not pausable.');
+          }
+          finishPausedDownload(null);
+        },
+        resumeAsync: async () => {
+          files.set(filePath, 1024);
+          return { uri: filePath };
+        },
+      };
+    },
     fileExists: (filePath) => files.has(filePath),
     getFileSize: (filePath) => files.get(filePath) ?? null,
     deleteFile: (filePath) => files.delete(filePath),
@@ -170,6 +187,21 @@ test('download service checks free space and prevents duplicate active downloads
   await pending.service.cancel(item.id);
   await operation;
   assert.equal(pending.service.getRecords()[0].status, 'canceled');
+});
+
+test('download service pauses and resumes an active download', async () => {
+  const { service } = createDownloadService({ pauseDownload: true });
+  const item = downloadableItem();
+  const operation = service.download(item);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  await service.pause(item.id);
+  assert.equal(service.getRecords()[0].status, 'paused');
+
+  await service.resume(item.id);
+  await operation;
+  assert.equal(service.getRecords()[0].status, 'downloaded');
+  assert.equal(service.getRecords()[0].size, 1024);
 });
 
 test('download service rejects titles that do not permit offline downloads', async () => {

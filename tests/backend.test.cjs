@@ -400,6 +400,103 @@ test('published B2 episode play URLs are public while unpublished episodes requi
   assert.equal(adminResponse.status, 200);
 });
 
+test('download URLs require the published title download flag for movies and episodes', async (context) => {
+  const originalFetch = global.fetch;
+  const originalCreatePlayUrl = B2StorageService.prototype.createPlayUrl;
+  const movie = {
+    storage_provider: 'b2',
+    storage_key: 'movies/00000000-0000-4000-8000-000000000001.mp4',
+    published: true,
+    allow_download: true,
+    file_size_bytes: 1024,
+    content_type: 'movie',
+    video_path: 'movies/00000000-0000-4000-8000-000000000001.mp4',
+  };
+  const episode = {
+    storage_provider: 'b2',
+    storage_key: 'episodes/00000000-0000-4000-8000-000000000002.mp4',
+    published: true,
+    allow_download: true,
+    file_size_bytes: 2048,
+  };
+  let requestedKeys = [];
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/rest/v1/movies') {
+      assert.match(url.searchParams.get('select'), /allow_download/);
+      return makeResponse(movie);
+    }
+    if (url.pathname === '/rest/v1/episodes') {
+      assert.match(url.searchParams.get('select'), /allow_download/);
+      return makeResponse(episode);
+    }
+    if (url.pathname.startsWith('/storage/v1/object/sign/movie-assets/')) {
+      return makeResponse({
+        signedURL: `${url.pathname.replace('/storage/v1', '')}?token=signed`,
+      });
+    }
+    return makeResponse({}, 404);
+  };
+  B2StorageService.prototype.createPlayUrl = async (key) => {
+    requestedKeys.push(key);
+    return `https://b2.example.test/${key}?signed=true`;
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+    B2StorageService.prototype.createPlayUrl = originalCreatePlayUrl;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+    storage: {
+      s3Endpoint: 'https://s3.example.test',
+      s3Region: 'us-east-1',
+      s3AccessKeyId: 'test-key',
+      s3SecretAccessKey: 'test-secret',
+      s3Bucket: 'test-bucket',
+    },
+  });
+  context.after(api.close);
+
+  const authorizeDownload = (contentKind, contentId) =>
+    originalFetch(`${api.baseUrl}/api/downloads/authorize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contentKind, contentId }),
+    });
+  const movieResponse = await authorizeDownload(
+    'movie',
+    '00000000-0000-4000-8000-000000000001',
+  );
+  assert.equal(movieResponse.status, 200);
+  assert.equal((await movieResponse.json()).fileSizeBytes, 1024);
+  const episodeResponse = await authorizeDownload(
+    'episode',
+    '00000000-0000-4000-8000-000000000002',
+  );
+  assert.equal(episodeResponse.status, 200);
+  assert.equal((await episodeResponse.json()).fileSizeBytes, 2048);
+  assert.equal(requestedKeys.length, 2);
+
+  movie.storage_provider = 'supabase';
+  const supabaseResponse = await authorizeDownload(
+    'movie',
+    '00000000-0000-4000-8000-000000000001',
+  );
+  assert.equal(supabaseResponse.status, 200);
+  assert.match((await supabaseResponse.json()).url, /^https:\/\/supabase\.example\.test\/storage\/v1\/object\/sign\//);
+
+  movie.allow_download = false;
+  const deniedResponse = await authorizeDownload(
+    'movie',
+    '00000000-0000-4000-8000-000000000001',
+  );
+  assert.equal(deniedResponse.status, 403);
+  assert.equal((await deniedResponse.json()).error.code, 'DOWNLOAD_NOT_ALLOWED');
+  assert.equal(requestedKeys.length, 2);
+});
+
 test('system status is admin-only and reports only check states', async (context) => {
   const originalFetch = global.fetch;
   const originalCheckBucket = B2StorageService.prototype.checkBucket;
@@ -630,7 +727,7 @@ test('trending and genre endpoints use server-side cache', async (context) => {
   assert.equal([...api.calls].find(([path]) => path.endsWith('/genre/tv/list'))?.[1], 1);
 });
 
-test('playback and downloads are explicitly unavailable without a licensed provider', async (context) => {
+test('playback and download authorization report missing provider configuration', async (context) => {
   context.mock.method(console, 'error', () => {});
   const api = await startApi();
   context.after(api.close);
@@ -638,7 +735,7 @@ test('playback and downloads are explicitly unavailable without a licensed provi
   const playback = await fetch(`${api.baseUrl}/api/playback/session`, { method: 'POST' });
   const downloads = await fetch(`${api.baseUrl}/api/downloads/authorize`, { method: 'POST' });
   assert.equal(playback.status, 501);
-  assert.equal(downloads.status, 501);
+  assert.equal(downloads.status, 503);
 });
 
 test('memory cache deduplicates in-flight work and expires values', async () => {

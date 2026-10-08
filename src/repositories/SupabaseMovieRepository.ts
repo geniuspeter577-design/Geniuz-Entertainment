@@ -1086,6 +1086,18 @@ export class SupabaseMovieRepository {
     return this.getApiPlaybackUrl('movies', movie.id.replace(/^geniuz:(?:movie|series|short):/, ''));
   }
 
+  async getDownloadUrl(item: Pick<ContentItem, 'id'>) {
+    const episodeId = /^geniuz:episode:(.+)$/.exec(item.id)?.[1];
+    if (episodeId) {
+      return this.getApiPlaybackUrl('episodes', episodeId, 'video', 'download');
+    }
+    const movieId = /^geniuz:(?:movie|short):(.+)$/.exec(item.id)?.[1];
+    if (!movieId) {
+      throw new PlaybackError('This title is not available for download.', 'DOWNLOAD_NOT_ALLOWED', 403);
+    }
+    return this.getApiPlaybackUrl('movies', movieId, 'video', 'download');
+  }
+
   async getTrailerPlaybackUrl(item: Pick<ContentItem, 'id' | 'trailerStorageKey'>) {
     if (!item.trailerStorageKey?.trim()) {
       throw new PlaybackError('This title does not have an available trailer.', 'TRAILER_NOT_FOUND', 404);
@@ -1098,6 +1110,7 @@ export class SupabaseMovieRepository {
     resource: 'movies' | 'episodes' | 'series',
     id: string,
     kind: 'video' | 'trailer' = 'video',
+    action: 'play' | 'download' = 'play',
   ) {
     const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
     if (!apiBaseUrl) {
@@ -1114,13 +1127,33 @@ export class SupabaseMovieRepository {
       });
     }
 
-    const requestOptions: RequestInit = accessToken
-      ? { headers: { Authorization: `Bearer ${accessToken}` } }
-      : {};
+    const requestOptions: RequestInit = {
+      ...(action === 'download'
+        ? {
+            method: 'POST',
+            body: JSON.stringify({
+              contentKind: resource === 'episodes' ? 'episode' : 'movie',
+              contentId: id,
+            }),
+          }
+        : {}),
+      ...(accessToken || action === 'download'
+        ? {
+            headers: {
+              ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+              ...(action === 'download' ? { 'Content-Type': 'application/json' } : {}),
+            },
+          }
+        : {}),
+    };
     let response: Response;
     try {
       response = await fetch(
-        `${apiBaseUrl.replace(/\/+$/, '')}/${resource}/${encodeURIComponent(id)}/${kind === 'trailer' ? 'trailer-play-url' : 'play-url'}`,
+        action === 'download'
+          ? `${apiBaseUrl.replace(/\/+$/, '')}/api/downloads/authorize`
+          : `${apiBaseUrl.replace(/\/+$/, '')}/${resource}/${encodeURIComponent(id)}/${
+              kind === 'trailer' ? 'trailer-play-url' : 'play-url'
+            }`,
         requestOptions,
       );
     } catch (fetchError) {
@@ -1141,6 +1174,9 @@ export class SupabaseMovieRepository {
       });
     }
     if (!response.ok) {
+      const defaultMessage = action === 'download'
+        ? 'Could not prepare this title for download.'
+        : 'Could not prepare this movie for playback.';
       const message =
         typeof result === 'object' &&
         result !== null &&
@@ -1150,7 +1186,7 @@ export class SupabaseMovieRepository {
         'message' in result.error &&
         typeof result.error.message === 'string'
           ? result.error.message
-          : 'Could not prepare this movie for playback.';
+          : defaultMessage;
       const code =
         typeof result === 'object' &&
         result !== null &&

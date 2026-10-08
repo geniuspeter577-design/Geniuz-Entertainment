@@ -92,9 +92,11 @@ function getClientIp(request: IncomingMessage) {
 }
 
 function applyRateLimit(request: IncomingMessage, pathname: string) {
-  const isPlayUrl = /^\/movies\/[^/]+\/play-url$/.test(pathname) || /^\/episodes\/[^/]+\/play-url$/.test(pathname);
-  const limit = isPlayUrl ? PLAY_URL_RATE_LIMIT_PER_MINUTE : PUBLIC_RATE_LIMIT_PER_MINUTE;
-  const key = `${getClientIp(request)}:${isPlayUrl ? 'play-url' : pathname}`;
+  const isMediaUrl =
+    /^\/(movies|episodes)\/[^/]+\/play-url$/.test(pathname) ||
+    pathname === '/api/downloads/authorize';
+  const limit = isMediaUrl ? PLAY_URL_RATE_LIMIT_PER_MINUTE : PUBLIC_RATE_LIMIT_PER_MINUTE;
+  const key = `${getClientIp(request)}:${isMediaUrl ? 'media-url' : pathname}`;
   const now = Date.now();
   const bucket = publicRateLimit.get(key);
 
@@ -590,6 +592,98 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/api/downloads/authorize') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, isAdmin } = await authenticatePlayback(config, request.headers.authorization);
+    const body = await readJson(request);
+    const contentKind = requiredString(body, 'contentKind');
+    const contentId = requiredString(body, 'contentId');
+    if (contentKind !== 'movie' && contentKind !== 'episode') {
+      throw new HttpError(400, 'INVALID_CONTENT_KIND', 'The content kind is invalid.');
+    }
+    if (!isMovieId(contentId)) {
+      throw new HttpError(400, 'INVALID_CONTENT_ID', 'The content ID is invalid.');
+    }
+
+    let data: {
+      storage_provider: unknown;
+      storage_key: unknown;
+      video_path: unknown;
+      published: unknown;
+      allow_download: unknown;
+      file_size_bytes: unknown;
+      content_type: unknown;
+    } | null;
+    if (contentKind === 'episode') {
+      const lookup = await client
+        .from('episodes')
+        .select('storage_provider,storage_key,published,allow_download,file_size_bytes')
+        .eq('id', contentId)
+        .maybeSingle();
+      if (lookup.error) {
+        throw new HttpError(502, 'DOWNLOAD_LOOKUP_FAILED', 'Could not load this title.');
+      }
+      data = lookup.data ? { ...lookup.data, video_path: null, content_type: null } : null;
+    } else {
+      const lookup = await client
+        .from('movies')
+        .select('storage_provider,storage_key,video_path,published,allow_download,file_size_bytes,content_type')
+        .eq('id', contentId)
+        .maybeSingle();
+      if (lookup.error) {
+        throw new HttpError(502, 'DOWNLOAD_LOOKUP_FAILED', 'Could not load this title.');
+      }
+      data = lookup.data;
+    }
+    if (!data) {
+      throw new HttpError(404, 'TITLE_NOT_FOUND', 'This title is not available for download.');
+    }
+    if (data.published !== true && !isAdmin) {
+      throw new HttpError(403, 'TITLE_NOT_PUBLISHED', 'This title is not available for download.');
+    }
+    if (
+      data.allow_download !== true ||
+      (contentKind === 'movie' && data.content_type === 'series')
+    ) {
+      throw new HttpError(403, 'DOWNLOAD_NOT_ALLOWED', 'Downloads are not enabled for this title.');
+    }
+    const storagePath =
+      data.storage_provider === 'b2'
+        ? data.storage_key
+        : contentKind === 'episode'
+          ? data.storage_key
+          : data.video_path;
+    if (typeof storagePath !== 'string' || !storagePath.trim()) {
+      throw new HttpError(404, 'PLAYBACK_FILE_MISSING', 'This title is missing its video file.');
+    }
+    const fileSizeBytes = Number(data.file_size_bytes);
+    if (!Number.isSafeInteger(fileSizeBytes) || fileSizeBytes <= 0) {
+      throw new HttpError(409, 'FILE_SIZE_UNAVAILABLE', 'This title has no verified file size.');
+    }
+
+    let url: string;
+    if (data.storage_provider === 'b2') {
+      url = await getStorage(config).createPlayUrl(storagePath, {
+        routeKind: contentKind,
+        contentId,
+      });
+    } else if (data.storage_provider === 'supabase') {
+      const { data: signedData, error: signedUrlError } = await client.storage
+        .from('movie-assets')
+        .createSignedUrl(storagePath, 7200);
+      if (signedUrlError || !signedData?.signedUrl) {
+        throw new HttpError(502, 'DOWNLOAD_URL_FAILED', 'Could not prepare this title for download.');
+      }
+      url = signedData.signedUrl;
+    } else {
+      throw new HttpError(409, 'STORAGE_PROVIDER_UNSUPPORTED', 'This title uses unsupported storage.');
+    }
+    writeJson(response, 200, { url, expiresIn: 7200, fileSizeBytes });
+    return;
+  }
+
   const trailerPlayUrlMatch = /^\/(movies|series)\/([^/]+)\/trailer-play-url$/.exec(pathname);
   if (trailerPlayUrlMatch) {
     if (request.method !== 'GET') {
@@ -629,14 +723,14 @@ async function handleRequest(
     return;
   }
 
-  if (pathname === '/api/playback/session' || pathname === '/api/downloads/authorize') {
+  if (pathname === '/api/playback/session') {
     if (request.method !== 'POST') {
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
     }
     throw new HttpError(
       501,
       'NOT_IMPLEMENTED',
-      'Playback and download authorization require a configured licensed content provider.',
+      'Playback authorization requires a configured licensed content provider.',
     );
   }
 

@@ -27,6 +27,8 @@ type DownloadSheetProps = {
   unavailableReason?: string;
   onClose: () => void;
   onDownload: () => void;
+  onPause: () => void;
+  onResume: () => void;
   onCancel: () => void;
   onPlayOffline: () => void;
 };
@@ -39,6 +41,8 @@ export function DownloadSheet({
   unavailableReason,
   onClose,
   onDownload,
+  onPause,
+  onResume,
   onCancel,
   onPlayOffline,
 }: DownloadSheetProps) {
@@ -51,6 +55,7 @@ export function DownloadSheet({
   const allowed = item.availability.download;
   const downloaded = record?.status === 'downloaded';
   const downloading = record?.status === 'downloading';
+  const paused = record?.status === 'paused';
   const queued = record?.status === 'queued';
   const size = item.fileSizeBytes ? formatBytes(item.fileSizeBytes) : 'Size unavailable';
   const stateMessage = unavailableReason ?? (!allowed
@@ -60,7 +65,9 @@ export function DownloadSheet({
       : platform === 'web'
         ? 'Offline downloads need the Geniuz+ phone app; they are not available in a browser.'
         : error ??
-        (record?.status === 'failed'
+        (paused
+          ? 'Download paused. Resume when you are ready.'
+          : record?.status === 'failed'
           ? 'The download failed. Retry when your connection is available.'
           : undefined));
 
@@ -72,8 +79,12 @@ export function DownloadSheet({
     action = onPlayOffline;
     disabled = false;
   } else if (downloading) {
-    actionLabel = `Cancel download (${record.progress}%)`;
-    action = onCancel;
+    actionLabel = `Pause download (${record.progress}%)`;
+    action = onPause;
+    disabled = false;
+  } else if (paused) {
+    actionLabel = `Resume download (${record.progress}%)`;
+    action = onResume;
     disabled = false;
   } else if (queued) {
     actionLabel = 'Cancel queued download';
@@ -147,10 +158,10 @@ export function DownloadSheet({
                   <Text style={styles.rowTitle} numberOfLines={1}>{item.title}</Text>
                   <Text style={styles.rowMeta}>
                     {size}
-                    {downloading ? ` · ${record.progress}%` : downloaded ? ' · Downloaded' : ''}
+                    {downloading || paused ? ` · ${record.progress}%${paused ? ' · Paused' : ''}` : downloaded ? ' · Downloaded' : ''}
                     {queued ? ' · Queued' : ''}
                   </Text>
-                  {downloading ? (
+                  {downloading || paused ? (
                     <View style={styles.progressTrack}>
                       <View style={[styles.progressFill, { width: `${record.progress}%` }]} />
                     </View>
@@ -180,6 +191,16 @@ export function DownloadSheet({
             >
               <Text style={styles.primaryText}>{actionLabel}</Text>
             </Pressable>
+            {downloading || paused ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Cancel download"
+                onPress={onCancel}
+                style={styles.secondaryButton}
+              >
+                <Text style={styles.secondaryText}>Cancel download</Text>
+              </Pressable>
+            ) : null}
           </View>
         </SafeAreaView>
       </View>
@@ -276,6 +297,17 @@ const styles = StyleSheet.create({
     backgroundColor: theme.accent,
     borderRadius: 999,
     marginTop: 18,
+  },
+  secondaryButton: {
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  secondaryText: {
+    color: theme.secondaryText,
+    fontSize: 14,
+    fontWeight: '700',
   },
   disabledButton: { backgroundColor: theme.surfaceSoft },
   primaryText: { color: theme.background, fontSize: 15, fontWeight: '800' },
