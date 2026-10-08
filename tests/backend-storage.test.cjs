@@ -200,6 +200,18 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
   assert.deepEqual(remuxArgs.slice(remuxArgs.indexOf('-c'), remuxArgs.indexOf('-sn')), ['-c', 'copy']);
   assert.ok(remuxArgs.includes('-map_chapters'));
 
+  const forcedReencodeArgs = buildFfmpegArgs(
+    '/tmp/convert/input.mkv',
+    '/tmp/convert/output.mp4',
+    [
+      { codec_type: 'video', codec_name: 'h264', height: 480 },
+      { codec_type: 'audio', codec_name: 'aac' },
+    ],
+    { forceReencode: true },
+  );
+  assert.ok(forcedReencodeArgs.includes('libx264'));
+  assert.ok(forcedReencodeArgs.includes('64k'));
+
   const scaledReencodeArgs = buildFfmpegArgs('/tmp/convert/input.mkv', '/tmp/convert/output.mp4', [
     { codec_type: 'video', codec_name: 'hevc', height: 720 },
     { codec_type: 'audio', codec_name: 'aac' },
@@ -330,6 +342,225 @@ test('media conversion verification enforces codecs, duration tolerance, and non
     }).valid,
     false,
   );
+});
+
+test('media:process parses the required movie ID and explicit apply/replace flags', async () => {
+  const { parseArguments } = await import('../backend/scripts/process-movie.mjs');
+  const movieId = 'f157edce-7fcf-4ab2-a80c-365306fae850';
+  assert.deepEqual(parseArguments(['--movie-id', movieId]), {
+    movieId,
+    apply: false,
+    replace: false,
+  });
+  assert.deepEqual(parseArguments(['--movie-id', movieId, '--apply', '--replace']), {
+    movieId,
+    apply: true,
+    replace: true,
+  });
+  assert.throws(() => parseArguments(['--movie-id', 'not-a-uuid']), /Usage/);
+  assert.throws(() => parseArguments(['--movie-id', movieId, '--apply', '--apply']), /Usage/);
+});
+
+test('media:process dry-run reads a fake row and performs no storage or database writes', async () => {
+  const { runMovieProcess } = await import('../backend/scripts/process-movie.mjs');
+  const movieId = 'f157edce-7fcf-4ab2-a80c-365306fae850';
+  const updates = [];
+  const storageCalls = [];
+  const output = [];
+  const result = await runMovieProcess(
+    { movieId, apply: false, replace: false },
+    {
+      database: {
+        getMovie: async (id) => ({
+          id,
+          storage_key: 'movies/source.mkv',
+          file_extension: 'mkv',
+          file_size_bytes: 700,
+          conversion_status: 'uploaded',
+        }),
+        updateMovie: async (...args) => updates.push(args),
+      },
+      storage: {
+        downloadSource: async (...args) => storageCalls.push(['download', ...args]),
+        targetExists: async (...args) => storageCalls.push(['exists', ...args]),
+        uploadOutput: async (...args) => storageCalls.push(['upload', ...args]),
+      },
+      runtime: {},
+      maxSizeBytes: 1024,
+    },
+    (line) => output.push(line),
+  );
+
+  assert.equal(result.dryRun, true);
+  assert.match(output[0], /Source key: movies\/source\.mkv/);
+  assert.match(output[0], /Target key: movies\//);
+  assert.match(output[0], /uploaded -> converting -> ready/);
+  assert.match(output[0], /libx264\/veryfast, max 350 kb\/s video, AAC stereo 64 kb\/s/);
+  assert.match(output[0], /no files were downloaded/);
+  assert.deepEqual(updates, []);
+  assert.deepEqual(storageCalls, []);
+});
+
+test('media:process skips encoding only for in-limit H.264/AAC MP4 files', async () => {
+  const { shouldSkipEncoding } = await import('../backend/scripts/process-movie.mjs');
+  const compatibleProbe = {
+    streams: [
+      { codec_type: 'video', codec_name: 'h264' },
+      { codec_type: 'audio', codec_name: 'aac' },
+    ],
+    format: { format_name: 'mov,mp4,m4a' },
+  };
+  const options = {
+    fileExtension: 'mp4',
+    mediaProbe: compatibleProbe,
+    fileSizeBytes: 900,
+    maxSizeBytes: 1000,
+  };
+  assert.equal(shouldSkipEncoding(options), true);
+  assert.equal(shouldSkipEncoding({ ...options, fileExtension: 'mkv' }), false);
+  assert.equal(shouldSkipEncoding({ ...options, fileSizeBytes: 1001 }), false);
+  assert.equal(shouldSkipEncoding({
+    ...options,
+    mediaProbe: { ...compatibleProbe, streams: [{ codec_type: 'video', codec_name: 'hevc' }, compatibleProbe.streams[1]] },
+  }), false);
+  assert.equal(shouldSkipEncoding({
+    ...options,
+    mediaProbe: { ...compatibleProbe, streams: [compatibleProbe.streams[0]] },
+  }), false);
+});
+
+test('media:process refuses collisions by default and replaces only after logging, then saves verified metadata', async () => {
+  const { runMovieProcess } = await import('../backend/scripts/process-movie.mjs');
+  const movieId = 'f157edce-7fcf-4ab2-a80c-365306fae850';
+  const sourceKey = 'movies/original.mkv';
+  const events = [];
+  const updates = [];
+  const movie = {
+    id: movieId,
+    storage_key: sourceKey,
+    file_extension: 'mkv',
+    file_size_bytes: 1000,
+    conversion_status: 'uploaded',
+  };
+  const dependencies = {
+    database: {
+      getMovie: async () => movie,
+      updateMovie: async (_id, values) => {
+        updates.push(values);
+        events.push(['database', values.conversion_status]);
+      },
+    },
+    storage: {
+      downloadSource: async () => ({ sizeBytes: 1000 }),
+      targetExists: async () => true,
+      uploadOutput: async (key, _path, size) => events.push(['upload', key, size]),
+    },
+    runtime: {
+      createTempDirectory: async () => '/tmp/fake-process-success',
+      removeTempDirectory: async (directory) => events.push(['cleanup', directory]),
+      probe: async (filePath) => filePath.endsWith('source')
+        ? {
+            streams: [
+              { codec_type: 'video', codec_name: 'hevc', height: 720 },
+              { codec_type: 'audio', codec_name: 'aac' },
+            ],
+            format: { format_name: 'matroska,webm', duration: '125' },
+          }
+        : {
+            streams: [
+              { codec_type: 'video', codec_name: 'h264', width: 854, height: 480 },
+              { codec_type: 'audio', codec_name: 'aac' },
+            ],
+            format: { format_name: 'mov,mp4,m4a', duration: '125' },
+          },
+      encode: async () => events.push(['encode']),
+      getFileSize: async () => 900,
+      sha256: async () => 'a'.repeat(64),
+    },
+    maxSizeBytes: 2000,
+  };
+
+  await assert.rejects(
+    runMovieProcess({ movieId, apply: true, replace: false }, dependencies),
+    /target already exists/,
+  );
+  assert.equal(events.some(([kind]) => kind === 'upload'), false);
+  assert.equal(updates.at(-1).conversion_status, 'failed');
+
+  events.length = 0;
+  updates.length = 0;
+  const output = [];
+  const result = await runMovieProcess(
+    { movieId, apply: true, replace: true },
+    dependencies,
+    (line) => {
+      output.push(line);
+      events.push(['log', line]);
+    },
+  );
+
+  const replacingIndex = events.findIndex(([kind, line]) => kind === 'log' && line.startsWith('REPLACING a live file:'));
+  const uploadIndex = events.findIndex(([kind]) => kind === 'upload');
+  assert.ok(replacingIndex >= 0 && replacingIndex < uploadIndex);
+  assert.notEqual(result.targetKey, sourceKey);
+  assert.match(result.targetKey, /\.mp4$/);
+  assert.deepEqual(updates.map(({ conversion_status }) => conversion_status), ['converting', 'ready']);
+  assert.equal(updates[1].storage_key, result.targetKey);
+  assert.equal(updates[1].file_extension, 'mp4');
+  assert.equal(updates[1].mime_type, 'video/mp4');
+  assert.equal(updates[1].file_size_bytes, 900);
+  assert.equal(updates[1].runtime_minutes, 3);
+  assert.equal(updates[1].conversion_error, null);
+  assert.ok(events.some(([kind]) => kind === 'cleanup'));
+  assert.match(output.at(-1), /SHA-256/);
+});
+
+test('media:process marks fake database failures safely and removes its temporary directory', async () => {
+  const { runMovieProcess, mapFailureStatus } = await import('../backend/scripts/process-movie.mjs');
+  const movieId = 'f157edce-7fcf-4ab2-a80c-365306fae850';
+  const updates = [];
+  const storageCalls = [];
+  let cleanedDirectory;
+  await assert.rejects(
+    runMovieProcess(
+      { movieId, apply: true, replace: false },
+      {
+        database: {
+          getMovie: async (id) => ({
+            id,
+            storage_key: 'movies/source.mkv',
+            file_extension: 'mkv',
+            file_size_bytes: 700,
+            conversion_status: 'uploaded',
+          }),
+          updateMovie: async (_id, value) => updates.push(value),
+        },
+        storage: {
+          downloadSource: async () => {
+            storageCalls.push('download');
+            throw new Error('https://private.example/signed?token=secret');
+          },
+          targetExists: async () => storageCalls.push('exists'),
+          uploadOutput: async () => storageCalls.push('upload'),
+        },
+        runtime: {
+          createTempDirectory: async () => '/tmp/fake-movie-process',
+          removeTempDirectory: async (directory) => { cleanedDirectory = directory; },
+        },
+        maxSizeBytes: 1024,
+      },
+    ),
+    (error) => error.message === 'Movie processing failed. Check the worker configuration and retry.' && !/secret|private\.example/.test(error.message),
+  );
+
+  assert.deepEqual(updates.map(({ conversion_status }) => conversion_status), ['converting', 'failed']);
+  assert.equal(updates[1].conversion_error, 'Movie processing failed. Check the worker configuration and retry.');
+  assert.equal(cleanedDirectory, '/tmp/fake-movie-process');
+  assert.deepEqual(storageCalls, ['download']);
+  assert.deepEqual(mapFailureStatus(new Error('credentials: secret')), {
+    conversion_status: 'failed',
+    conversion_error: 'Movie processing failed. Check the worker configuration and retry.',
+  });
 });
 const { buildAllowedOrigins } = require('../scripts/b2-cors.cjs');
 

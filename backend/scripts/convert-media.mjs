@@ -12,7 +12,8 @@ import { downloadObjectToFile, isAllowedOutputPath } from './download-media.mjs'
 import { formatFileSize } from '../../src/utils/formatFileSize.cjs';
 
 const require = createRequire(import.meta.url);
-const videoConversionProfile = require('../src/config/videoConversionProfile.json');
+export const videoConversionProfile = require('../src/config/videoConversionProfile.json');
+export { formatFileSize };
 const execFileAsync = promisify(execFile);
 const REQUIRED_S3_SETTINGS = [
   'S3_ENDPOINT',
@@ -28,7 +29,7 @@ Defaults: --crf ${videoConversionProfile.crf}, --maxrate-kbps ${videoConversionP
 
 class ConversionError extends Error {}
 
-function getVideoMaxrateKbps(environment = process.env) {
+export function getVideoMaxrateKbps(environment = process.env) {
   const configuredMaxrate = environment.VIDEO_MAXRATE_KBPS?.trim();
   return configuredMaxrate ? Number(configuredMaxrate) : videoConversionProfile.VIDEO_MAXRATE_KBPS;
 }
@@ -82,6 +83,7 @@ export function buildFfmpegArgs(
     crf = videoConversionProfile.crf,
     maxrateKbps = getVideoMaxrateKbps(),
     audioKbps = videoConversionProfile.audioKbps,
+    forceReencode = false,
   } = {},
 ) {
   const videoStreams = streams.filter((stream) => stream.codec_type === 'video');
@@ -97,6 +99,7 @@ export function buildFfmpegArgs(
   const shouldScaleVideo = sourceHeight > videoConversionProfile.scaleHeight;
 
   const canRemux =
+    !forceReencode &&
     videoStreams.every((stream) => stream.codec_name === 'h264') &&
     audioStreams.every((stream) => stream.codec_name === 'aac');
   const args = ['-nostdin', '-i', sourcePath, '-map', '0:v:0', '-map', '0:a:0?'];
@@ -305,7 +308,7 @@ function formatCommand(command, args) {
     .join(' ');
 }
 
-async function probe(input) {
+export async function probe(input) {
   try {
     const { stdout } = await execFileAsync(
       'ffprobe',
