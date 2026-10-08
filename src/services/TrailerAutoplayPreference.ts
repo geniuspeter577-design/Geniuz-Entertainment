@@ -13,6 +13,7 @@ export type UserAppSettings = {
   defaultPlaybackSpeed: typeof DEFAULT_PLAYBACK_SPEEDS[number];
   wifiOnlyDownloads: boolean;
   watchPreference: WatchPreference;
+  subtitleLanguage: string | null;
 };
 
 const DEFAULT_USER_SETTINGS: UserAppSettings = {
@@ -20,6 +21,7 @@ const DEFAULT_USER_SETTINGS: UserAppSettings = {
   defaultPlaybackSpeed: 1,
   wifiOnlyDownloads: false,
   watchPreference: 'streaming',
+  subtitleLanguage: null,
 };
 
 function getSettingsKey(userId: string) {
@@ -53,6 +55,10 @@ export function parseUserAppSettings(value: string | null): UserAppSettings {
         ? parsed.wifiOnlyDownloads
         : DEFAULT_USER_SETTINGS.wifiOnlyDownloads,
     watchPreference: parsed.watchPreference === 'download' ? 'download' : 'streaming',
+    subtitleLanguage:
+      typeof parsed.subtitleLanguage === 'string' && parsed.subtitleLanguage.trim().length <= 64
+        ? parsed.subtitleLanguage.trim() || null
+        : DEFAULT_USER_SETTINGS.subtitleLanguage,
   };
 }
 

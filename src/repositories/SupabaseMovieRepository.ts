@@ -7,6 +7,7 @@ import { PlaybackError } from '../utils/playbackError';
 import { loadAllPages } from '../utils/publishedCatalog';
 import { logSupabaseError } from '../utils/supabaseError';
 import { getConversionStatusBadge, type ConversionStatus } from '../utils/conversionStatus';
+import type { SubtitleFormat } from '../utils/subtitles';
 
 const MOVIE_BUCKET = 'movie-assets';
 const PUBLISHED_CATALOG_PAGE_SIZE = 500;
@@ -24,6 +25,7 @@ type MovieColumnList =
   | typeof MOVIE_COLUMNS_WITH_CREATED_AT
   | typeof LEGACY_MOVIE_COLUMNS_WITH_CREATED_AT;
 const TITLE_IMAGE_BUCKET = 'title-images';
+const SUBTITLE_BUCKET = 'subtitle-files';
 const TUS_STORAGE_PREFIX = '@geniuz/tus-upload/v1/';
 
 type MovieRecord = {
@@ -129,6 +131,13 @@ export type AdminTitleUpdate = {
   trailerDurationSeconds?: number;
   trailerContentType?: string;
   published: boolean;
+};
+
+export type SubtitleTrack = {
+  id: string;
+  languageLabel: string;
+  format: SubtitleFormat;
+  url: string;
 };
 
 type NewSeries = {
@@ -253,6 +262,126 @@ export class SupabaseMovieRepository {
     return this.client.storage.from(TITLE_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
   }
 
+    async uploadSubtitleTrack(input: {
+      contentKind: 'movie' | 'episode';
+      contentId: string;
+      languageLabel: string;
+      format: SubtitleFormat;
+      blob: Blob;
+    }) {
+      const languageLabel = input.languageLabel.trim();
+      if (!languageLabel || languageLabel.length > 64) {
+        throw new Error('Enter a subtitle language label up to 64 characters.');
+      }
+      const contentType = input.format === 'vtt' ? 'text/vtt' : 'application/x-subrip';
+      const storagePath = `${input.contentKind}/${input.contentId}/${Date.now().toString(36)}.${input.format}`;
+      const bucket = this.client.storage.from(SUBTITLE_BUCKET);
+      const { error: uploadError } = await bucket.upload(storagePath, input.blob, {
+        contentType,
+        upsert: false,
+      });
+      if (uploadError) {
+        throw new Error('Could not upload the subtitle file. Check the private subtitle bucket and retry.', {
+          cause: uploadError,
+        });
+      }
+
+      const target = input.contentKind === 'episode'
+        ? { movie_id: null, episode_id: input.contentId }
+        : { movie_id: input.contentId, episode_id: null };
+      const { error: insertError } = await this.client.from('subtitle_tracks').insert({
+        ...target,
+        language_label: languageLabel,
+        format: input.format,
+        storage_path: storagePath,
+      });
+      if (insertError) {
+        const { error: cleanupError } = await bucket.remove([storagePath]);
+        if (cleanupError) {
+          console.error('[SupabaseMovieRepository] Could not clean up an unrecorded subtitle upload.', cleanupError);
+          throw new Error('The subtitle uploaded, but its record and cleanup both failed. Contact an administrator before retrying.', {
+            cause: insertError,
+          });
+        }
+        throw new Error('The subtitle file uploaded, but its title or episode record could not be saved.', {
+          cause: insertError,
+        });
+      }
+    }
+
+    async getSubtitleTracks(contentId: string): Promise<SubtitleTrack[]> {
+      const episodeId = /^geniuz:episode:(.+)$/.exec(contentId)?.[1];
+      const titleId = /^geniuz:(?:movie|short):(.+)$/.exec(contentId)?.[1];
+      const contentKind = episodeId ? 'episode' : titleId ? 'movie' : undefined;
+      const id = episodeId ?? titleId;
+      if (!contentKind || !id) {
+        throw new Error('Subtitles are not available for this video.');
+      }
+      const apiBaseUrl = process.env.EXPO_PUBLIC_GENIUZ_API_URL?.trim();
+      if (!apiBaseUrl) {
+        throw new Error('The video service is not configured. Restart Expo after setting its API URL.');
+      }
+      const { data, error: sessionError } = await this.client.auth.getSession();
+      if (sessionError) {
+        throw new Error('Could not verify your session before loading subtitles.', { cause: sessionError });
+      }
+      const accessToken = data.session?.access_token;
+      const query = new URLSearchParams({ kind: contentKind, id });
+      let response: Response;
+      try {
+        response = await fetch(
+          `${apiBaseUrl.replace(/\/+$/, '')}/api/subtitles?${query.toString()}`,
+          accessToken ? { headers: { Authorization: 'Bearer ' + accessToken } } : {},
+        );
+      } catch (fetchError) {
+        throw new Error('Could not reach the video service to load subtitles. Check your connection and retry.', {
+          cause: fetchError,
+        });
+      }
+      let result: unknown;
+      try {
+        result = await response.json();
+      } catch (parseError) {
+        throw new Error('The video service returned an invalid subtitle response.', { cause: parseError });
+      }
+      if (!response.ok) {
+        const message =
+          typeof result === 'object' &&
+          result !== null &&
+          'error' in result &&
+          typeof result.error === 'object' &&
+          result.error !== null &&
+          'message' in result.error &&
+          typeof result.error.message === 'string'
+            ? result.error.message
+            : 'Could not load subtitles for this video.';
+        throw new Error(message);
+      }
+      if (typeof result !== 'object' || result === null || !('tracks' in result) || !Array.isArray(result.tracks)) {
+        throw new Error('The video service returned an invalid subtitle list.');
+      }
+      return result.tracks.flatMap((track): SubtitleTrack[] => {
+        if (typeof track !== 'object' || track === null) {
+          return [];
+        }
+        const row = track as Record<string, unknown>;
+        if (
+          typeof row.id !== 'string' ||
+          typeof row.languageLabel !== 'string' ||
+          (row.format !== 'srt' && row.format !== 'vtt') ||
+          typeof row.url !== 'string' ||
+          !isHttpUrl(row.url)
+        ) {
+          return [];
+        }
+        return [{
+          id: row.id,
+          languageLabel: row.languageLabel,
+          format: row.format,
+          url: row.url,
+        }];
+      });
+    }
   async deleteTitleImage(url: string | undefined) {
     if (!url) {
       return;

@@ -48,6 +48,8 @@ type PlayerHeaderProps = {
   speedMenuOpen: boolean;
   fitMode: PlayerFitMode;
   isRotateLocked: boolean;
+  subtitleText?: string;
+  subtitlesEnabled: boolean;
   onBack: () => void;
   onToggleControls: () => void;
   onToggleLock: () => void;
@@ -55,6 +57,7 @@ type PlayerHeaderProps = {
   onSelectSpeed: (speed: number) => void;
   onCycleFit: () => void;
   onToggleRotate: () => void;
+  onOpenSubtitles: () => void;
   onPlayPause: () => void;
   onSeekBy: (seconds: number) => void;
   onSeekTo: (seconds: number) => void;
@@ -80,6 +83,8 @@ export function PlayerHeader({
   speedMenuOpen,
   fitMode,
   isRotateLocked,
+  subtitleText,
+  subtitlesEnabled,
   onBack,
   onToggleControls,
   onToggleLock,
@@ -87,6 +92,7 @@ export function PlayerHeader({
   onSelectSpeed,
   onCycleFit,
   onToggleRotate,
+  onOpenSubtitles,
   onPlayPause,
   onSeekBy,
   onSeekTo,
@@ -367,6 +373,11 @@ export function PlayerHeader({
             allowsPictureInPicture={false}
           />
         ) : null}
+        {subtitleText ? (
+          <View pointerEvents="none" style={[styles.subtitleOverlay, isLandscape && styles.subtitleOverlayLandscape]}>
+            <Text style={styles.subtitleText}>{subtitleText}</Text>
+          </View>
+        ) : null}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Tap to reveal lock control"
@@ -398,6 +409,11 @@ export function PlayerHeader({
           contentFit={fitMode}
           allowsPictureInPicture={false}
         />
+      ) : null}
+      {subtitleText ? (
+        <View pointerEvents="none" style={[styles.subtitleOverlay, isLandscape && styles.subtitleOverlayLandscape]}>
+          <Text style={styles.subtitleText}>{subtitleText}</Text>
+        </View>
       ) : null}
       <View
         style={StyleSheet.absoluteFill}
@@ -630,6 +646,15 @@ export function PlayerHeader({
                         <Ionicons name={isPlaying ? 'pause' : 'play'} size={16} color={theme.background} />
                       </Pressable>
                       <View style={styles.footerActions} pointerEvents="box-none">
+                        <Pressable
+                          accessibilityRole="button"
+                          accessibilityLabel={`Language and subtitles${subtitlesEnabled ? ', subtitles on' : ''}`}
+                          onPress={onOpenSubtitles}
+                          style={styles.footerActionButton}
+                        >
+                          <Ionicons name="language-outline" size={16} color={theme.text} />
+                          <Text style={styles.footerLabel}>Subtitles</Text>
+                        </Pressable>
                         <Pressable accessibilityRole="button" accessibilityLabel="Change video fit" onPress={onCycleFit} style={styles.footerActionButton}>
                           <Ionicons name="contract-outline" size={16} color={theme.text} />
                           <Text style={styles.footerLabel}>{getPlayerFitLabel(fitMode)}</Text>
@@ -722,6 +747,14 @@ export function PlayerHeader({
                     <Pressable accessibilityRole="button" accessibilityLabel="Enter full screen" onPress={onToggleRotate} style={styles.fullscreenButton}>
                       <Ionicons name="contract-outline" size={18} color={theme.text} />
                     </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Language and subtitles${subtitlesEnabled ? ', subtitles on' : ''}`}
+                      onPress={onOpenSubtitles}
+                      style={styles.fullscreenButton}
+                    >
+                      <Ionicons name="language-outline" size={18} color={theme.text} />
+                    </Pressable>
                   </View>
                 )}
               </View>
@@ -747,6 +780,32 @@ const styles = StyleSheet.create({
   },
   video: {
     ...StyleSheet.absoluteFill,
+  },
+  subtitleOverlay: {
+    alignItems: 'center',
+    bottom: 58,
+    left: 12,
+    position: 'absolute',
+    right: 12,
+    zIndex: 2,
+  },
+  subtitleOverlayLandscape: {
+    bottom: 84,
+  },
+  subtitleText: {
+    backgroundColor: 'rgba(0, 0, 0, 0.78)',
+    borderRadius: 5,
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    lineHeight: 23,
+    overflow: 'hidden',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    textAlign: 'center',
+    textShadowColor: '#000000',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
   controls: {
     ...StyleSheet.absoluteFill,

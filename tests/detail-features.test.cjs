@@ -62,6 +62,11 @@ const {
   isEpisodeWatchedAtPosition,
   markEpisodeWatched,
 } = require('../.test-build/src/utils/episodePlayback.js');
+const {
+  findSubtitleCue,
+  parseSubtitleFile,
+  validateSubtitleFile,
+} = require('../.test-build/src/utils/subtitles.js');
 
 function item(id, title = id) {
   return {
@@ -517,4 +522,28 @@ test('episode watch completion records watched state at 95 percent without dupli
   assert.equal(isEpisodeWatchedAtPosition('geniuz:movie:movie-1', 100, 100), false);
   assert.deepEqual(markEpisodeWatched([], episodeId, 95, 100), [episodeId]);
   assert.deepEqual(markEpisodeWatched([episodeId], episodeId, 99, 100), [episodeId]);
+});
+
+test('subtitle validation and SRT/VTT parsing select cues by playback time', () => {
+  assert.deepEqual(validateSubtitleFile('captions.srt', 10), { valid: true, format: 'srt' });
+  assert.deepEqual(validateSubtitleFile('captions.vtt', 10), { valid: true, format: 'vtt' });
+  assert.equal(validateSubtitleFile('captions.txt', 10).valid, false);
+  assert.equal(validateSubtitleFile('captions.srt', 0).valid, false);
+
+  const srt = parseSubtitleFile(
+    '1\r\n00:00:01,000 --> 00:00:02,500\r\n<i>Hello</i> &amp; welcome\r\n\r\n2\r\n00:00:03,000 --> 00:00:04,000\r\nNext line',
+    'srt',
+  );
+  assert.deepEqual(srt, [
+    { startSeconds: 1, endSeconds: 2.5, text: 'Hello & welcome' },
+    { startSeconds: 3, endSeconds: 4, text: 'Next line' },
+  ]);
+  assert.equal(findSubtitleCue(srt, 0.99), undefined);
+  assert.equal(findSubtitleCue(srt, 1.5).text, 'Hello & welcome');
+  assert.equal(findSubtitleCue(srt, 2.5), undefined);
+  assert.deepEqual(
+    parseSubtitleFile('WEBVTT\n\n00:00:00.500 --> 00:00:01.250\nHello', 'vtt'),
+    [{ startSeconds: 0.5, endSeconds: 1.25, text: 'Hello' }],
+  );
+  assert.throws(() => parseSubtitleFile('00:00:01.000 --> 00:00:02.000\nCaption', 'vtt'), /WEBVTT/);
 });

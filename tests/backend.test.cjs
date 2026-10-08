@@ -497,6 +497,86 @@ test('download URLs require the published title download flag for movies and epi
   assert.equal(requestedKeys.length, 2);
 });
 
+test('subtitle endpoints return signed tracks only for published movies and published episode chains', async (context) => {
+  const originalFetch = global.fetch;
+  const movieId = '00000000-0000-4000-8000-000000000011';
+  const seriesId = '00000000-0000-4000-8000-000000000012';
+  const episodeId = '00000000-0000-4000-8000-000000000013';
+  const seasonId = '00000000-0000-4000-8000-000000000014';
+  let moviePublished = true;
+  let episodePublished = true;
+  let seasonPublished = true;
+  let seriesPublished = true;
+  global.fetch = async (input) => {
+    const url = new URL(String(input));
+    if (url.pathname === '/rest/v1/movies') {
+      const id = url.searchParams.get('id');
+      return makeResponse(id === `eq.${seriesId}`
+        ? { published: seriesPublished, content_type: 'series' }
+        : { published: moviePublished, content_type: 'movie' });
+    }
+    if (url.pathname === '/rest/v1/episodes') {
+      return makeResponse({ published: episodePublished, season_id: seasonId });
+    }
+    if (url.pathname === '/rest/v1/seasons') {
+      return makeResponse({ published: seasonPublished, series_id: seriesId });
+    }
+    if (url.pathname === '/rest/v1/subtitle_tracks') {
+      return makeResponse([{
+        id: 'track-1',
+        language_label: 'English',
+        format: 'vtt',
+        storage_path: 'movie/track.vtt',
+      }]);
+    }
+    if (url.pathname.startsWith('/storage/v1/object/sign/subtitle-files/')) {
+      return makeResponse({
+        signedURL: `${url.pathname.replace('/storage/v1', '')}?token=signed`,
+      });
+    }
+    return makeResponse({}, 404);
+  };
+  context.after(() => {
+    global.fetch = originalFetch;
+  });
+
+  const api = await startApi({
+    supabaseUrl: 'https://supabase.example.test',
+    supabasePublishableKey: 'test-publishable-key',
+  });
+  context.after(api.close);
+  const getTracks = (kind, id) =>
+    originalFetch(`${api.baseUrl}/api/subtitles?kind=${kind}&id=${id}`);
+
+  const movieResponse = await getTracks('movie', movieId);
+  assert.equal(movieResponse.status, 200);
+  assert.deepEqual((await movieResponse.json()).tracks, [{
+    id: 'track-1',
+    languageLabel: 'English',
+    format: 'vtt',
+    url: 'https://supabase.example.test/storage/v1/object/sign/subtitle-files/movie/track.vtt?token=signed',
+  }]);
+
+  const episodeResponse = await getTracks('episode', episodeId);
+  assert.equal(episodeResponse.status, 200);
+
+  moviePublished = false;
+  const draftMovie = await getTracks('movie', movieId);
+  assert.equal(draftMovie.status, 403);
+
+  episodePublished = false;
+  const draftEpisode = await getTracks('episode', episodeId);
+  assert.equal(draftEpisode.status, 403);
+  episodePublished = true;
+  seasonPublished = false;
+  const draftSeason = await getTracks('episode', episodeId);
+  assert.equal(draftSeason.status, 403);
+  seasonPublished = true;
+  seriesPublished = false;
+  const draftSeries = await getTracks('episode', episodeId);
+  assert.equal(draftSeries.status, 403);
+});
+
 test('system status is admin-only and reports only check states', async (context) => {
   const originalFetch = global.fetch;
   const originalCheckBucket = B2StorageService.prototype.checkBucket;

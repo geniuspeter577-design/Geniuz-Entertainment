@@ -65,7 +65,12 @@ test('user settings restore safe defaults and reject unsupported playback speeds
     defaultPlaybackSpeed: 1,
     wifiOnlyDownloads: false,
     watchPreference: 'streaming',
+    subtitleLanguage: null,
   });
+  assert.equal(
+    parseUserAppSettings(JSON.stringify({ subtitleLanguage: '  English  ' })).subtitleLanguage,
+    'English',
+  );
   assert.equal(
     parseUserAppSettings(JSON.stringify({ defaultPlaybackSpeed: 8, watchPreference: 'other' }))
       .defaultPlaybackSpeed,

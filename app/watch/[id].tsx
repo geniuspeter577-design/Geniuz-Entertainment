@@ -8,13 +8,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
+import { SubtitleSheet } from '../../src/components/detail/SubtitleSheet';
 import type { ContentItem, EpisodeItem } from '../../src/models/content';
-import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
+import {
+  supabaseMovieRepository,
+  type SubtitleTrack,
+} from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useAuth } from '../../src/state/AuthContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
-import { getUserAppSettings } from '../../src/services/TrailerAutoplayPreference';
+import {
+  getUserAppSettings,
+  setUserAppSettings,
+} from '../../src/services/TrailerAutoplayPreference';
 import { theme } from '../../src/theme';
 import { logger } from '../../src/utils/logger';
 import { getFriendlyPlaybackError, getPlaybackErrorDetails, isExpiredPlaybackLinkError, PlaybackError } from '../../src/utils/playbackError';
@@ -35,6 +42,7 @@ import {
   isEpisodeWatchedAtPosition,
 } from '../../src/utils/episodePlayback';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
+import { findSubtitleCue, parseSubtitleFile, type SubtitleCue } from '../../src/utils/subtitles';
 
 export default function WatchScreen() {
   const { id: routeId, trailer: routeTrailer } = useLocalSearchParams<{ id: string; trailer?: string }>();
@@ -71,6 +79,30 @@ export default function WatchScreen() {
   const [isSeeking, setIsSeeking] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [autoplaySettings, setAutoplaySettings] = useState<{ userId: string; enabled: boolean }>();
+  const [subtitlePreference, setSubtitlePreference] = useState<{
+    userId: string;
+    language: string | null;
+  }>();
+  const [subtitleData, setSubtitleData] = useState<{
+    contentId: string;
+    retryAttempt: number;
+    tracks: SubtitleTrack[];
+    error?: string;
+  }>();
+  const [subtitleSelection, setSubtitleSelection] = useState<{
+    contentId: string;
+    userId: string | null;
+    trackId: string | null;
+  }>();
+  const [subtitleCueData, setSubtitleCueData] = useState<{
+    trackId: string;
+    url: string;
+    cues?: SubtitleCue[];
+    error?: string;
+  }>();
+  const [subtitlePreferenceError, setSubtitlePreferenceError] = useState<string>();
+  const [subtitleRetryAttempt, setSubtitleRetryAttempt] = useState(0);
+  const [subtitleSheetVisible, setSubtitleSheetVisible] = useState(false);
   const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<{
     episodeId: string;
     seconds: number;
@@ -103,6 +135,10 @@ export default function WatchScreen() {
             userId: session.user.id,
             enabled: settings.autoplayNextEpisode,
           });
+          setSubtitlePreference({
+            userId: session.user.id,
+            language: settings.subtitleLanguage,
+          });
         }
       })
       .catch((settingsError: unknown) => {
@@ -121,6 +157,59 @@ export default function WatchScreen() {
       autoplaySettings?.userId === auth.session.user.id &&
       autoplaySettings.enabled,
   );
+  const subtitleContentId = movie?.id;
+  const subtitleDataIsCurrent =
+    subtitleData?.contentId === subtitleContentId &&
+    subtitleData?.retryAttempt === subtitleRetryAttempt;
+  const subtitleTracks = useMemo(
+    () => (subtitleDataIsCurrent ? subtitleData?.tracks ?? [] : []),
+    [subtitleData, subtitleDataIsCurrent],
+  );
+  const subtitleLoading = Boolean(
+    movie &&
+      !isTrailer &&
+      isOnline &&
+      supabaseMovieRepository &&
+      !subtitleDataIsCurrent,
+  );
+  const subtitleError =
+    !movie || isTrailer
+      ? undefined
+      : !isOnline
+        ? 'Subtitles need an internet connection.'
+        : !supabaseMovieRepository
+          ? 'Subtitle service is not configured.'
+          : subtitleDataIsCurrent
+            ? subtitleData?.error
+            : undefined;
+  const userId = auth.session?.user.id;
+  const manualSubtitleSelectionIsCurrent =
+    subtitleSelection?.contentId === movie?.id &&
+    subtitleSelection?.userId === userId;
+  const preferredSubtitleLanguage =
+    userId && subtitlePreference?.userId === userId
+      ? subtitlePreference.language
+      : null;
+  const preferredSubtitleTrack = preferredSubtitleLanguage
+    ? subtitleTracks.find((track) => track.languageLabel === preferredSubtitleLanguage)
+    : undefined;
+  const selectedSubtitleTrack = subtitleTracks.find(
+    (track) =>
+      track.id ===
+      (manualSubtitleSelectionIsCurrent
+        ? subtitleSelection?.trackId
+        : preferredSubtitleTrack?.id),
+  );
+  const selectedSubtitleTrackId = selectedSubtitleTrack?.id ?? null;
+  const subtitleCueDataIsCurrent =
+    subtitleCueData?.trackId === selectedSubtitleTrack?.id &&
+    subtitleCueData?.url === selectedSubtitleTrack?.url;
+  const selectedSubtitleTrackUrl = selectedSubtitleTrack?.url;
+  const selectedSubtitleTrackFormat = selectedSubtitleTrack?.format;
+  const subtitleCues =
+    selectedSubtitleTrack && subtitleCueDataIsCurrent ? subtitleCueData?.cues ?? [] : [];
+  const subtitleCueError =
+    selectedSubtitleTrack && subtitleCueDataIsCurrent ? subtitleCueData?.error : undefined;
 
   const saveProgress = useCallback(() => {
     if (isTrailer || !movie || finishedProgressRef.current) {
@@ -251,6 +340,117 @@ export default function WatchScreen() {
       active = false;
     };
   }, [isOnline, parentSeriesId, seriesEpisodeRetryAttempt]);
+
+  useEffect(() => {
+    let active = true;
+    const contentId = subtitleContentId;
+    if (!contentId || isTrailer || !isOnline || !supabaseMovieRepository) {
+      return;
+    }
+    const retryAttempt = subtitleRetryAttempt;
+    void supabaseMovieRepository
+      .getSubtitleTracks(contentId)
+      .then((tracks) => {
+        if (active) {
+          setSubtitleData({ contentId, retryAttempt, tracks });
+        }
+      })
+      .catch((loadError: unknown) => {
+        logger.warn('[Player] Could not load subtitle tracks.', loadError);
+        if (active) {
+          setSubtitleData({
+            contentId,
+            retryAttempt,
+            tracks: [],
+            error:
+              loadError instanceof Error
+                ? loadError.message
+                : 'Subtitle tracks could not be loaded.',
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOnline, isTrailer, subtitleContentId, subtitleRetryAttempt]);
+
+  useEffect(() => {
+    let active = true;
+    if (
+      !selectedSubtitleTrackId ||
+      !selectedSubtitleTrackUrl ||
+      !selectedSubtitleTrackFormat
+    ) {
+      return () => {
+        active = false;
+      };
+    }
+    const trackId = selectedSubtitleTrackId;
+    const url = selectedSubtitleTrackUrl;
+    const format = selectedSubtitleTrackFormat;
+    void fetch(url)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`Subtitle download failed with HTTP ${response.status}.`);
+        }
+        return response.text();
+      })
+      .then((contents) => {
+        const cues = parseSubtitleFile(contents, format);
+        if (active) {
+          setSubtitleCueData({ trackId, url, cues });
+        }
+      })
+      .catch((loadError: unknown) => {
+        logger.warn('[Player] Could not load subtitle captions.', loadError);
+        if (active) {
+          setSubtitleCueData({
+            trackId,
+            url,
+            error: 'The selected subtitles could not be loaded. Retry or choose Off.',
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedSubtitleTrackFormat, selectedSubtitleTrackId, selectedSubtitleTrackUrl]);
+
+  const selectSubtitleTrack = useCallback(
+    (trackId: string | null) => {
+      const track = trackId ? subtitleTracks.find((candidate) => candidate.id === trackId) : undefined;
+      if (trackId && !track) {
+        setSubtitlePreferenceError(
+          'That subtitle track is no longer available. Refresh the list and retry.',
+        );
+        return;
+      }
+      const userId = auth.session?.user.id ?? null;
+      if (movie) {
+        setSubtitleSelection({
+          contentId: movie.id,
+          userId,
+          trackId: track?.id ?? null,
+        });
+      }
+      setSubtitleSheetVisible(false);
+      setSubtitlePreferenceError(undefined);
+      if (!userId) {
+        return;
+      }
+      const language = track?.languageLabel ?? null;
+      void getUserAppSettings(userId)
+        .then((settings) =>
+          setUserAppSettings(userId, { ...settings, subtitleLanguage: language }),
+        )
+        .then(() => setSubtitlePreference({ userId, language }))
+        .catch((saveError: unknown) => {
+          logger.warn('[Player] Could not save the subtitle preference.', saveError);
+          setSubtitlePreferenceError('Your subtitle preference could not be saved.');
+        });
+    },
+    [auth.session?.user.id, movie, subtitleTracks],
+  );
 
   useEffect(() => {
     if (
@@ -722,6 +922,8 @@ export default function WatchScreen() {
     }
   };
 
+  const activeSubtitleText = findSubtitleCue(subtitleCues, currentTime)?.text;
+
   return (
     <SafeAreaView style={[styles.safeArea, isLandscape && styles.landscapeSafeArea]}>
       <Stack.Screen
@@ -749,6 +951,8 @@ export default function WatchScreen() {
         speedMenuOpen={speedMenuOpen}
         fitMode={fitMode}
         isRotateLocked={isRotateLocked}
+        subtitleText={activeSubtitleText}
+        subtitlesEnabled={selectedSubtitleTrackId !== null}
         onBack={() => backOrReplace('/')}
         onToggleControls={() => setShowControls((visible) => !visible)}
         onToggleLock={toggleLock}
@@ -759,11 +963,22 @@ export default function WatchScreen() {
         }}
         onCycleFit={cycleFitMode}
         onToggleRotate={toggleRotateLock}
+        onOpenSubtitles={() => setSubtitleSheetVisible(true)}
         onPlayPause={togglePlayback}
         onSeekBy={seekBy}
         onSeekTo={seekTo}
         onSeekingChange={setIsSeeking}
         onRetry={retryPlayback}
+      />
+      <SubtitleSheet
+        visible={subtitleSheetVisible}
+        tracks={subtitleTracks}
+        selectedTrackId={selectedSubtitleTrackId}
+        isLoading={subtitleLoading}
+        error={subtitleCueError ?? subtitlePreferenceError ?? subtitleError}
+        onClose={() => setSubtitleSheetVisible(false)}
+        onSelect={selectSubtitleTrack}
+        onRetry={() => setSubtitleRetryAttempt((attempt) => attempt + 1)}
       />
       {!isLandscape && !isTrailer && movie?.parentSeriesId ? (
         <View style={styles.nextEpisodeCard}>

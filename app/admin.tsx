@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { File as ExpoFile, FileMode } from 'expo-file-system';
+import { File as ExpoFile } from 'expo-file-system';
 import * as DocumentPicker from 'expo-document-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
@@ -21,6 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ContentNotice } from '../src/components/ContentNotice';
 import { KeyboardAwareScrollView, KeyboardAwareTextInput } from '../src/components/KeyboardAwareScrollView';
 import { CategoryPicker } from '../src/components/CategoryPicker';
+import { SubtitleUploadPanel } from '../src/components/admin/SubtitleUploadPanel';
 import { useNetwork } from '../src/state/NetworkContext';
 import { TitleImage } from '../src/components/TitleImage';
 import { MAX_TRAILER_FILE_SIZE_BYTES, MAX_VIDEO_FILE_SIZE_BYTES } from '../src/constants/video';
@@ -52,6 +53,7 @@ import { getAdminRouteState, isAdminMetadata } from '../src/utils/adminAccess';
 import { getFriendlyAuthError } from '../src/utils/accountAuth';
 import { backOrReplace } from '../src/utils/navigation';
 import { createConfirmAction } from '../src/utils/confirmAction';
+import { readFilePart } from '../src/utils/readFilePart';
 
 const confirmAction = createConfirmAction({
   platform: Platform.OS,
@@ -187,28 +189,6 @@ function parseUnusedMediaScan(value: unknown): UnusedMediaScan | undefined {
 }
 
 const titleCleanupStore = new TitleCleanupStore(AsyncStorage);
-
-async function readVideoPart(
-  file: globalThis.File | ExpoFile,
-  start: number,
-  end: number,
-  contentType: string,
-) {
-  if (file instanceof ExpoFile) {
-    const handle = file.open(FileMode.ReadOnly);
-    try {
-      handle.offset = start;
-      const bytes = handle.readBytes(end - start);
-      if (bytes.byteLength !== end - start) {
-        throw new Error('The selected video file could not be read completely.');
-      }
-      return new Blob([bytes], { type: contentType });
-    } finally {
-      handle.close();
-    }
-  }
-  return file.slice(start, end, contentType);
-}
 
 const inputFields = [
   { key: 'title', label: 'Movie title', placeholder: 'Enter the movie title' },
@@ -886,7 +866,7 @@ export default function AdminScreen() {
           file: {
             size: selectedTrailer.size,
             readPart: (start, end, contentType) =>
-              readVideoPart(selectedTrailer.file, start, end, contentType),
+              readFilePart(selectedTrailer.file, start, end, contentType),
           },
           fileName: selectedTrailer.name,
           contentType: selectedTrailer.contentType,
@@ -904,7 +884,7 @@ export default function AdminScreen() {
         file: {
           size: selectedFile.size,
           readPart: (start, end, contentType) =>
-            readVideoPart(selectedFile.file, start, end, contentType),
+            readFilePart(selectedFile.file, start, end, contentType),
         },
         fileName: selectedFile.name,
         contentType: selectedFile.contentType,
@@ -1171,7 +1151,7 @@ export default function AdminScreen() {
           file: {
             size: seriesTrailer.size,
             readPart: (start, end, contentType) =>
-              readVideoPart(seriesTrailer.file, start, end, contentType),
+              readFilePart(seriesTrailer.file, start, end, contentType),
           },
           fileName: seriesTrailer.name,
           contentType: seriesTrailer.contentType,
@@ -1334,7 +1314,7 @@ export default function AdminScreen() {
         file: {
           size: episodeFile.size,
           readPart: (start, end, contentType) =>
-            readVideoPart(episodeFile.file, start, end, contentType),
+            readFilePart(episodeFile.file, start, end, contentType),
         },
         fileName: episodeFile.name,
         contentType: episodeFile.contentType,
@@ -1550,7 +1530,7 @@ export default function AdminScreen() {
           file: {
             size: editTrailerFile.size,
             readPart: (start, end, contentType) =>
-              readVideoPart(editTrailerFile.file, start, end, contentType),
+              readFilePart(editTrailerFile.file, start, end, contentType),
           },
           fileName: editTrailerFile.name,
           contentType: editTrailerFile.contentType,
@@ -2472,6 +2452,8 @@ export default function AdminScreen() {
                 <Text style={styles.primaryButtonText}>{isUploading ? 'Uploading…' : 'Add episode'}</Text>
               </Pressable>
             </View>
+
+            <SubtitleUploadPanel titles={movies} isOnline={isOnline} />
 
             <View style={styles.catalogHeader}>
               <Text style={styles.sectionTitle}>Content catalog</Text>

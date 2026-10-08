@@ -94,6 +94,7 @@ function getClientIp(request: IncomingMessage) {
 function applyRateLimit(request: IncomingMessage, pathname: string) {
   const isMediaUrl =
     /^\/(movies|episodes)\/[^/]+\/play-url$/.test(pathname) ||
+    pathname === '/api/subtitles' ||
     pathname === '/api/downloads/authorize';
   const limit = isMediaUrl ? PLAY_URL_RATE_LIMIT_PER_MINUTE : PUBLIC_RATE_LIMIT_PER_MINUTE;
   const key = `${getClientIp(request)}:${isMediaUrl ? 'media-url' : pathname}`;
@@ -681,6 +682,101 @@ async function handleRequest(
       throw new HttpError(409, 'STORAGE_PROVIDER_UNSUPPORTED', 'This title uses unsupported storage.');
     }
     writeJson(response, 200, { url, expiresIn: 7200, fileSizeBytes });
+    return;
+  }
+
+  if (pathname === '/api/subtitles') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const { client, isAdmin } = await authenticatePlayback(config, request.headers.authorization);
+    const contentKind = requiredQuery(url, 'kind', 16);
+    const contentId = requiredQuery(url, 'id', 64);
+    if ((contentKind !== 'movie' && contentKind !== 'episode') || !isMovieId(contentId)) {
+      throw new HttpError(400, 'INVALID_SUBTITLE_TARGET', 'The subtitle target is invalid.');
+    }
+
+    let trackColumn: 'movie_id' | 'episode_id';
+    if (contentKind === 'movie') {
+      const { data, error } = await client
+        .from('movies')
+        .select('published,content_type')
+        .eq('id', contentId)
+        .maybeSingle();
+      if (error) {
+        throw new HttpError(502, 'SUBTITLE_LOOKUP_FAILED', 'Could not load subtitles for this title.');
+      }
+      if (!data || (data.content_type !== 'movie' && data.content_type !== 'short')) {
+        throw new HttpError(404, 'TITLE_NOT_FOUND', 'This video is not available.');
+      }
+      requirePublishedOrAdmin(data.published === true, isAdmin);
+      trackColumn = 'movie_id';
+    } else {
+      const { data: episode, error: episodeError } = await client
+        .from('episodes')
+        .select('published,season_id')
+        .eq('id', contentId)
+        .maybeSingle();
+      if (episodeError) {
+        throw new HttpError(502, 'SUBTITLE_LOOKUP_FAILED', 'Could not load subtitles for this episode.');
+      }
+      if (!episode) {
+        throw new HttpError(404, 'EPISODE_NOT_FOUND', 'This video is not available.');
+      }
+      const { data: season, error: seasonError } = await client
+        .from('seasons')
+        .select('published,series_id')
+        .eq('id', episode.season_id)
+        .maybeSingle();
+      if (seasonError) {
+        throw new HttpError(502, 'SUBTITLE_LOOKUP_FAILED', 'Could not load subtitles for this episode.');
+      }
+      if (!season) {
+        throw new HttpError(404, 'EPISODE_NOT_FOUND', 'This video is not available.');
+      }
+      const { data: series, error: seriesError } = await client
+        .from('movies')
+        .select('published,content_type')
+        .eq('id', season.series_id)
+        .maybeSingle();
+      if (seriesError) {
+        throw new HttpError(502, 'SUBTITLE_LOOKUP_FAILED', 'Could not load subtitles for this episode.');
+      }
+      if (!series || series.content_type !== 'series') {
+        throw new HttpError(404, 'EPISODE_NOT_FOUND', 'This video is not available.');
+      }
+      requirePublishedOrAdmin(
+        episode.published === true && season.published === true && series.published === true,
+        isAdmin,
+      );
+      trackColumn = 'episode_id';
+    }
+
+    const { data: tracks, error: tracksError } = await client
+      .from('subtitle_tracks')
+      .select('id,language_label,format,storage_path')
+      .eq(trackColumn, contentId)
+      .order('language_label', { ascending: true });
+    if (tracksError) {
+      throw new HttpError(502, 'SUBTITLE_LOOKUP_FAILED', 'Could not load subtitles for this video.');
+    }
+    const signedTracks = await Promise.all(
+      (tracks ?? []).map(async (track) => {
+        const { data, error } = await client.storage
+          .from('subtitle-files')
+          .createSignedUrl(track.storage_path, 7200);
+        if (error || !data?.signedUrl) {
+          throw new HttpError(502, 'SUBTITLE_URL_FAILED', 'Could not prepare a subtitle track.');
+        }
+        return {
+          id: track.id,
+          languageLabel: track.language_label,
+          format: track.format,
+          url: data.signedUrl,
+        };
+      }),
+    );
+    writeJson(response, 200, { tracks: signedTracks });
     return;
   }
 
