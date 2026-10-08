@@ -133,9 +133,16 @@ test('Football Home category shows score states and notes without match stream a
   assert.match(panel, /Loading football scores/);
   assert.match(panel, /Football scores could not be loaded/);
   assert.match(panel, /You’re offline/);
-  assert.match(panel, /No matches scheduled/);
+  assert.match(panel, /No matches/);
   assert.match(panel, /Scores may be delayed/);
   assert.match(panel, /All times in West Africa Time/);
+  assert.match(panel, /Array\.from\(\{ length: 7 \}/);
+  assert.match(panel, /onPress=\{\(\) => setDate\(day\.date\)\}/);
+  assert.match(panel, /title: 'Live'/);
+  assert.match(panel, /title: 'Upcoming'/);
+  assert.match(panel, /title: 'Results'/);
+  assert.match(panel, /timeZone: 'Africa\/Lagos'[\s\S]*?hour: '2-digit'/);
+  assert.match(panel, /match\.status === 'scheduled'[\s\S]*?styles\.kickoff[\s\S]*?formatKickoff\(match\.startsAt\)/);
   assert.doesNotMatch(panel, /router\.push|\/watch\//);
 });
 
