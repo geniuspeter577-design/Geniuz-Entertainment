@@ -19,6 +19,9 @@ import {
   validateUploadInput,
 } from '../storage/uploadValidation';
 import { ContentNotFoundError, ContentService } from '../services/ContentService';
+import { FootballMatchesService } from '../services/FootballMatchesService';
+import { FootballDataProvider } from '../providers/FootballDataProvider';
+import { SportsProviderError } from '../providers/SportsProvider';
 import { authenticateAdmin, authenticatePlayback, requirePublishedOrAdmin } from './auth';
 import { HttpError, mapProviderError } from './errors';
 
@@ -42,6 +45,7 @@ type UnusedMediaScan = {
 };
 type ApiServerOptions = {
   storageFactory?: StorageFactory;
+  footballMatchesService?: FootballMatchesService;
   now?: () => number;
 };
 
@@ -148,6 +152,31 @@ function optionalQuery(url: URL, name: string, maximumLength: number) {
   return value;
 }
 
+function isRealCalendarDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+}
+
+function mapFootballProviderError(error: unknown): HttpError {
+  if (!(error instanceof SportsProviderError)) {
+    return new HttpError(502, 'FOOTBALL_UNAVAILABLE', 'Football scores are temporarily unavailable.');
+  }
+  switch (error.code) {
+    case 'NOT_CONFIGURED':
+      return new HttpError(503, 'FOOTBALL_NOT_CONFIGURED', 'Football scores are not configured.');
+    case 'RATE_LIMITED':
+      return new HttpError(503, 'FOOTBALL_RATE_LIMITED', 'Football scores are temporarily rate limited.');
+    case 'TIMEOUT':
+      return new HttpError(504, 'FOOTBALL_TIMEOUT', 'The football scores provider did not respond in time.');
+    case 'INVALID_RESPONSE':
+    case 'UNAVAILABLE':
+      return new HttpError(502, 'FOOTBALL_UNAVAILABLE', 'Football scores are temporarily unavailable.');
+  }
+}
+
 function pageResponse(result: ContentPage) {
   return { items: result.items, page: result.page, totalPages: result.totalPages };
 }
@@ -249,6 +278,7 @@ async function handleRequest(
   response: ServerResponse,
   config: Config,
   content: ContentService,
+  footballMatches: FootballMatchesService,
   getStorage: StorageFactory,
   unusedMediaScans: Map<string, UnusedMediaScan>,
   activeMultipartUploads: Set<string>,
@@ -288,6 +318,29 @@ async function handleRequest(
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
     }
     writeJson(response, 200, { status: 'ok', service: 'geniuz-api' });
+    return;
+  }
+
+  if (pathname === '/football/matches') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const date = url.searchParams.get('date')?.trim() ?? '';
+    if (!isRealCalendarDate(date)) {
+      throw new HttpError(
+        400,
+        'INVALID_MATCH_DATE',
+        'The date query parameter must be a real date in YYYY-MM-DD format.',
+      );
+    }
+    if (!config.footballDataApiKey) {
+      throw new HttpError(503, 'FOOTBALL_NOT_CONFIGURED', 'Football scores are not configured.');
+    }
+    try {
+      writeJson(response, 200, await footballMatches.getMatches(date));
+    } catch (error) {
+      throw mapFootballProviderError(error);
+    }
     return;
   }
 
@@ -1083,8 +1136,12 @@ export function createApiServer(config: Config, content: ContentService, options
   const unusedMediaScans = new Map<string, UnusedMediaScan>();
   const activeMultipartUploads = new Set<string>();
   const now = options.now ?? Date.now;
+  const footballMatches = options.footballMatchesService ?? new FootballMatchesService(
+    new FootballDataProvider(config.footballDataApiKey),
+    now,
+  );
   return createServer((request, response) => {
-    void handleRequest(request, response, config, content, getStorage, unusedMediaScans, activeMultipartUploads, now).catch((error: unknown) => {
+    void handleRequest(request, response, config, content, footballMatches, getStorage, unusedMediaScans, activeMultipartUploads, now).catch((error: unknown) => {
       const httpError =
         error instanceof HttpError
           ? error

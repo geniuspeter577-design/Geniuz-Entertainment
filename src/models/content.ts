@@ -90,6 +90,6 @@ export interface ContinueWatchingEntry {
 
 export type ContentQueryResult<T> = {
   data: T;
-  source: 'mock' | 'tmdb' | 'supabase' | 'local';
+  source: 'mock' | 'tmdb' | 'supabase' | 'local' | 'api';
   warning?: string;
 };

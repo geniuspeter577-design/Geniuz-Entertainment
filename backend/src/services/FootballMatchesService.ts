@@ -3,10 +3,13 @@ import type {
   FootballMatchesResponse,
   SportsProvider,
 } from '../providers/SportsProvider';
+import { SportsProviderError } from '../providers/SportsProvider';
 
 export const LIVE_MATCH_CACHE_MS = 60_000;
 export const NON_LIVE_MATCH_CACHE_MS = 10 * 60_000;
 const PROVIDER_RETRY_DELAY_MS = 60_000;
+const PROVIDER_REQUEST_WINDOW_MS = 60_000;
+const PROVIDER_REQUEST_LIMIT = 10;
 
 type CachedMatches = {
   response: FootballMatchesResponse;
@@ -17,6 +20,7 @@ type CachedMatches = {
 export class FootballMatchesService {
   private readonly cache = new Map<string, CachedMatches>();
   private readonly inFlight = new Map<string, Promise<FootballMatchesResponse>>();
+  private readonly providerRequestTimes: number[] = [];
 
   constructor(
     private readonly provider: SportsProvider,
@@ -37,6 +41,22 @@ export class FootballMatchesService {
     if (existing) {
       return existing;
     }
+
+    while (
+      this.providerRequestTimes.length > 0 &&
+      this.providerRequestTimes[0] <= now - PROVIDER_REQUEST_WINDOW_MS
+    ) {
+      this.providerRequestTimes.shift();
+    }
+    if (this.providerRequestTimes.length >= PROVIDER_REQUEST_LIMIT) {
+      if (!cached) {
+        throw new SportsProviderError('RATE_LIMITED');
+      }
+      const retryAfter = this.providerRequestTimes[0] + PROVIDER_REQUEST_WINDOW_MS;
+      this.cache.set(date, { ...cached, retryAfter });
+      return Promise.resolve({ ...cached.response, stale: true });
+    }
+    this.providerRequestTimes.push(now);
 
     const request = this.loadMatches(date, cached)
       .finally(() => this.inFlight.delete(date));

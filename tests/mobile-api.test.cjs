@@ -1,4 +1,5 @@
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const { once } = require('node:events');
 const { test } = require('node:test');
 
@@ -8,6 +9,7 @@ const { loadConfig } = require('../.test-build/backend/backend/src/config/config
 const { createApiServer } = require('../.test-build/backend/backend/src/http/server.js');
 const { TMDBContentRepository } = require('../.test-build/backend/backend/src/repositories/TMDBContentRepository.js');
 const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
+const { FootballMatchesService } = require('../.test-build/backend/backend/src/services/FootballMatchesService.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 
 function tmdbResponse(url) {
@@ -62,6 +64,7 @@ async function createIntegratedServer() {
     tmdbApiKey: 'integration-only-secret',
     tmdbBaseUrl: 'https://tmdb.example.test/3',
     anilistApiUrl: 'https://anilist.example.test/graphql',
+    footballDataApiKey: 'football-integration-key',
     corsOrigins: ['http://localhost:8081'],
     cacheTtlSeconds: 30,
   };
@@ -70,7 +73,20 @@ async function createIntegratedServer() {
     async (input) => tmdbResponse(new URL(String(input))),
   );
   const repository = new TMDBContentRepository(provider);
-  const server = createApiServer(config, new ContentService(repository));
+  const footballMatchesService = new FootballMatchesService({
+    getMatches: async () => [{
+      id: 'football-match-1',
+      competition: { id: 'league-1', name: 'Integration League' },
+      startsAt: '2026-10-08T17:00:00.000Z',
+      status: 'scheduled',
+      minute: null,
+      homeTeam: { name: 'Home FC' },
+      awayTeam: { name: 'Away FC' },
+      homeScore: null,
+      awayScore: null,
+    }],
+  });
+  const server = createApiServer(config, new ContentService(repository), { footballMatchesService });
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
@@ -96,6 +112,31 @@ test('mobile Geniuz repository consumes live trending and search API responses',
   assert.equal(trending[0].availability.stream, false);
   assert.equal(search[0].id, 'tmdb:movie:654');
   assert.equal(search[0].availability.download, false);
+});
+
+test('mobile Geniuz repository loads football matches through the backend route', async (context) => {
+  const server = await createIntegratedServer();
+  context.after(server.close);
+
+  const repository = new GeniuzContentRepository(new ApiClient({ baseUrl: server.baseUrl }));
+  const response = await repository.getFootballMatches('2026-10-08');
+  assert.equal(response.date, '2026-10-08');
+  assert.equal(response.matches[0].competition.name, 'Integration League');
+  assert.equal(response.matches[0].homeTeam.name, 'Home FC');
+});
+
+test('Football Home category shows score states and notes without match stream actions', () => {
+  const home = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
+  const panel = fs.readFileSync('src/components/FootballMatchesPanel.tsx', 'utf8');
+  assert.match(home, /selectedCategory === 'Football'[\s\S]*?<FootballMatchesPanel/);
+  assert.match(panel, /getFootballMatches\(date\)/);
+  assert.match(panel, /Loading football scores/);
+  assert.match(panel, /Football scores could not be loaded/);
+  assert.match(panel, /You’re offline/);
+  assert.match(panel, /No matches scheduled/);
+  assert.match(panel, /Scores may be delayed/);
+  assert.match(panel, /All times in West Africa Time/);
+  assert.doesNotMatch(panel, /router\.push|\/watch\//);
 });
 
 test('mobile Geniuz repository rejects malformed normalized responses', async () => {

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { ContentRail } from '../../src/components/ContentRail';
+import { FootballMatchesPanel } from '../../src/components/FootballMatchesPanel';
 import { HomeHeroCarousel } from '../../src/components/HomeHeroCarousel';
 import { OfflineState } from '../../src/components/OfflineState';
 import { SectionHeader } from '../../src/components/SectionHeader';
@@ -309,10 +310,17 @@ export default function HomeScreen() {
             />
             <Text style={styles.brand}>Geniuz+</Text>
           </View>
-          <OfflineState onRetry={() => {
-            refreshCatalog();
-            void retryConnection();
-          }} />
+          {selectedCategory === 'Football' ? (
+            <FootballMatchesPanel
+              isOnline={false}
+              onRetryConnection={() => void retryConnection()}
+            />
+          ) : (
+            <OfflineState onRetry={() => {
+              refreshCatalog();
+              void retryConnection();
+            }} />
+          )}
         </ScrollView>
       </SafeAreaView>
     );
@@ -416,6 +424,10 @@ export default function HomeScreen() {
           </ScrollView>
         ) : null}
 
+        {selectedCategory === 'Football' ? (
+          <FootballMatchesPanel isOnline={isOnline} onRetryConnection={() => void retryConnection()} />
+        ) : null}
+
         {activeHeroItems.length ? (
           <HomeHeroCarousel
             items={activeHeroItems}
@@ -425,8 +437,8 @@ export default function HomeScreen() {
           />
         ) : null}
         {catalogQuery.isLoading ? <ContentNotice message="Loading published titles…" /> : null}
-        {noTitles ? <Text style={styles.emptyText}>Nothing here yet</Text> : null}
-        {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'Trending' && activeCategoryItems.length === 0 ? (
+        {noTitles && selectedCategory !== 'Football' ? <Text style={styles.emptyText}>Nothing here yet</Text> : null}
+        {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'Trending' && selectedCategory !== 'Football' && activeCategoryItems.length === 0 ? (
           <Text style={styles.emptyText}>Nothing here yet</Text>
         ) : null}
 

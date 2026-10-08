@@ -1,5 +1,6 @@
 import { ApiClient, ApiError } from '../api/ApiClient';
 import type { ContentItem, ContentType } from '../models/content';
+import type { FootballMatch, FootballMatchesResponse, FootballMatchStatus, FootballTeam } from '../models/football';
 import type { ContentRepository, ContentSearchOptions } from './ContentRepository';
 
 type ContentPageResponse = {
@@ -102,6 +103,75 @@ function parsePage(value: unknown): ContentItem[] {
   return value.items.map(parseContentItem);
 }
 
+const footballStatuses = new Set<FootballMatchStatus>([
+  'scheduled',
+  'live',
+  'finished',
+  'postponed',
+  'cancelled',
+]);
+
+function parseFootballTeam(value: unknown): FootballTeam {
+  if (
+    !isRecord(value) ||
+    typeof value.name !== 'string' ||
+    (value.logoUrl !== undefined && typeof value.logoUrl !== 'string')
+  ) {
+    throw new ApiError('Geniuz API returned invalid football match data.');
+  }
+  return {
+    name: value.name,
+    ...(typeof value.logoUrl === 'string' ? { logoUrl: value.logoUrl } : {}),
+  };
+}
+
+function parseFootballMatches(value: unknown): FootballMatchesResponse {
+  if (
+    !isRecord(value) ||
+    typeof value.date !== 'string' ||
+    typeof value.fetchedAt !== 'string' ||
+    typeof value.stale !== 'boolean' ||
+    !Array.isArray(value.matches)
+  ) {
+    throw new ApiError('Geniuz API returned invalid football match data.');
+  }
+  const matches: FootballMatch[] = value.matches.map((item) => {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== 'string' ||
+      !isRecord(item.competition) ||
+      typeof item.competition.id !== 'string' ||
+      typeof item.competition.name !== 'string' ||
+      (item.competition.logoUrl !== undefined && typeof item.competition.logoUrl !== 'string') ||
+      typeof item.startsAt !== 'string' ||
+      !Number.isFinite(Date.parse(item.startsAt)) ||
+      typeof item.status !== 'string' ||
+      !footballStatuses.has(item.status as FootballMatchStatus) ||
+      (item.minute !== null && (!Number.isInteger(item.minute) || Number(item.minute) < 0)) ||
+      (item.homeScore !== null && (!Number.isInteger(item.homeScore) || Number(item.homeScore) < 0)) ||
+      (item.awayScore !== null && (!Number.isInteger(item.awayScore) || Number(item.awayScore) < 0))
+    ) {
+      throw new ApiError('Geniuz API returned invalid football match data.');
+    }
+    return {
+      id: item.id,
+      competition: {
+        id: item.competition.id,
+        name: item.competition.name,
+        ...(typeof item.competition.logoUrl === 'string' ? { logoUrl: item.competition.logoUrl } : {}),
+      },
+      startsAt: item.startsAt,
+      status: item.status as FootballMatchStatus,
+      minute: item.minute as number | null,
+      homeTeam: parseFootballTeam(item.homeTeam),
+      awayTeam: parseFootballTeam(item.awayTeam),
+      homeScore: item.homeScore as number | null,
+      awayScore: item.awayScore as number | null,
+    };
+  });
+  return { date: value.date, fetchedAt: value.fetchedAt, stale: value.stale, matches };
+}
+
 export class GeniuzContentRepository implements ContentRepository {
   constructor(private readonly apiClient: ApiClient) {}
 
@@ -164,6 +234,12 @@ export class GeniuzContentRepository implements ContentRepository {
       name: genre,
       ...(page ? { page } : {}),
     });
+  }
+
+  async getFootballMatches(date: string) {
+    return parseFootballMatches(
+      await this.apiClient.get<unknown>('/football/matches', { date }),
+    );
   }
 
   async getSimilar(id: string, page = 1) {

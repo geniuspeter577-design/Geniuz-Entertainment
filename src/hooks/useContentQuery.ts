@@ -5,7 +5,7 @@ import { getFriendlyCatalogErrorMessage } from '../utils/contentError';
 
 export type ContentQueryState<T> = {
   data: T | null;
-  source: 'mock' | 'tmdb' | 'supabase' | 'local' | null;
+  source: 'mock' | 'tmdb' | 'supabase' | 'local' | 'api' | null;
   warning?: string;
   error?: string;
   isLoading: boolean;

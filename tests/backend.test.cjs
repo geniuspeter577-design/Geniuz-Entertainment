@@ -7,6 +7,7 @@ const { createApiServer } = require('../.test-build/backend/backend/src/http/ser
 const { TMDBContentRepository } = require('../.test-build/backend/backend/src/repositories/TMDBContentRepository.js');
 const { MemoryCache } = require('../.test-build/backend/backend/src/repositories/MemoryCache.js');
 const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
+const { FootballMatchesService } = require('../.test-build/backend/backend/src/services/FootballMatchesService.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 const { B2StorageService } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
 
@@ -20,6 +21,18 @@ const tmdbRecord = {
   overview: 'A catalog description.',
   vote_average: 8.2,
   original_language: 'en',
+};
+
+const footballMatch = {
+  id: 'match-1',
+  competition: { id: 'competition-1', name: 'Test League' },
+  startsAt: '2026-10-08T17:00:00.000Z',
+  status: 'live',
+  minute: 61,
+  homeTeam: { name: 'Home FC' },
+  awayTeam: { name: 'Away FC' },
+  homeScore: 2,
+  awayScore: 1,
 };
 
 function makeResponse(value, status = 200) {
@@ -102,6 +115,9 @@ async function startApi(options = {}) {
     anilistApiUrl: 'https://anilist.example.test/graphql',
     corsOrigins: options.corsOrigins ?? ['http://localhost:8081'],
     cacheTtlSeconds: 30,
+    ...(Object.hasOwn(options, 'footballDataApiKey')
+      ? { footballDataApiKey: options.footballDataApiKey }
+      : {}),
     ...(options.supabaseUrl ? { supabaseUrl: options.supabaseUrl } : {}),
     ...(options.supabasePublishableKey
       ? { supabasePublishableKey: options.supabasePublishableKey }
@@ -114,7 +130,11 @@ async function startApi(options = {}) {
     fakeFetch.fetchImplementation,
   );
   const repository = new TMDBContentRepository(provider, 30_000);
-  const server = createApiServer(config, new ContentService(repository, 30_000));
+  const server = createApiServer(
+    config,
+    new ContentService(repository, 30_000),
+    options.footballMatchesService ? { footballMatchesService: options.footballMatchesService } : undefined,
+  );
   server.listen(0, '127.0.0.1');
   await once(server, 'listening');
   const address = server.address();
@@ -766,6 +786,106 @@ test('health endpoint does not require catalog credentials', async (context) => 
   const response = await fetch(`http://127.0.0.1:${server.address().port}/health`);
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), { status: 'ok', service: 'geniuz-api' });
+});
+
+test('football matches endpoint validates and returns a real calendar date', async (context) => {
+  let requestedDate;
+  const footballMatchesService = new FootballMatchesService({
+    getMatches: async (date) => {
+      requestedDate = date;
+      return [footballMatch];
+    },
+  });
+  const api = await startApi({ footballDataApiKey: 'football-test-key', footballMatchesService });
+  context.after(api.close);
+
+  const response = await fetch(`${api.baseUrl}/football/matches?date=2026-10-08`);
+  const body = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(requestedDate, '2026-10-08');
+  assert.equal(body.date, '2026-10-08');
+  assert.equal(body.matches[0].homeTeam.name, 'Home FC');
+  assert.doesNotMatch(JSON.stringify(body), /football-test-key/);
+});
+
+test('football matches endpoint rejects missing or impossible dates with a clear 400', async (context) => {
+  const api = await startApi({ footballDataApiKey: 'football-test-key' });
+  context.after(api.close);
+
+  for (const path of ['/football/matches', '/football/matches?date=2026-02-30', '/football/matches?date=2026-2-3']) {
+    const response = await fetch(`${api.baseUrl}${path}`);
+    const body = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, 'INVALID_MATCH_DATE');
+    assert.match(body.error.message, /real date in YYYY-MM-DD/);
+  }
+});
+
+test('football matches endpoint reports missing provider configuration without exposing a key', async (context) => {
+  context.mock.method(console, 'error', () => {});
+  const api = await startApi();
+  context.after(api.close);
+
+  const response = await fetch(`${api.baseUrl}/football/matches?date=2026-10-08`);
+  const body = await response.text();
+  assert.equal(response.status, 503);
+  assert.match(body, /Football scores are not configured/);
+  assert.doesNotMatch(body, /football-test-key|stack/i);
+});
+
+test('football matches endpoint serves stale data after provider failure and caches successful results', async (context) => {
+  let now = Date.UTC(2026, 9, 8);
+  let calls = 0;
+  let shouldFail = false;
+  const footballMatchesService = new FootballMatchesService({
+    getMatches: async () => {
+      calls += 1;
+      if (shouldFail) {
+        throw new Error('provider unavailable');
+      }
+      return [];
+    },
+  }, () => now);
+  const api = await startApi({ footballDataApiKey: 'football-test-key', footballMatchesService });
+  context.after(api.close);
+
+  const first = await fetch(`${api.baseUrl}/football/matches?date=2026-10-08`);
+  assert.equal(first.status, 200);
+  const cacheHit = await fetch(`${api.baseUrl}/football/matches?date=2026-10-08`);
+  assert.equal(cacheHit.status, 200);
+  assert.equal(calls, 1);
+
+  now += 10 * 60_000 + 1;
+  shouldFail = true;
+  const stale = await fetch(`${api.baseUrl}/football/matches?date=2026-10-08`);
+  const staleBody = await stale.json();
+  assert.equal(stale.status, 200);
+  assert.equal(staleBody.stale, true);
+  assert.deepEqual(staleBody.matches, []);
+  assert.equal(calls, 2);
+});
+
+test('football provider requests stay within the ten-per-minute free tier limit', async (context) => {
+  context.mock.method(console, 'error', () => {});
+  let calls = 0;
+  const now = Date.UTC(2026, 9, 8);
+  const footballMatchesService = new FootballMatchesService({
+    getMatches: async () => {
+      calls += 1;
+      return [];
+    },
+  }, () => now);
+  const api = await startApi({ footballDataApiKey: 'football-test-key', footballMatchesService });
+  context.after(api.close);
+
+  for (let day = 1; day <= 10; day += 1) {
+    const response = await fetch(`${api.baseUrl}/football/matches?date=2026-10-${String(day).padStart(2, '0')}`);
+    assert.equal(response.status, 200);
+  }
+  const limited = await fetch(`${api.baseUrl}/football/matches?date=2026-10-11`);
+  assert.equal(limited.status, 503);
+  assert.equal((await limited.json()).error.code, 'FOOTBALL_RATE_LIMITED');
+  assert.equal(calls, 10);
 });
 
 test('trending endpoint returns normalized discovery items without streaming rights', async (context) => {
