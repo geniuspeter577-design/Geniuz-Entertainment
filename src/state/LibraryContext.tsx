@@ -88,7 +88,11 @@ function isContinueWatchingEntry(value: unknown): value is ContinueWatchingEntry
     (entry.positionSeconds === undefined ||
       (typeof entry.positionSeconds === 'number' &&
         Number.isFinite(entry.positionSeconds) &&
-        entry.positionSeconds >= 0))
+        entry.positionSeconds >= 0)) &&
+    (entry.durationSeconds === undefined ||
+      (typeof entry.durationSeconds === 'number' &&
+        Number.isFinite(entry.durationSeconds) &&
+        entry.durationSeconds > 0))
   );
 }
 
@@ -236,6 +240,7 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
                   item,
                   progress,
                   positionSeconds,
+                  durationSeconds,
                   updatedAt,
                 },
                 ...current.continueWatching.filter((entry) => entry.item.id !== item.id),

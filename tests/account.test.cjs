@@ -185,13 +185,17 @@ test('new profile migration protects avatar ownership and adds short categories 
   assert.doesNotMatch(migration, /insert into public\.movies/i);
 });
 
-test('Me screen profile header opens Edit profile and displays its navigation arrow', () => {
+test('Me screen profile header and site/settings rows have working actions', () => {
   const screen = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
   assert.match(
     screen,
-    /<Pressable[\s\S]*?accessibilityLabel="Edit profile"[\s\S]*?onPress=\{\(\) => router\.push\('\/edit-profile'\)\}[\s\S]*?style=\{styles\.profileHeader\}/,
+    /const openEditProfile = \(\) => \{[\s\S]*?router\.push\('\/edit-profile'\)/,
   );
-  assert.match(screen, /<Ionicons name="chevron-forward" size=\{20\}/);
+  assert.match(screen, /<Ionicons name="chevron-forward" size=\{\d+\}/);
+  assert.match(screen, /EXPO_PUBLIC_OFFICIAL_SITE_URL/);
+  assert.match(screen, /accessibilityLabel="Settings, coming soon"/);
+  assert.match(screen, /auth\.openSignInSheet\('sign-in'\)/);
+  assert.match(fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8'), /name="profile" options=\{\{ title: 'Me' \}\}/);
 });
 
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {

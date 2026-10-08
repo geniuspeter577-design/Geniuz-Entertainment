@@ -18,11 +18,27 @@ const {
 const {
   getUnreadNotificationCount,
 } = require('../.test-build/src/services/NotificationsStore.js');
-const { getMeScreenData } = require('../.test-build/src/utils/meScreen.js');
+const {
+  getMeScreenData,
+  getShortPublicId,
+} = require('../.test-build/src/utils/meScreen.js');
 
-test('Me screen summary uses saved watchlist, watch progress, and unread messages', () => {
+test('Me screen uses newest saved watch progress, real list count, and unread messages', () => {
   const history = [
-    { item: { id: 'movie-1' }, progress: 42, updatedAt: '2026-10-08T00:00:00.000Z' },
+    {
+      item: { id: 'movie-1' },
+      progress: 20,
+      positionSeconds: 50,
+      durationSeconds: 100,
+      updatedAt: '2026-10-07T00:00:00.000Z',
+    },
+    {
+      item: { id: 'movie-2' },
+      progress: 10,
+      positionSeconds: 30,
+      durationSeconds: 100,
+      updatedAt: '2026-10-08T00:00:00.000Z',
+    },
   ];
   const meData = getMeScreenData(
     { watchlist: [{ id: 'movie-1' }, { id: 'movie-2' }], continueWatching: history },
@@ -35,8 +51,11 @@ test('Me screen summary uses saved watchlist, watch progress, and unread message
 
   assert.equal(meData.myListCount, 2);
   assert.equal(meData.unreadMessagesCount, 2);
-  assert.strictEqual(meData.watchHistory, history);
-  assert.equal(meData.watchHistory[0].progress, 42);
+  assert.deepEqual(
+    meData.watchHistory.map(({ item, progress }) => [item.id, progress]),
+    [['movie-2', 30], ['movie-1', 50]],
+  );
+  assert.equal(getShortPublicId('12345678'), 'ID ····5678');
 });
 
 const categoryItems = [
