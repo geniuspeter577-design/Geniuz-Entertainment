@@ -14,6 +14,7 @@ export const REQUIRED_BACKEND_ENV_VARS = [
 export type Config = {
   port: number;
   tmdbApiKey: string | undefined;
+  footballDataApiKey?: string;
   tmdbBaseUrl: string;
   anilistApiUrl: string;
   corsOrigins: string[];
@@ -82,6 +83,7 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
   return {
     port,
     tmdbApiKey: environment.TMDB_API_KEY?.trim() || undefined,
+    footballDataApiKey: environment.FOOTBALL_DATA_API_KEY?.trim() || undefined,
     tmdbBaseUrl: parsedTmdbBaseUrl.toString().replace(/\/+$/, ''),
     anilistApiUrl: environment.ANILIST_API_URL?.trim() || 'https://graphql.anilist.co',
     corsOrigins: (environment.CORS_ORIGIN ?? defaultCorsOrigins.join(','))

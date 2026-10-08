@@ -1,32 +1,54 @@
-export type LiveMatch = {
+export type FootballMatchStatus =
+  | 'scheduled'
+  | 'live'
+  | 'finished'
+  | 'postponed'
+  | 'cancelled';
+
+export type FootballMatch = {
   id: string;
-  competition: string;
+  competition: {
+    id: string;
+    name: string;
+    logoUrl?: string;
+  };
   startsAt: string;
-  status: 'scheduled' | 'live' | 'finished';
-  homeTeam: string;
-  awayTeam: string;
-  homeScore?: number;
-  awayScore?: number;
+  status: FootballMatchStatus;
+  minute: number | null;
+  homeTeam: {
+    name: string;
+    logoUrl?: string;
+  };
+  awayTeam: {
+    name: string;
+    logoUrl?: string;
+  };
+  homeScore: number | null;
+  awayScore: number | null;
 };
 
+export type FootballMatchesResponse = {
+  date: string;
+  fetchedAt: string;
+  stale: boolean;
+  matches: FootballMatch[];
+};
+
+export class SportsProviderError extends Error {
+  constructor(
+    readonly code: 'NOT_CONFIGURED' | 'RATE_LIMITED' | 'TIMEOUT' | 'INVALID_RESPONSE' | 'UNAVAILABLE',
+  ) {
+    super(code);
+    this.name = 'SportsProviderError';
+  }
+}
+
 export interface SportsProvider {
-  getLiveMatches(): Promise<LiveMatch[]>;
-  getUpcomingMatches(): Promise<LiveMatch[]>;
-  getResults(): Promise<LiveMatch[]>;
-  getCompetition(id: string): Promise<unknown | null>;
+  getMatches(date: string): Promise<FootballMatch[]>;
 }
 
 export class UnconfiguredSportsProvider implements SportsProvider {
-  async getLiveMatches(): Promise<LiveMatch[]> {
-    return [];
-  }
-  async getUpcomingMatches(): Promise<LiveMatch[]> {
-    return [];
-  }
-  async getResults(): Promise<LiveMatch[]> {
-    return [];
-  }
-  async getCompetition(_id: string): Promise<null> {
-    return null;
+  async getMatches(_date: string): Promise<FootballMatch[]> {
+    throw new SportsProviderError('NOT_CONFIGURED');
   }
 }
