@@ -198,6 +198,14 @@ test('Me screen profile header and site/settings rows have working actions', () 
   assert.match(fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8'), /name="profile" options=\{\{ title: 'Me' \}\}/);
 });
 
+test('signed-out Me screen keeps sign-in in the header only', () => {
+  const screen = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+  assert.match(screen, /: 'Sign in';/);
+  assert.match(screen, /Save your list and progress/);
+  assert.doesNotMatch(screen, /Sign in to your account|signInCard|signInTitle|signInSubtitle/);
+  assert.match(screen, /auth\.openSignInSheet\('sign-in'\)/);
+});
+
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
   const migration = fs.readFileSync('supabase/migrations/20261014000000_profile_date_of_birth.sql', 'utf8');
   assert.match(migration, /add column if not exists date_of_birth date/i);

@@ -127,8 +127,9 @@ export default function ProfileScreen() {
     Alert.alert(feature, 'Coming soon');
   };
 
-  const displayName =
-    auth.profile?.display_name || auth.session?.user.email || 'Sign in to view your profile';
+  const displayName = auth.session
+    ? auth.profile?.display_name || auth.session.user.email || 'Geniuz+ user'
+    : 'Sign in';
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -167,6 +168,9 @@ export default function ProfileScreen() {
               <Pressable accessibilityRole="button" onPress={openEditProfile}>
                 <Text style={styles.name} numberOfLines={1}>{displayName}</Text>
               </Pressable>
+              {!auth.session ? (
+                <Text style={styles.profileHint}>Save your list and progress</Text>
+              ) : null}
               {auth.profile?.public_id ? (
                 <Pressable
                   accessibilityRole="button"
@@ -195,17 +199,6 @@ export default function ProfileScreen() {
           {profileMessage ? <Text style={styles.profileMessage}>{profileMessage}</Text> : null}
         </View>
 
-        {!auth.session ? (
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => auth.openSignInSheet('sign-in')}
-            style={styles.signInCard}
-          >
-            <Text style={styles.signInTitle}>Sign in to your account</Text>
-            <Text style={styles.signInSubtitle}>Your profile and saved titles will be here.</Text>
-            <Ionicons name="chevron-forward" size={19} color={theme.accent} />
-          </Pressable>
-        ) : null}
         {auth.isLoading ? <ContentNotice message="Loading your account…" /> : null}
         {auth.profileError ? <ContentNotice message={auth.profileError} tone="error" /> : null}
         {notificationError ? <ContentNotice message={notificationError} tone="error" /> : null}
@@ -383,17 +376,6 @@ const styles = StyleSheet.create({
   profileHint: { color: theme.secondaryText, fontSize: 12, marginTop: 6 },
   editButton: { minWidth: 36, minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' },
   profileMessage: { color: theme.secondaryText, fontSize: 12, marginTop: 8 },
-  signInCard: {
-    minHeight: 66,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    marginBottom: 14,
-  },
-  signInTitle: { color: theme.text, fontSize: 14, fontWeight: '700' },
-  signInSubtitle: { flex: 1, color: theme.secondaryText, fontSize: 12, marginLeft: 10 },
   section: {
     backgroundColor: theme.surface,
     borderRadius: 16,
