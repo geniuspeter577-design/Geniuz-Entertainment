@@ -6,6 +6,7 @@ import { isNetworkOnline } from '../utils/networkStatus';
 
 type NetworkContextValue = {
   isOnline: boolean;
+  isWifi: boolean;
   isReady: boolean;
   retryConnection: () => Promise<void>;
 };
@@ -13,11 +14,15 @@ type NetworkContextValue = {
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
 export function NetworkProvider({ children }: React.PropsWithChildren) {
-  const [state, setState] = useState({ isOnline: false, isReady: false });
+  const [state, setState] = useState({ isOnline: false, isWifi: false, isReady: false });
 
   const updateNetwork = useCallback((networkState: NetworkState) => {
     const isOnline = isNetworkOnline(networkState);
-    setState({ isOnline, isReady: true });
+    setState({
+      isOnline,
+      isWifi: networkState.type === Network.NetworkStateType.WIFI,
+      isReady: true,
+    });
   }, []);
 
   const retryConnection = useCallback(async () => {
@@ -25,7 +30,7 @@ export function NetworkProvider({ children }: React.PropsWithChildren) {
       updateNetwork(await Network.getNetworkStateAsync());
     } catch (error) {
       console.error('[Network] Could not check connectivity.', error);
-      setState((current) => ({ ...current, isOnline: false, isReady: true }));
+      setState((current) => ({ ...current, isOnline: false, isWifi: false, isReady: true }));
     }
   }, [updateNetwork]);
 

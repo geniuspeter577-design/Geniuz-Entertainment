@@ -22,6 +22,7 @@ const {
   getMeScreenData,
   getShortPublicId,
 } = require('../.test-build/src/utils/meScreen.js');
+const { parseUserAppSettings } = require('../.test-build/src/services/TrailerAutoplayPreference.js');
 
 test('Me screen uses newest saved watch progress, real list count, and unread messages', () => {
   const history = [
@@ -56,6 +57,25 @@ test('Me screen uses newest saved watch progress, real list count, and unread me
     [['movie-2', 30], ['movie-1', 50]],
   );
   assert.equal(getShortPublicId('12345678'), 'ID ····5678');
+});
+
+test('user settings restore safe defaults and reject unsupported playback speeds', () => {
+  assert.deepEqual(parseUserAppSettings(null), {
+    autoplayNextEpisode: false,
+    defaultPlaybackSpeed: 1,
+    wifiOnlyDownloads: false,
+    watchPreference: 'streaming',
+  });
+  assert.equal(
+    parseUserAppSettings(JSON.stringify({ defaultPlaybackSpeed: 8, watchPreference: 'other' }))
+      .defaultPlaybackSpeed,
+    1,
+  );
+  assert.equal(
+    parseUserAppSettings(JSON.stringify({ defaultPlaybackSpeed: 1.5, watchPreference: 'download' }))
+      .watchPreference,
+    'download',
+  );
 });
 
 const categoryItems = [

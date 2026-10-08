@@ -138,8 +138,8 @@ export default function ProfileScreen() {
           <Text style={styles.header}>Me</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Settings, coming soon"
-            onPress={() => showComingSoon('Settings')}
+            accessibilityLabel="Settings"
+            onPress={() => router.push('/settings')}
             style={styles.settingsButton}
           >
             <Ionicons name="settings-outline" size={21} color={theme.text} />

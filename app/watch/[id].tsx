@@ -11,8 +11,10 @@ import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
+import { useAuth } from '../../src/state/AuthContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
+import { getUserAppSettings } from '../../src/services/TrailerAutoplayPreference';
 import { theme } from '../../src/theme';
 import { logger } from '../../src/utils/logger';
 import { getFriendlyPlaybackError, getPlaybackErrorDetails, isExpiredPlaybackLinkError, PlaybackError } from '../../src/utils/playbackError';
@@ -35,6 +37,7 @@ export default function WatchScreen() {
   const isTrailer = routeTrailer === '1';
   const player = useMemo(() => createVideoPlayer(null), []);
   const downloads = useDownloads();
+  const auth = useAuth();
   const { continueWatching, isLoading: isLibraryLoading, recordProgress } = useLibrary();
   const { isOnline } = useNetwork();
   const { width, height } = useWindowDimensions();
@@ -65,6 +68,30 @@ export default function WatchScreen() {
   const resumeAppliedRef = useRef(false);
   const finishedProgressRef = useRef(false);
   const saveProgressRef = useRef<() => void>(() => {});
+
+  useEffect(() => {
+    let active = true;
+    if (!auth.session) {
+      return () => {
+        active = false;
+      };
+    }
+    void getUserAppSettings(auth.session.user.id)
+      .then((settings) => {
+        if (active) {
+          setPlaybackSpeed(settings.defaultPlaybackSpeed);
+        }
+      })
+      .catch((settingsError: unknown) => {
+        logger.warn('[Player] Could not load default playback speed.', settingsError);
+        if (active) {
+          setError('Your playback speed preference could not be loaded.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [auth.session]);
 
   const saveProgress = useCallback(() => {
     if (isTrailer || !movie || finishedProgressRef.current) {

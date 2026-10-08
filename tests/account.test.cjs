@@ -193,7 +193,7 @@ test('Me screen profile header and site/settings rows have working actions', () 
   );
   assert.match(screen, /<Ionicons name="chevron-forward" size=\{\d+\}/);
   assert.match(screen, /EXPO_PUBLIC_OFFICIAL_SITE_URL/);
-  assert.match(screen, /accessibilityLabel="Settings, coming soon"/);
+  assert.match(screen, /accessibilityLabel="Settings"[\s\S]*?router\.push\('\/settings'\)/);
   assert.match(screen, /auth\.openSignInSheet\('sign-in'\)/);
   assert.match(fs.readFileSync('app/(tabs)/_layout.tsx', 'utf8'), /name="profile" options=\{\{ title: 'Me' \}\}/);
 });
@@ -204,6 +204,17 @@ test('signed-out Me screen keeps sign-in in the header only', () => {
   assert.match(screen, /Save your list and progress/);
   assert.doesNotMatch(screen, /Sign in to your account|signInCard|signInTitle|signInSubtitle/);
   assert.match(screen, /auth\.openSignInSheet\('sign-in'\)/);
+});
+
+test('Me gear opens Settings, which exposes real account actions and configured policy links', () => {
+  const profile = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
+  const settings = fs.readFileSync('app/settings.tsx', 'utf8');
+  assert.match(profile, /accessibilityLabel="Settings"[\s\S]*?router\.push\('\/settings'\)/);
+  assert.match(settings, /Change password/);
+  assert.match(settings, /auth\.signOut\(\)/);
+  assert.match(settings, /EXPO_PUBLIC_TERMS_URL/);
+  assert.match(settings, /EXPO_PUBLIC_PRIVACY_URL/);
+  assert.match(settings, /EXPO_PUBLIC_TERMS_URL[\s\S]*?EXPO_PUBLIC_PRIVACY_URL/);
 });
 
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
