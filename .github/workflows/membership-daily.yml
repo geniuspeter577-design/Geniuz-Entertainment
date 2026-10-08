@@ -1,0 +1,34 @@
+name: Daily membership maintenance
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: membership-daily-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Reconcile payments and create renewal reminders
+        env:
+          GENIUZ_API_URL: ${{ secrets.GENIUZ_API_URL }}
+          MEMBERSHIP_CRON_SECRET: ${{ secrets.MEMBERSHIP_CRON_SECRET }}
+        shell: bash
+        run: |
+          if [[ -z "$GENIUZ_API_URL" || -z "$MEMBERSHIP_CRON_SECRET" ]]; then
+            echo "GENIUZ_API_URL and MEMBERSHIP_CRON_SECRET repository secrets are required." >&2
+            exit 1
+          fi
+          curl --fail-with-body --silent --show-error \
+            --retry 3 --retry-all-errors --max-time 30 \
+            --request POST \
+            --header "x-membership-cron-secret: $MEMBERSHIP_CRON_SECRET" \
+            "$GENIUZ_API_URL/internal/membership/daily"

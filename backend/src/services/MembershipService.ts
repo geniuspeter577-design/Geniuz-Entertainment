@@ -232,7 +232,7 @@ export class MembershipService implements MembershipOperations {
     for (const payment of pending ?? []) {
       try {
         const verified = await this.paystack.verifyTransaction(payment.reference);
-        const eventId = `reconcile:${payment.reference}:${this.now().toISOString().slice(0, 10)}`;
+        const eventId = `reconcile:${payment.reference}:${this.now().getTime()}:${randomUUID()}`;
         const { error: applyError } = await admin.rpc('apply_paystack_event', {
           p_event_id: eventId,
           p_event_type: 'reconciliation',

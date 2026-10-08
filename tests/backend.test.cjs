@@ -1145,6 +1145,58 @@ test('membership service forwards Paystack verified wrong amount for database re
   assert.equal(rpcCalls[0].args.p_verified_amount_kobo, 1);
 });
 
+test('daily membership maintenance reconciles pending payments and queues renewal reminders', async () => {
+  const rpcCalls = [];
+  const paymentQuery = {
+    eq() { return this; },
+    order() { return this; },
+    limit: async () => ({ data: [{ reference: 'daily-reference' }], error: null }),
+  };
+  const adminClient = {
+    from: () => ({ select: () => paymentQuery }),
+    rpc: async (name, args) => {
+      rpcCalls.push({ name, args });
+      return { data: name === 'create_membership_renewal_reminders' ? 2 : 'pending', error: null };
+    },
+  };
+  const paystack = new PaystackService('sk_test_daily', async () => makeResponse({
+    status: true,
+    data: { status: 'pending', reference: 'daily-reference', amount: 90_000, currency: 'NGN' },
+  }));
+  const membership = new MembershipService(loadConfig({}), { adminClient, paystack });
+  const result = await membership.runDailyMaintenance();
+  assert.deepEqual(result, { checked: 1, remindersCreated: 2 });
+  assert.equal(rpcCalls[0].name, 'apply_paystack_event');
+  assert.equal(rpcCalls[0].args.p_verified_status, 'pending');
+  assert.equal(rpcCalls[1].name, 'create_membership_renewal_reminders');
+  assert.equal(rpcCalls[1].args.p_days_before, 3);
+});
+
+test('admin refund calls Paystack and records the refund through the audit RPC', async () => {
+  let refundPayload;
+  let auditRpc;
+  const adminClient = {
+    from: () => ({
+      select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { status: 'success' }, error: null }) }) }),
+    }),
+    rpc: async (name, args) => {
+      auditRpc = { name, args };
+      return { data: 'refunded', error: null };
+    },
+  };
+  const paystack = new PaystackService('sk_test_refund', async (_input, init) => {
+    refundPayload = JSON.parse(init.body);
+    return makeResponse({ status: true, data: { id: 786, reference: 'refund-reference' } });
+  });
+  const membership = new MembershipService(loadConfig({}), { adminClient, paystack });
+  const result = await membership.refund('admin-user', 'paid-reference', 'Customer request');
+  assert.deepEqual(refundPayload, { transaction: 'paid-reference' });
+  assert.deepEqual(result, { status: 'refunded', reference: 'paid-reference' });
+  assert.equal(auditRpc.name, 'record_membership_refund');
+  assert.equal(auditRpc.args.p_admin_user_id, 'admin-user');
+  assert.equal(auditRpc.args.p_reason, 'Customer request');
+});
+
 test('membership period status covers active, grace, and expired states', () => {
   const now = new Date('2026-10-08T00:00:00.000Z');
   assert.equal(getMembershipAccessStatus(null, now), 'visitor');
