@@ -1,14 +1,14 @@
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { StatusBar } from 'expo-status-bar';
-import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { createVideoPlayer } from 'expo-video';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, AppState, Platform, Pressable, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { Alert, AppState, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { PlayerHeader } from '../../src/components/detail/PlayerHeader';
-import type { ContentItem } from '../../src/models/content';
+import type { ContentItem, EpisodeItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { useDownloads } from '../../src/state/DownloadsContext';
 import { useAuth } from '../../src/state/AuthContext';
@@ -29,6 +29,11 @@ import {
   type PlayerFitMode,
 } from '../../src/utils/playerControls';
 import { backOrReplace } from '../../src/utils/navigation';
+import { nextEpisodeInSeries } from '../../src/utils/episodeSelection';
+import {
+  NEXT_EPISODE_COUNTDOWN_SECONDS,
+  isEpisodeWatchedAtPosition,
+} from '../../src/utils/episodePlayback';
 import { getFileExtension, isVideoFormatLikelySupported } from '../../src/utils/videoFile';
 
 export default function WatchScreen() {
@@ -47,17 +52,29 @@ export default function WatchScreen() {
   );
   const [movie, setMovie] = useState<ContentItem>();
   const [seriesTitle, setSeriesTitle] = useState<string>();
+  const [seriesCatalog, setSeriesCatalog] = useState<{
+    seriesId: string;
+    episodes: EpisodeItem[];
+    error?: string;
+  }>();
+  const [seriesEpisodeRetryAttempt, setSeriesEpisodeRetryAttempt] = useState(0);
   const [playbackUrl, setPlaybackUrl] = useState<string>();
   const [isOfflinePlayback, setIsOfflinePlayback] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [playerStatus, setPlayerStatus] = useState(player.status);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [appIsActive, setAppIsActive] = useState(AppState.currentState === 'active');
   const [currentTime, setCurrentTime] = useState(0);
   const [error, setError] = useState<string>();
   const [retryAttempt, setRetryAttempt] = useState(0);
   const [showControls, setShowControls] = useState(true);
   const [isSeeking, setIsSeeking] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const [autoplaySettings, setAutoplaySettings] = useState<{ userId: string; enabled: boolean }>();
+  const [nextEpisodeCountdown, setNextEpisodeCountdown] = useState<{
+    episodeId: string;
+    seconds: number;
+  } | null>(null);
   const [speedMenuOpen, setSpeedMenuOpen] = useState(false);
   const [fitMode, setFitMode] = useState<PlayerFitMode>('contain');
   const [isPlayerLocked, setIsPlayerLocked] = useState(false);
@@ -67,19 +84,25 @@ export default function WatchScreen() {
   const failureHandledRef = useRef(false);
   const resumeAppliedRef = useRef(false);
   const finishedProgressRef = useRef(false);
+  const autoplayCanceledRef = useRef<string | undefined>(undefined);
   const saveProgressRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     let active = true;
-    if (!auth.session) {
+    const session = auth.session;
+    if (!session) {
       return () => {
         active = false;
       };
     }
-    void getUserAppSettings(auth.session.user.id)
+    void getUserAppSettings(session.user.id)
       .then((settings) => {
         if (active) {
           setPlaybackSpeed(settings.defaultPlaybackSpeed);
+          setAutoplaySettings({
+            userId: session.user.id,
+            enabled: settings.autoplayNextEpisode,
+          });
         }
       })
       .catch((settingsError: unknown) => {
@@ -92,6 +115,12 @@ export default function WatchScreen() {
       active = false;
     };
   }, [auth.session]);
+
+  const autoplayNextEpisodeEnabled = Boolean(
+    auth.session &&
+      autoplaySettings?.userId === auth.session.user.id &&
+      autoplaySettings.enabled,
+  );
 
   const saveProgress = useCallback(() => {
     if (isTrailer || !movie || finishedProgressRef.current) {
@@ -106,7 +135,17 @@ export default function WatchScreen() {
       return;
     }
 
-    if (durationSeconds - positionSeconds <= 30) {
+    const isSeriesEpisode = movie.parentSeriesId !== undefined;
+    const episodeReachedWatchedThreshold = isEpisodeWatchedAtPosition(
+      movie.id,
+      positionSeconds,
+      durationSeconds,
+    );
+    if (
+      isSeriesEpisode
+        ? episodeReachedWatchedThreshold
+        : durationSeconds - positionSeconds <= 30
+    ) {
       finishedProgressRef.current = true;
       void recordProgress(movie, durationSeconds, durationSeconds);
       return;
@@ -134,6 +173,32 @@ export default function WatchScreen() {
   const isDownloading = downloadRecord?.status === 'downloading';
   const isQueued = downloadRecord?.status === 'queued';
   const isDownloaded = downloadRecord?.status === 'downloaded';
+  const parentSeriesId = movie?.parentSeriesId;
+  const downloadedEpisodes = downloads.records
+    .filter(
+      (record) =>
+        record.status === 'downloaded' &&
+        record.item.parentSeriesId === parentSeriesId &&
+        typeof record.item.episodeNumber === 'number',
+    )
+    .map((record) => record.item);
+  const episodeCandidates =
+    parentSeriesId && seriesCatalog?.seriesId === parentSeriesId
+      ? seriesCatalog.episodes
+      : downloadedEpisodes;
+  const nextEpisode = movie?.parentSeriesId
+    ? nextEpisodeInSeries(episodeCandidates, movie.id)
+    : undefined;
+  const nextEpisodeDownloaded = downloads.records.some(
+    (record) => record.status === 'downloaded' && record.item.id === nextEpisode?.id,
+  );
+  const canPlayNextEpisode = Boolean(nextEpisode && (isOnline || nextEpisodeDownloaded));
+  const currentCountdown =
+    nextEpisodeCountdown && nextEpisodeCountdown.episodeId === movie?.id
+      ? nextEpisodeCountdown.seconds
+      : null;
+  const seriesCatalogError =
+    seriesCatalog?.seriesId === parentSeriesId ? seriesCatalog?.error : undefined;
   const duration = Number.isFinite(player.duration) ? player.duration : 0;
   const bufferedPosition = Number.isFinite(player.bufferedPosition) ? player.bufferedPosition : 0;
   const isBuffering = isLoading || playerStatus === 'loading';
@@ -143,6 +208,106 @@ export default function WatchScreen() {
       : movie?.parentSeriesId && movie.episodeNumber
         ? `${seriesTitle ?? movie.title} S${String(movie.seasonNumber ?? 1).padStart(2, '0')} E${String(movie.episodeNumber).padStart(2, '0')}`
         : movie?.title ?? 'Now playing';
+
+  const openNextEpisode = useCallback(() => {
+    if (!nextEpisode || !canPlayNextEpisode) {
+      return;
+    }
+    autoplayCanceledRef.current = movie?.id;
+    setNextEpisodeCountdown(null);
+    router.replace({ pathname: '/watch/[id]', params: { id: nextEpisode.id } });
+  }, [canPlayNextEpisode, movie?.id, nextEpisode]);
+
+  useEffect(() => {
+    if (!parentSeriesId || !isOnline || !supabaseMovieRepository) {
+      return;
+    }
+    let active = true;
+    void supabaseMovieRepository
+      .getSeasons(`geniuz:series:${parentSeriesId}`)
+      .then((seasons) => {
+        if (active) {
+          const hasEpisodeLoadErrors = seasons.some((season) => season.episodesError);
+          setSeriesCatalog({
+            seriesId: parentSeriesId,
+            episodes: seasons.flatMap((season) => season.episodes),
+            ...(hasEpisodeLoadErrors
+              ? { error: 'Some episodes could not be loaded. Try again when online.' }
+              : {}),
+          });
+        }
+      })
+      .catch((catalogError: unknown) => {
+        logger.warn('[Player] Could not load the episode list.', catalogError);
+        if (active) {
+          setSeriesCatalog({
+            seriesId: parentSeriesId,
+            episodes: [],
+            error: 'The next episode could not be loaded. Try again when online.',
+          });
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [isOnline, parentSeriesId, seriesEpisodeRetryAttempt]);
+
+  useEffect(() => {
+    if (
+      !movie?.parentSeriesId ||
+      !autoplayNextEpisodeEnabled ||
+      !nextEpisode ||
+      !canPlayNextEpisode ||
+      currentCountdown !== null ||
+      autoplayCanceledRef.current === movie.id ||
+      !isEpisodeWatchedAtPosition(movie.id, currentTime, duration)
+    ) {
+      return;
+    }
+    setNextEpisodeCountdown({
+      episodeId: movie.id,
+      seconds: NEXT_EPISODE_COUNTDOWN_SECONDS,
+    });
+  }, [
+    autoplayNextEpisodeEnabled,
+    canPlayNextEpisode,
+    currentCountdown,
+    currentTime,
+    duration,
+    movie,
+    nextEpisode,
+  ]);
+
+  useEffect(() => {
+    if (
+      !nextEpisodeCountdown ||
+      !appIsActive ||
+      nextEpisodeCountdown.episodeId !== movie?.id ||
+      !nextEpisode ||
+      !canPlayNextEpisode
+    ) {
+      return;
+    }
+    const timeout = setTimeout(() => {
+      if (nextEpisodeCountdown.seconds <= 1) {
+        openNextEpisode();
+      } else {
+        setNextEpisodeCountdown((current) =>
+          current?.episodeId === nextEpisodeCountdown.episodeId
+            ? { ...current, seconds: current.seconds - 1 }
+            : current,
+        );
+      }
+    }, 1000);
+    return () => clearTimeout(timeout);
+  }, [
+    appIsActive,
+    canPlayNextEpisode,
+    movie?.id,
+    nextEpisode,
+    nextEpisodeCountdown,
+    openNextEpisode,
+  ]);
 
   useEffect(() => {
     playerReleasedRef.current = false;
@@ -161,6 +326,7 @@ export default function WatchScreen() {
 
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
+      setAppIsActive(state === 'active');
       if (state !== 'active') {
         releasePlayer();
       }
@@ -187,7 +353,14 @@ export default function WatchScreen() {
     setPlayerTimeUpdateInterval(player, 0.25);
     const timeSubscription = player.addListener('timeUpdate', ({ currentTime: time }) => {
       setCurrentTime(time);
-      if (duration > 0 && time > 0 && duration - time <= 30) {
+      const isEpisode = movie?.parentSeriesId !== undefined;
+      const nearEnd =
+        duration > 0 &&
+        time > 0 &&
+        (isEpisode
+          ? isEpisodeWatchedAtPosition(movie.id, time, duration)
+          : duration - time <= 30);
+      if (nearEnd) {
         saveProgressRef.current();
       }
     });
@@ -201,7 +374,13 @@ export default function WatchScreen() {
       timeSubscription.remove();
       playingSubscription.remove();
     };
-  }, [duration, player]);
+  }, [
+    autoplayNextEpisodeEnabled,
+    canPlayNextEpisode,
+    duration,
+    movie,
+    player,
+  ]);
 
   useEffect(() => {
     if (!isPlaying) {
@@ -586,6 +765,65 @@ export default function WatchScreen() {
         onSeekingChange={setIsSeeking}
         onRetry={retryPlayback}
       />
+      {!isLandscape && !isTrailer && movie?.parentSeriesId ? (
+        <View style={styles.nextEpisodeCard}>
+          <View style={styles.nextEpisodeCopy}>
+            <Text style={styles.nextEpisodeHeading}>
+              {currentCountdown !== null ? `Next episode starts in ${currentCountdown}s` : 'Up next'}
+            </Text>
+            <Text style={styles.nextEpisodeTitle} numberOfLines={2}>
+              {nextEpisode
+                ? `S${String(nextEpisode.seasonNumber ?? 1).padStart(2, '0')} E${String(nextEpisode.episodeNumber ?? 0).padStart(2, '0')} · ${nextEpisode.title}`
+                : seriesCatalogError ??
+                  (isOnline
+                    ? seriesCatalog?.seriesId === parentSeriesId
+                      ? 'No next episode is available.'
+                      : 'Loading the episode list…'
+                    : 'A connection or a downloaded next episode is needed to continue.')}
+            </Text>
+            {seriesCatalogError && isOnline ? (
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => setSeriesEpisodeRetryAttempt((attempt) => attempt + 1)}
+                style={styles.retryEpisodesButton}
+              >
+                <Text style={styles.retryEpisodesText}>Retry</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {canPlayNextEpisode ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
+                currentCountdown !== null
+                  ? 'Play next episode now'
+                  : `Play next episode, ${nextEpisode?.title ?? ''}`
+              }
+              onPress={openNextEpisode}
+              style={styles.nextEpisodeButton}
+            >
+              <Text style={styles.nextEpisodeButtonText}>
+                {currentCountdown !== null ? 'Play now' : 'Next episode'}
+              </Text>
+            </Pressable>
+          ) : nextEpisode ? (
+            <Text style={styles.nextEpisodeUnavailable}>Not downloaded</Text>
+          ) : null}
+          {currentCountdown !== null ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel automatic next episode"
+              onPress={() => {
+                autoplayCanceledRef.current = movie.id;
+                setNextEpisodeCountdown(null);
+              }}
+              style={styles.cancelAutoplayButton}
+            >
+              <Text style={styles.cancelAutoplayText}>Cancel</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       {!isLandscape && !isTrailer && movie?.availability.download ? (
         <Pressable
           accessibilityRole="button"
@@ -678,6 +916,73 @@ const styles = StyleSheet.create({
   downloadButtonText: {
     color: theme.text,
     fontSize: 13,
+    fontWeight: '700',
+  },
+  nextEpisodeCard: {
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderColor: theme.border,
+    borderRadius: 14,
+    borderWidth: 1,
+    flexDirection: 'row',
+    gap: 10,
+    marginHorizontal: 18,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  nextEpisodeCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
+  nextEpisodeHeading: {
+    color: theme.secondaryText,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  nextEpisodeTitle: {
+    color: theme.text,
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 4,
+  },
+  nextEpisodeButton: {
+    alignItems: 'center',
+    backgroundColor: theme.accent,
+    borderRadius: 999,
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 13,
+  },
+  nextEpisodeButtonText: {
+    color: theme.background,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  nextEpisodeUnavailable: {
+    color: theme.secondaryText,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  cancelAutoplayButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 40,
+    paddingHorizontal: 5,
+  },
+  cancelAutoplayText: {
+    color: theme.secondaryText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  retryEpisodesButton: {
+    alignSelf: 'flex-start',
+    marginTop: 5,
+  },
+  retryEpisodesText: {
+    color: theme.accent,
+    fontSize: 12,
     fontWeight: '700',
   },
   disabledButton: {

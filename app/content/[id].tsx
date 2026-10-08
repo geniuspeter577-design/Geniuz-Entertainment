@@ -457,6 +457,7 @@ export default function ContentDetailsScreen() {
               <EpisodeChips
                 episodes={selectedSeason.episodes}
                 records={downloads.records}
+                watchedEpisodeIds={library.watchedEpisodeIds}
                 selectedId={selectedEpisodeId}
                 onPlay={(episode) => {
                   setSelectedEpisodeId(episode.id);
@@ -576,6 +577,7 @@ export default function ContentDetailsScreen() {
             visible={showSeriesDownloadSheet}
             season={selectedSeason}
             records={downloads.records}
+            watchedEpisodeIds={library.watchedEpisodeIds}
             onClose={() => setShowSeriesDownloadSheet(false)}
             onCancel={(episodeId) =>
               void downloads.cancel(episodeId).catch((error: unknown) =>

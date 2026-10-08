@@ -83,12 +83,20 @@ export function SeasonSheet({
 type EpisodeChipsProps = {
   episodes: EpisodeItem[];
   records: OfflineDownloadRecord[];
+  watchedEpisodeIds: readonly string[];
   selectedId?: string;
   onPlay: (episode: EpisodeItem) => void;
   onDownload: (episode: EpisodeItem) => void;
 };
 
-export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload }: EpisodeChipsProps) {
+export function EpisodeChips({
+  episodes,
+  records,
+  watchedEpisodeIds,
+  selectedId,
+  onPlay,
+  onDownload,
+}: EpisodeChipsProps) {
   const ordered = orderEpisodes(episodes);
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.episodeChipRow}>
@@ -102,6 +110,7 @@ export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload
         const isQueued = record?.status === 'queued';
         const isDownloaded = record?.status === 'downloaded';
         const hasFailed = record?.status === 'failed' || record?.status === 'canceled';
+        const isWatched = watchedEpisodeIds.includes(episode.id);
         return (
           <View
             key={episode.id}
@@ -109,19 +118,27 @@ export function EpisodeChips({ episodes, records, selectedId, onPlay, onDownload
           >
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel={`Play episode ${episode.episodeNumber}, ${episode.title}`}
+              accessibilityLabel={`Play episode ${episode.episodeNumber}, ${episode.title}${isWatched ? ', watched' : ''}`}
               onPress={() => onPlay(episode)}
               style={styles.episodePlay}
             >
-              <Text style={[styles.episodeChipText, selectedId === episode.id && styles.selectedEpisodeText]}>
+              <Text
+                style={[
+                  styles.episodeChipText,
+                  selectedId === episode.id && styles.selectedEpisodeText,
+                  isWatched && selectedId !== episode.id && styles.watchedEpisodeText,
+                ]}
+              >
                 E{String(episode.episodeNumber).padStart(2, '0')} ·{' '}
-                {isDownloading
-                  ? `${record.progress}%`
-                  : isQueued
-                    ? 'Queued'
-                    : episode.fileSizeBytes
-                      ? formatBytes(episode.fileSizeBytes)
-                      : '—'}
+                {isWatched
+                  ? 'Watched'
+                  : isDownloading
+                    ? `${record.progress}%`
+                    : isQueued
+                      ? 'Queued'
+                      : episode.fileSizeBytes
+                        ? formatBytes(episode.fileSizeBytes)
+                        : '—'}
               </Text>
             </Pressable>
             {episode.availability.download ? (
@@ -169,6 +186,7 @@ type SeriesDownloadSheetProps = {
   visible: boolean;
   season: SeasonItem;
   records: OfflineDownloadRecord[];
+  watchedEpisodeIds: readonly string[];
   onClose: () => void;
   onQueue: (episodes: EpisodeItem[]) => void;
   onCancel: (episodeId: string) => void;
@@ -180,6 +198,7 @@ export function SeriesDownloadSheet({
   visible,
   season,
   records,
+  watchedEpisodeIds,
   onClose,
   onQueue,
   onCancel,
@@ -295,6 +314,7 @@ export function SeriesDownloadSheet({
                       {record?.status === 'downloading' ? ` · ${record.progress}%` : ''}
                       {record?.status === 'paused' ? ` · Paused at ${record.progress}%` : ''}
                       {record?.status === 'downloaded' ? ' · Downloaded' : ''}
+                      {watchedEpisodeIds.includes(episode.id) ? ' · Watched' : ''}
                       {record?.status === 'failed' ? ' · Failed · Retry' : ''}
                       {!episode.availability.download ? ' · Downloads not available' : ''}
                     </Text>
@@ -388,6 +408,7 @@ const styles = StyleSheet.create({
   selectedEpisodeChip: { backgroundColor: theme.accent, borderColor: theme.accent },
   episodeChipText: { color: theme.text, fontSize: 14, fontWeight: '700' },
   selectedEpisodeText: { color: theme.background },
+  watchedEpisodeText: { color: theme.accent },
   episodePlay: { minHeight: 42, justifyContent: 'center' },
   episodeDownload: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   selectAll: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },

@@ -56,6 +56,12 @@ const {
   selectEpisodes,
   totalEpisodeSize,
 } = require('../.test-build/src/utils/episodeSelection.js');
+const {
+  EPISODE_WATCHED_PROGRESS_PERCENT,
+  NEXT_EPISODE_COUNTDOWN_SECONDS,
+  isEpisodeWatchedAtPosition,
+  markEpisodeWatched,
+} = require('../.test-build/src/utils/episodePlayback.js');
 
 function item(id, title = id) {
   return {
@@ -470,34 +476,45 @@ test('title image migration creates a public-read bucket with admin-only mutatio
 });
 
 test('episode selection preserves season and episode order and calculates selected file size', () => {
-    const episode = (seasonNumber, episodeNumber, fileSizeBytes) => ({
-      ...item(`s${seasonNumber}e${episodeNumber}`),
-      seasonId: `season-${seasonNumber}`,
-      seasonNumber,
-      episodeNumber,
-      durationSeconds: 1200,
-      fileSizeBytes,
-      parentSeriesId: 'series-1',
-      published: true,
-    });
-    const seasonOne = episode(1, 1, 100);
-    const seasonTwo = episode(2, 1, 300);
-    const seasonOneNext = episode(1, 2, 200);
-    const unordered = [seasonTwo, seasonOneNext, seasonOne];
+  const episode = (seasonNumber, episodeNumber, fileSizeBytes) => ({
+    ...item(`s${seasonNumber}e${episodeNumber}`),
+    seasonId: `season-${seasonNumber}`,
+    seasonNumber,
+    episodeNumber,
+    durationSeconds: 1200,
+    fileSizeBytes,
+    parentSeriesId: 'series-1',
+    published: true,
+  });
+  const seasonOne = episode(1, 1, 100);
+  const seasonTwo = episode(2, 1, 300);
+  const seasonOneNext = episode(1, 2, 200);
+  const unordered = [seasonTwo, seasonOneNext, seasonOne];
 
-    assert.deepEqual(orderEpisodes(unordered).map(({ id }) => id), [
-      seasonOne.id,
-      seasonOneNext.id,
-      seasonTwo.id,
-    ]);
-    assert.deepEqual(selectEpisodes(unordered, [seasonTwo.id, seasonOne.id]).map(({ id }) => id), [
-      seasonOne.id,
-      seasonTwo.id,
-    ]);
-    assert.equal(totalEpisodeSize([seasonOne, seasonOneNext]), 300);
-    assert.equal(
-      nextEpisodeInSeason({ id: 'season-1', seriesId: 'series-1', seasonNumber: 1, published: true, episodes: [seasonOne, seasonOneNext] }, seasonOne.id).id,
-      seasonOneNext.id,
-    );
-    assert.equal(nextEpisodeInSeries(unordered, seasonOneNext.id).id, seasonTwo.id);
+  assert.deepEqual(orderEpisodes(unordered).map(({ id }) => id), [
+    seasonOne.id,
+    seasonOneNext.id,
+    seasonTwo.id,
+  ]);
+  assert.deepEqual(selectEpisodes(unordered, [seasonTwo.id, seasonOne.id]).map(({ id }) => id), [
+    seasonOne.id,
+    seasonTwo.id,
+  ]);
+  assert.equal(totalEpisodeSize([seasonOne, seasonOneNext]), 300);
+  assert.equal(
+    nextEpisodeInSeason({ id: 'season-1', seriesId: 'series-1', seasonNumber: 1, published: true, episodes: [seasonOne, seasonOneNext] }, seasonOne.id).id,
+    seasonOneNext.id,
+  );
+  assert.equal(nextEpisodeInSeries(unordered, seasonOneNext.id).id, seasonTwo.id);
+});
+
+test('episode watch completion records watched state at 95 percent without duplicating IDs', () => {
+  const episodeId = 'geniuz:episode:episode-1';
+  assert.equal(EPISODE_WATCHED_PROGRESS_PERCENT, 95);
+  assert.equal(NEXT_EPISODE_COUNTDOWN_SECONDS, 10);
+  assert.equal(isEpisodeWatchedAtPosition(episodeId, 94, 100), false);
+  assert.equal(isEpisodeWatchedAtPosition(episodeId, 95, 100), true);
+  assert.equal(isEpisodeWatchedAtPosition('geniuz:movie:movie-1', 100, 100), false);
+  assert.deepEqual(markEpisodeWatched([], episodeId, 95, 100), [episodeId]);
+  assert.deepEqual(markEpisodeWatched([episodeId], episodeId, 99, 100), [episodeId]);
 });

@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 import type { ContentItem, ContentType, ContinueWatchingEntry } from '../models/content';
+import { isEpisodeWatchedAtPosition, markEpisodeWatched } from '../utils/episodePlayback';
 import { toggleWatchlistItem } from '../utils/watchlist';
 
 const STORAGE_KEY = '@geniuz/library/v1';
@@ -23,6 +24,7 @@ const CONTENT_SOURCES = new Set(['geniuz', 'tmdb', 'mock', 'anilist', 'other']);
 type LibraryState = {
   watchlist: ContentItem[];
   continueWatching: ContinueWatchingEntry[];
+  watchedEpisodeIds: string[];
 };
 
 type LibraryContextValue = LibraryState & {
@@ -39,7 +41,7 @@ type LibraryContextValue = LibraryState & {
   retryLoad: () => void;
 };
 
-const EMPTY_LIBRARY: LibraryState = { watchlist: [], continueWatching: [] };
+const EMPTY_LIBRARY: LibraryState = { watchlist: [], continueWatching: [], watchedEpisodeIds: [] };
 const LibraryContext = createContext<LibraryContextValue | null>(null);
 
 function isContentItem(value: unknown): value is ContentItem {
@@ -96,6 +98,13 @@ function isContinueWatchingEntry(value: unknown): value is ContinueWatchingEntry
   );
 }
 
+function isWatchedEpisodeIds(value: unknown): value is string[] {
+  return (
+    Array.isArray(value) &&
+    value.every((id) => typeof id === 'string' && id.startsWith('geniuz:episode:'))
+  );
+}
+
 function parseLibrary(value: string | null): LibraryState {
   if (!value) {
     return EMPTY_LIBRARY;
@@ -113,7 +122,8 @@ function parseLibrary(value: string | null): LibraryState {
     !parsed.watchlist.every(isContentItem) ||
     !('continueWatching' in parsed) ||
     !Array.isArray(parsed.continueWatching) ||
-    !parsed.continueWatching.every(isContinueWatchingEntry)
+    !parsed.continueWatching.every(isContinueWatchingEntry) ||
+    ('watchedEpisodeIds' in parsed && !isWatchedEpisodeIds(parsed.watchedEpisodeIds))
   ) {
     throw new Error('Stored library data has an unsupported format.');
   }
@@ -121,6 +131,10 @@ function parseLibrary(value: string | null): LibraryState {
   return {
     watchlist: parsed.watchlist,
     continueWatching: parsed.continueWatching,
+    watchedEpisodeIds:
+      'watchedEpisodeIds' in parsed && isWatchedEpisodeIds(parsed.watchedEpisodeIds)
+        ? [...new Set(parsed.watchedEpisodeIds)]
+        : [],
   };
 }
 
@@ -228,12 +242,25 @@ export function LibraryProvider({ children }: React.PropsWithChildren) {
       }
 
       const progress = Math.min(100, Math.round((positionSeconds / durationSeconds) * 100));
+      const isWatchedEpisode = isEpisodeWatchedAtPosition(
+        item.id,
+        positionSeconds,
+        durationSeconds,
+      );
       const updatedAt = new Date().toISOString();
 
       return commitLibrary((current) => ({
         ...current,
+        watchedEpisodeIds: [
+          ...markEpisodeWatched(
+            current.watchedEpisodeIds,
+            item.id,
+            positionSeconds,
+            durationSeconds,
+          ),
+        ],
         continueWatching:
-          progress >= 100
+          progress >= 100 || isWatchedEpisode
             ? current.continueWatching.filter((entry) => entry.item.id !== item.id)
             : [
                 {

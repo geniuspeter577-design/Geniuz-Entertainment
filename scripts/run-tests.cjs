@@ -40,6 +40,7 @@ const sources = [
   'src/utils/titleDeletion.ts',
   'src/utils/downloadQueue.ts',
   'src/utils/episodeSelection.ts',
+  'src/utils/episodePlayback.ts',
   'src/utils/playbackError.ts',
   'src/utils/secureStorage.ts',
   'src/utils/accountAuth.ts',

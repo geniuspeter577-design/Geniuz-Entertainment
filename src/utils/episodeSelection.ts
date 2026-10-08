@@ -1,12 +1,13 @@
 import type { EpisodeItem, SeasonItem } from '../models/content';
 
-type OrderableEpisode = Pick<EpisodeItem, 'id' | 'episodeNumber' | 'seasonNumber'>;
+type OrderableEpisode = Pick<EpisodeItem, 'id'> &
+  Partial<Pick<EpisodeItem, 'episodeNumber' | 'seasonNumber'>>;
 
 export function orderEpisodes<T extends OrderableEpisode>(episodes: readonly T[]) {
   return [...episodes].sort(
     (left, right) =>
       (left.seasonNumber ?? 0) - (right.seasonNumber ?? 0) ||
-      left.episodeNumber - right.episodeNumber,
+      (left.episodeNumber ?? 0) - (right.episodeNumber ?? 0),
   );
 }
 
