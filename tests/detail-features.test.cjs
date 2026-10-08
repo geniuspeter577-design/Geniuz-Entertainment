@@ -341,6 +341,31 @@ test('published movie query columns are declared by project migrations', () => {
   }
 });
 
+test('manual movie conversion workflow is dispatch-only, read-only permissioned, and references secrets by name', () => {
+  const workflow = fs.readFileSync(
+    path.join(process.cwd(), '.github/workflows/convert-movie.yml'),
+    'utf8',
+  );
+  const triggerBlock = workflow.split(/^permissions:/m, 1)[0];
+  const permissionsBlock = workflow.match(/^permissions:\s*\n((?:^  .*\n)+)/m)?.[1]?.trim();
+
+  assert.match(triggerBlock, /^on:\s*\n\s+workflow_dispatch:\s*$/m);
+  assert.doesNotMatch(triggerBlock, /^\s{2}(push|pull_request|schedule|workflow_run):/m);
+  assert.equal(permissionsBlock, 'contents: read');
+  for (const secretName of [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'S3_ENDPOINT',
+    'S3_REGION',
+    'S3_BUCKET',
+    'S3_ACCESS_KEY_ID',
+    'S3_SECRET_ACCESS_KEY',
+  ]) {
+    assert.match(workflow, new RegExp(`\\$\\{\\{\\s*secrets\\.${secretName}\\s*\\}\\}`));
+  }
+  assert.doesNotMatch(workflow, /sb_secret_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
+});
+
 test('published series are selectable by anon while series still require no video file', () => {
   const migration = fs.readFileSync(
     path.join(process.cwd(), 'supabase/migrations/20261008000000_published_series_read_access.sql'),
