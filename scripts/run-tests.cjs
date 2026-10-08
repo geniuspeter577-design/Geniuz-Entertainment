@@ -48,6 +48,7 @@ const sources = [
   'src/services/OfflineDownloadService.ts',
   'src/services/TitleCleanupStore.ts',
   'src/services/NotificationsStore.ts',
+  'src/utils/meScreen.ts',
 ];
 
 function run(command, args) {

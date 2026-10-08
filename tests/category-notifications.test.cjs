@@ -18,6 +18,26 @@ const {
 const {
   getUnreadNotificationCount,
 } = require('../.test-build/src/services/NotificationsStore.js');
+const { getMeScreenData } = require('../.test-build/src/utils/meScreen.js');
+
+test('Me screen summary uses saved watchlist, watch progress, and unread messages', () => {
+  const history = [
+    { item: { id: 'movie-1' }, progress: 42, updatedAt: '2026-10-08T00:00:00.000Z' },
+  ];
+  const meData = getMeScreenData(
+    { watchlist: [{ id: 'movie-1' }, { id: 'movie-2' }], continueWatching: history },
+    [
+      { id: 'read', read: true },
+      { id: 'unread-1', read: false },
+      { id: 'unread-2', read: false },
+    ],
+  );
+
+  assert.equal(meData.myListCount, 2);
+  assert.equal(meData.unreadMessagesCount, 2);
+  assert.strictEqual(meData.watchHistory, history);
+  assert.equal(meData.watchHistory[0].progress, 42);
+});
 
 const categoryItems = [
   {

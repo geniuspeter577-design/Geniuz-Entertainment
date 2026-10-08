@@ -185,14 +185,13 @@ test('new profile migration protects avatar ownership and adds short categories 
   assert.doesNotMatch(migration, /insert into public\.movies/i);
 });
 
-test('Me screen avatar opens Edit profile and replaces the standalone edit link', () => {
+test('Me screen profile header opens Edit profile and displays its navigation arrow', () => {
   const screen = fs.readFileSync('app/(tabs)/profile.tsx', 'utf8');
   assert.match(
     screen,
-    /<Pressable[\s\S]*?accessibilityLabel="Edit profile"[\s\S]*?onPress=\{\(\) => router\.push\('\/edit-profile'\)\}[\s\S]*?styles\.avatarButton/,
+    /<Pressable[\s\S]*?accessibilityLabel="Edit profile"[\s\S]*?onPress=\{\(\) => router\.push\('\/edit-profile'\)\}[\s\S]*?style=\{styles\.profileHeader\}/,
   );
-  assert.match(screen, /styles\.avatarEditBadge/);
-  assert.doesNotMatch(screen, /<Text[^>]*>\s*Edit profile\s*<\/Text>/);
+  assert.match(screen, /<Ionicons name="chevron-forward" size=\{20\}/);
 });
 
 test('date-of-birth migration stores private dates and limits completion to the authenticated user', () => {
