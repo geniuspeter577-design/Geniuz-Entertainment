@@ -6,6 +6,7 @@ import path from 'node:path';
 import { Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { formatFileSize } from '../../src/utils/formatFileSize.cjs';
 
 const REQUIRED_S3_SETTINGS = [
   'S3_ENDPOINT',
@@ -14,8 +15,6 @@ const REQUIRED_S3_SETTINGS = [
   'S3_ACCESS_KEY_ID',
   'S3_SECRET_ACCESS_KEY',
 ];
-const MEGABYTE = 1024 * 1024;
-
 // This script is read-only on Backblaze: it only reads an object and writes a local copy.
 export function isAllowedOutputPath(outputPath, repositoryRoot, temporaryRoot = '/tmp') {
   if (typeof outputPath !== 'string' || !path.isAbsolute(outputPath)) {
@@ -72,7 +71,7 @@ export async function downloadObjectToFile(client, bucket, key, outputPath, onPr
     await pipeline(result.Body, progress, createWriteStream(outputPath, { flags: 'wx', mode: 0o600 }));
     const { size: localBytes } = await stat(outputPath);
     if (localBytes !== totalBytes) {
-      const mismatch = new Error(`Expected ${totalBytes} bytes, received ${localBytes} bytes.`);
+      const mismatch = new Error(`Expected ${formatFileSize(totalBytes)}, received ${formatFileSize(localBytes)}.`);
       mismatch.code = 'SIZE_MISMATCH';
       throw mismatch;
     }
@@ -192,9 +191,7 @@ async function runDownload(args) {
       options.key,
       temporaryPath,
       (downloadedBytes, expectedBytes) => {
-        const downloadedMb = (downloadedBytes / MEGABYTE).toFixed(2);
-        const totalMb = (expectedBytes / MEGABYTE).toFixed(2);
-        process.stdout.write(`\r${downloadedMb} MB / ${totalMb} MB`);
+        process.stdout.write(`\r${formatFileSize(downloadedBytes)} / ${formatFileSize(expectedBytes)}`);
       },
     );
     process.stdout.write('\n');
@@ -206,7 +203,7 @@ async function runDownload(args) {
       await unlink(temporaryPath);
     }
     keepTemporaryFile = true;
-    console.log(`OK: ${totalBytes} bytes saved to ${outputPath}`);
+    console.log(`OK: ${formatFileSize(totalBytes)} saved to ${outputPath}`);
   } catch (error) {
     process.stdout.write('\n');
     if (error?.code === 'SIZE_MISMATCH') {

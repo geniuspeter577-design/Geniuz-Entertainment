@@ -1,3 +1,5 @@
+import { formatFileSize } from './formatFileSize.cjs';
+
 export const VIDEO_MIME_TYPES: Record<string, string> = {
   '3gp': 'video/3gpp',
   avi: 'video/x-msvideo',
@@ -72,8 +74,8 @@ export function validateVideoFileSize(size: number, maxSize: number) {
   }
 
   if (size > maxSize) {
-    const actualSize = `${(size / 1024 ** 3).toFixed(2)} GB (${size.toLocaleString()} bytes)`;
-    const maximumSize = `${(maxSize / 1024 ** 3).toFixed(2)} GB`;
+    const actualSize = `${formatFileSize(size)} (${size.toLocaleString()} bytes)`;
+    const maximumSize = formatFileSize(maxSize);
     return {
       valid: false as const,
       message: `This video is ${actualSize}. The maximum file size is ${maximumSize}.`,

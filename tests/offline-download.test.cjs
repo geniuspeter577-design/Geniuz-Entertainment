@@ -110,6 +110,7 @@ test('the 1 GB file limit accepts the boundary and reports the actual oversized 
   });
   const tooLarge = validateVideoFileSize(MAX_VIDEO_FILE_SIZE_BYTES + 1, MAX_VIDEO_FILE_SIZE_BYTES);
   assert.equal(tooLarge.valid, false);
+  assert.match(tooLarge.message, /1\.00 GiB/);
   assert.match(tooLarge.message, /1,073,741,825 bytes/);
   assert.equal(validateVideoFileSize(0, MAX_VIDEO_FILE_SIZE_BYTES).valid, false);
 });

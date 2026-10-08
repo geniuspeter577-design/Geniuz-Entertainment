@@ -9,6 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 
 import { downloadObjectToFile, isAllowedOutputPath } from './download-media.mjs';
+import { formatFileSize } from '../../src/utils/formatFileSize.cjs';
 
 const require = createRequire(import.meta.url);
 const videoConversionProfile = require('../src/config/videoConversionProfile.json');
@@ -41,6 +42,36 @@ export function getConvertedObjectKey(oldKey) {
     throw new ConversionError('The key must be a movie MKV object named movies/<uuid>.mkv.');
   }
   return `movies/${match[1]}.mp4`;
+}
+
+export function buildDatabaseUpdateSql(oldKey, newKey, fileSizeBytes) {
+  const expectedNewKey = getConvertedObjectKey(oldKey);
+  const movieId = oldKey.slice('movies/'.length, -'.mkv'.length);
+  if (newKey !== expectedNewKey) {
+    throw new ConversionError('The new key does not match the source movie key.');
+  }
+  if (!Number.isSafeInteger(fileSizeBytes) || fileSizeBytes <= 0) {
+    throw new ConversionError('The uploaded file size must be a positive safe integer.');
+  }
+
+  return [
+    '-- Run the SELECT first and save its old_* values before applying the UPDATE.',
+    'SELECT id,',
+    '       storage_key AS old_storage_key,',
+    '       file_extension AS old_file_extension,',
+    '       mime_type AS old_mime_type,',
+    '       file_size_bytes AS old_file_size_bytes',
+    'FROM public.movies',
+    `WHERE id = '${movieId}'::uuid;`,
+    '',
+    'UPDATE public.movies',
+    `SET storage_key = '${newKey}',`,
+    "    file_extension = 'mp4',",
+    "    mime_type = 'video/mp4',",
+    `    file_size_bytes = ${fileSizeBytes}`,
+    `WHERE id = '${movieId}'::uuid`,
+    'RETURNING id, storage_key, file_extension, mime_type, file_size_bytes;',
+  ].join('\n');
 }
 
 export function buildFfmpegArgs(
@@ -343,11 +374,11 @@ async function runConversion(args) {
         throw new ConversionError('The source object did not provide a valid size.');
       }
       if (localInput.size !== head.ContentLength) {
-        throw new ConversionError(`Local input size mismatch: source object is ${head.ContentLength} bytes; local file is ${localInput.size} bytes.`);
+        throw new ConversionError(`Local input size mismatch: source object is ${formatFileSize(head.ContentLength)}; local file is ${formatFileSize(localInput.size)}.`);
       }
       sourceSize = localInput.size;
       sourceProbe = await probe(inputPath);
-      console.log(`Local input size verified against source HEAD: ${sourceSize} bytes.`);
+      console.log(`Local input size verified against source HEAD: ${formatFileSize(sourceSize)}.`);
     } else if (options.dryRun) {
       const command = new GetObjectCommand({ Bucket: process.env.S3_BUCKET, Key: options.key });
       const { getSignedUrl } = await import('@aws-sdk/s3-request-presigner');
@@ -360,12 +391,12 @@ async function runConversion(args) {
         options.key,
         downloadedInputPath,
         (done, total) => {
-          process.stdout.write(`\rDownloading ${(done / 1024 / 1024).toFixed(2)} MB / ${(total / 1024 / 1024).toFixed(2)} MB`);
+          process.stdout.write(`\rDownloading ${formatFileSize(done)} / ${formatFileSize(total)}`);
         },
       );
       process.stdout.write('\n');
       sourceSize = downloadResult.sizeBytes;
-      console.log(`Source download size verified: ${sourceSize} bytes.`);
+      console.log(`Source download size verified: ${formatFileSize(sourceSize)}.`);
       sourceProbe = await probe(inputPath);
     }
 
@@ -389,7 +420,7 @@ async function runConversion(args) {
       }
       const { size: outputSize } = await stat(outputPath);
       if (Number.isFinite(sourceSize) && shouldWarnOutputIsLarger(sourceSize, outputSize)) {
-        console.error(`WARNING: Converted output is larger than the source; refusing upload. Source: ${sourceSize} bytes; output: ${outputSize} bytes.`);
+        console.error(`WARNING: Converted output is larger than the source; refusing upload. Source: ${formatFileSize(sourceSize)}; output: ${formatFileSize(outputSize)}.`);
         process.exitCode = 1;
         return;
       }
@@ -454,17 +485,14 @@ async function runConversion(args) {
     }
 
     console.log(`New key: ${newKey}`);
-    console.log(`New size: ${uploadSize} bytes`);
+    console.log(`New size: ${formatFileSize(uploadSize)}`);
     if (!options.uploadOnly) {
       const convertedProbe = await probe(stableConvertedPath);
       const convertedDuration = Number(convertedProbe.format.duration);
       console.log(`Duration: ${Number.isFinite(convertedDuration) ? convertedDuration.toFixed(3) : 'unknown'} seconds`);
     }
-    console.log(`Old key: ${options.key}`);
-    console.log('Database values:');
-    console.log(`storage_key: ${newKey}`);
-    console.log('file_extension: mp4');
-    console.log('mime_type: video/mp4');
+    console.log('Manual SQL for review (not executed):');
+    console.log(buildDatabaseUpdateSql(options.key, newKey, uploadSize));
   } catch (error) {
     console.error(
       error instanceof ConversionError

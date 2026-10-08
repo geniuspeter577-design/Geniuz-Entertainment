@@ -174,6 +174,35 @@ test('media conversion derives a new UUID key and selects copy or re-encode argu
   );
 });
 
+test('media conversion prints a reviewable SQL update using the real movie size column', async () => {
+  const { buildDatabaseUpdateSql } = await import('../backend/scripts/convert-media.mjs');
+  const sql = buildDatabaseUpdateSql(
+    'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mkv',
+    'movies/f157edce-7fcf-4ab2-a80c-365306fae850.mp4',
+    1234567,
+  );
+
+  assert.match(sql, /SELECT id,/);
+  assert.match(sql, /storage_key AS old_storage_key/);
+  assert.match(sql, /file_extension AS old_file_extension/);
+  assert.match(sql, /mime_type AS old_mime_type/);
+  assert.match(sql, /file_size_bytes AS old_file_size_bytes/);
+  assert.match(sql, /UPDATE public\.movies/);
+  assert.match(sql, /file_size_bytes = 1234567/);
+  assert.match(sql, /RETURNING id, storage_key, file_extension, mime_type, file_size_bytes/);
+  assert.throws(
+    () => buildDatabaseUpdateSql('movies/invalid.mkv', 'movies/invalid.mp4', 123),
+    /movie MKV/,
+  );
+});
+
+test('file-size formatting uses one binary-unit helper across application and scripts', () => {
+  assert.equal(formatFileSize(0), '0 B');
+  assert.equal(formatFileSize(1024), '1 KiB');
+  assert.equal(formatFileSize(1024 ** 2), '1.0 MiB');
+  assert.equal(formatFileSize(1024 ** 3), '1.00 GiB');
+});
+
 test('media conversion warns only when output exceeds source size', async () => {
   const { shouldWarnOutputIsLarger } = await import('../backend/scripts/convert-media.mjs');
   assert.equal(shouldWarnOutputIsLarger(1000, 1001), true);
@@ -244,6 +273,7 @@ const {
   B2StorageService,
   redactB2LogValue,
 } = require('../.test-build/backend/backend/src/storage/B2StorageService.js');
+const { formatFileSize } = require('../.test-build/src/utils/formatFileSize.cjs');
 const { deleteAdminTitle } = require('../.test-build/backend/backend/src/services/adminTitleDeletion.js');
 const {
   collectReferencedMediaKeys,

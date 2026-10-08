@@ -3,6 +3,7 @@ import type { DownloadProgress } from 'expo-file-system';
 import { MAX_VIDEO_FILE_SIZE_BYTES } from '../constants/video';
 import type { ContentItem } from '../models/content';
 import { downloadInOrder } from '../utils/downloadQueue';
+import { formatFileSize } from '../utils/formatFileSize.cjs';
 
 export type OfflineDownloadStatus = 'queued' | 'downloading' | 'downloaded' | 'failed' | 'canceled';
 
@@ -239,7 +240,7 @@ export class OfflineDownloadService {
     const availableSpace = this.fileSystem.availableDiskSpace();
     if (!Number.isFinite(availableSpace) || availableSpace < size + reservedSpace) {
       throw new Error(
-        `There is not enough free storage for this ${formatBytes(size)} video. Free up space and try again.`,
+        `There is not enough free storage for this ${formatFileSize(size)} video. Free up space and try again.`,
       );
     }
 
@@ -413,16 +414,6 @@ export class OfflineDownloadService {
     }
   }
 }
-
 export function formatBytes(bytes: number) {
-  if (bytes <= 0) {
-    return '0 B';
-  }
-  if (bytes >= 1024 ** 3) {
-    return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
-  }
-  if (bytes >= 1024 ** 2) {
-    return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  }
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return formatFileSize(bytes);
 }

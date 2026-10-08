@@ -79,6 +79,12 @@ try {
   ]);
 
   if (exitCode === 0) {
+    const testUtilsDirectory = path.join(outputDirectory, 'src', 'utils');
+    fs.mkdirSync(testUtilsDirectory, { recursive: true });
+    fs.copyFileSync(
+      path.join(projectRoot, 'src', 'utils', 'formatFileSize.cjs'),
+      path.join(testUtilsDirectory, 'formatFileSize.cjs'),
+    );
     exitCode = run(process.execPath, [
       compiler,
       '-p',
