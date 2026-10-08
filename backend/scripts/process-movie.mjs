@@ -174,6 +174,16 @@ export function mapFailureStatus(error) {
   return { conversion_status: 'failed', conversion_error: conversionError };
 }
 
+export function formatSupabaseMovieLookupFailure(error) {
+  if (error) {
+    const code = typeof error.code === 'string' && /^[A-Za-z0-9_-]{1,32}$/.test(error.code)
+      ? error.code
+      : 'UNKNOWN';
+    return `Supabase movie lookup failed (error code ${code}). Check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.`;
+  }
+  return 'Supabase lookup succeeded but returned no visible movie row. The UUID may not exist, or row-level security may hide an unpublished row; check SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.';
+}
+
 export async function runMovieProcess(options, dependencies, writeLine = () => {}) {
   const { movieId, apply, replace } = options;
   let movie;
@@ -181,7 +191,7 @@ export async function runMovieProcess(options, dependencies, writeLine = () => {
   try {
     movie = await dependencies.database.getMovie(movieId);
     if (!movie) {
-      throw new MovieProcessError('The requested movie was not found.');
+      throw new MovieProcessError(formatSupabaseMovieLookupFailure(null));
     }
     if (typeof movie.storage_key !== 'string' || !movie.storage_key.startsWith('movies/')) {
       throw new MovieProcessError('The movie does not have a valid B2 source key.');
@@ -299,7 +309,7 @@ function createProductionDependencies(environment = process.env) {
         .eq('id', movieId)
         .maybeSingle();
       if (error) {
-        throw new MovieProcessError('Could not read the movie row from Supabase.');
+        throw new MovieProcessError(formatSupabaseMovieLookupFailure(error));
       }
       return data;
     },

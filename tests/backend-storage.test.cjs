@@ -377,6 +377,7 @@ test('media:process dry-run reads a fake row and performs no storage or database
           file_extension: 'mkv',
           file_size_bytes: 700,
           conversion_status: 'uploaded',
+          published: false,
         }),
         updateMovie: async (...args) => updates.push(args),
       },
@@ -395,10 +396,25 @@ test('media:process dry-run reads a fake row and performs no storage or database
   assert.match(output[0], /Source key: movies\/source\.mkv/);
   assert.match(output[0], /Target key: movies\//);
   assert.match(output[0], /uploaded -> converting -> ready/);
+  assert.equal(output[0].includes('movie was not found'), false);
   assert.match(output[0], /libx264\/veryfast, max 350 kb\/s video, AAC stereo 64 kb\/s/);
   assert.match(output[0], /no files were downloaded/);
   assert.deepEqual(updates, []);
   assert.deepEqual(storageCalls, []);
+});
+
+test('media:process lookup errors report only a safe Supabase code and empty rows mention RLS', async () => {
+  const { formatSupabaseMovieLookupFailure } = await import('../backend/scripts/process-movie.mjs');
+  const failed = formatSupabaseMovieLookupFailure({
+    code: '42501',
+    message: 'service-role-secret-bearing provider details',
+  });
+  assert.match(failed, /Supabase movie lookup failed \(error code 42501\)/);
+  assert.doesNotMatch(failed, /service-role-secret-bearing|provider details/);
+
+  const empty = formatSupabaseMovieLookupFailure(null);
+  assert.match(empty, /no visible movie row/);
+  assert.match(empty, /row-level security may hide an unpublished row/);
 });
 
 test('media:process skips encoding only for in-limit H.264/AAC MP4 files', async () => {
