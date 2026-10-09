@@ -1,6 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import React from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  Image,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
 
 import type { FootballMatch } from '../models/football';
 import { formatWestAfricaKickoff, sortHomeFootballMatches } from '../utils/footballScores';
@@ -19,6 +28,11 @@ type Props = {
   onPin: (match: FootballMatch, date: string) => void;
 };
 
+const CARD_WIDTH = 310;
+const CARD_GAP = 12;
+const STEP = CARD_WIDTH + CARD_GAP;
+const SLIDE_MS = 5000;
+
 function formatLagosDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', {
     timeZone: 'Africa/Lagos',
@@ -27,71 +41,155 @@ function formatLagosDate(value: string) {
   }).format(new Date(value));
 }
 
+// Live minute. Uses the provider's minute when it is sent. The free plan often
+// sends none, so then the minute is ESTIMATED from the kick-off time
+// (45 min first half, 15 min break, second half). Replaced by the real minute when sent.
+export function getLiveMinuteLabel(match: FootballMatch, nowMs: number): string {
+  if (match.minute !== null) {
+    return `LIVE ${match.minute}′`;
+  }
+  const elapsed = Math.floor((nowMs - new Date(match.startsAt).getTime()) / 60000);
+  if (!Number.isFinite(elapsed) || elapsed < 1) {
+    return 'LIVE';
+  }
+  if (elapsed <= 45) {
+    return `LIVE ${elapsed}′`;
+  }
+  if (elapsed <= 60) {
+    return 'HT';
+  }
+  const secondHalf = elapsed - 15;
+  return secondHalf > 90 ? 'LIVE 90+′' : `LIVE ${secondHalf}′`;
+}
+
 export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpenFootball, onPin }: Props) {
   const liveUpcoming = sortHomeFootballMatches(matches);
-  if (liveUpcoming.length === 0) {
+  const count = liveUpcoming.length;
+  const listRef = useRef<ScrollView>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [isTouching, setIsTouching] = useState(false);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(tick);
+  }, []);
+
+  useEffect(() => {
+    if (count < 2 || isTouching || isOffline) {
+      return;
+    }
+    const slide = setInterval(() => {
+      const nextIndex = (activeIndex + 1) % count;
+      listRef.current?.scrollTo({ x: nextIndex * STEP, animated: true });
+      setActiveIndex(nextIndex);
+    }, SLIDE_MS);
+    return () => clearInterval(slide);
+  }, [activeIndex, count, isTouching, isOffline]);
+
+  useEffect(() => {
+    if (count > 0 && activeIndex > count - 1) {
+      setActiveIndex(count - 1);
+    }
+  }, [activeIndex, count]);
+
+  const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(event.nativeEvent.contentOffset.x / STEP);
+    setActiveIndex(Math.max(0, Math.min(count - 1, index)));
+    setIsTouching(false);
+  };
+
+  if (count === 0) {
     return null;
   }
+
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.list}>
-      {liveUpcoming.map((match) => {
-        const live = match.status === 'live';
-        const goals = goalSignals[match.id];
-        return (
-          <View key={match.id} style={styles.card}>
-            <View style={styles.tab}>
-              <Text style={styles.tabText} numberOfLines={1}>{match.competition.name}</Text>
-            </View>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`${match.competition.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}`}
-              onPress={() => onOpenFootball(date)}
-              style={styles.body}
-            >
-              <View style={styles.team}>
-                <View style={styles.badgeWrap}>
-                  <TeamBadge logoUrl={match.homeTeam.logoUrl} name={match.homeTeam.name} />
-                  <FootballGoalBalls count={goals?.home ?? 0} token={goals?.createdAt} />
-                </View>
-                <Text style={styles.teamName} numberOfLines={2}>{match.homeTeam.name}</Text>
+    <View>
+      <ScrollView
+        ref={listRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.list}
+        snapToInterval={STEP}
+        decelerationRate="fast"
+        onScrollBeginDrag={() => setIsTouching(true)}
+        onMomentumScrollEnd={handleScrollEnd}
+      >
+        {liveUpcoming.map((match) => {
+          const live = match.status === 'live';
+          const goals = goalSignals[match.id];
+          return (
+            <View key={match.id} style={styles.card}>
+              <View style={styles.tab}>
+                <Text style={styles.tabText} numberOfLines={1}>{match.competition.name}</Text>
               </View>
-              <View style={styles.center}>
-                {live ? (
-                  <>
-                    <Text style={styles.centerMain}>{match.homeScore ?? '-'} - {match.awayScore ?? '-'}</Text>
-                    <Text style={styles.liveMinute}>{match.minute === null ? 'LIVE' : `LIVE ${match.minute}′`}</Text>
-                  </>
-                ) : (
-                  <>
-                    <Text style={styles.centerMain}>{formatWestAfricaKickoff(match.startsAt)}</Text>
-                    <Text style={styles.centerSub}>{formatLagosDate(match.startsAt)}</Text>
-                  </>
-                )}
-                {isOffline ? <Text style={styles.offline}>Offline</Text> : null}
-              </View>
-              <View style={styles.team}>
-                <View style={styles.badgeWrap}>
-                  <TeamBadge logoUrl={match.awayTeam.logoUrl} name={match.awayTeam.name} />
-                  <FootballGoalBalls count={goals?.away ?? 0} token={goals?.createdAt} direction="down" />
-                </View>
-                <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
-              </View>
-            </Pressable>
-            {live ? (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={`Pin ${match.homeTeam.name} versus ${match.awayTeam.name} livescore`}
-                onPress={() => onPin(match, date)}
-                style={styles.pinButton}
+                accessibilityLabel={`${match.competition.name}: ${match.homeTeam.name} versus ${match.awayTeam.name}`}
+                onPress={() => onOpenFootball(date)}
+                style={styles.body}
               >
-                <Ionicons name="pin-outline" size={15} color={theme.accent} />
-                <Text style={styles.pinText}>Pin live score</Text>
+                <View style={styles.team}>
+                  <View style={styles.badgeWrap}>
+                    <TeamBadge logoUrl={match.homeTeam.logoUrl} name={match.homeTeam.name} />
+                    <FootballGoalBalls count={goals?.home ?? 0} token={goals?.createdAt} />
+                  </View>
+                  <Text style={styles.teamName} numberOfLines={2}>{match.homeTeam.name}</Text>
+                </View>
+                <View style={styles.center}>
+                  {live ? (
+                    <>
+                      <Text style={styles.centerMain}>{match.homeScore ?? '-'} - {match.awayScore ?? '-'}</Text>
+                      <Text style={styles.liveMinute}>{getLiveMinuteLabel(match, nowMs)}</Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={styles.centerMain}>{formatWestAfricaKickoff(match.startsAt)}</Text>
+                      <Text style={styles.centerSub}>{formatLagosDate(match.startsAt)}</Text>
+                    </>
+                  )}
+                  {isOffline ? <Text style={styles.offline}>Offline</Text> : null}
+                </View>
+                <View style={styles.team}>
+                  <View style={styles.badgeWrap}>
+                    <TeamBadge logoUrl={match.awayTeam.logoUrl} name={match.awayTeam.name} />
+                    <FootballGoalBalls count={goals?.away ?? 0} token={goals?.createdAt} direction="down" />
+                  </View>
+                  <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
+                </View>
               </Pressable>
-            ) : null}
-          </View>
-        );
-      })}
-    </ScrollView>
+              {live ? (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Pin ${match.homeTeam.name} versus ${match.awayTeam.name} livescore`}
+                  onPress={() => onPin(match, date)}
+                  style={styles.pinButton}
+                >
+                  <Ionicons name="pin-outline" size={15} color={theme.accent} />
+                  <Text style={styles.pinText}>Pin live score</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          );
+        })}
+      </ScrollView>
+      {count > 1 ? (
+        <View style={styles.dots} accessibilityLabel={`Match ${activeIndex + 1} of ${count}`}>
+          {liveUpcoming.map((match, index) => (
+            <Pressable
+              key={match.id}
+              accessibilityRole="button"
+              accessibilityLabel={`Show match ${index + 1}`}
+              onPress={() => {
+                listRef.current?.scrollTo({ x: index * STEP, animated: true });
+                setActiveIndex(index);
+              }}
+              style={[styles.dot, index === activeIndex && styles.activeDot]}
+            />
+          ))}
+        </View>
+      ) : null}
+    </View>
   );
 }
 
@@ -108,8 +206,8 @@ export function TeamBadge({ logoUrl, name, compact = false }: { logoUrl?: string
 }
 
 const styles = StyleSheet.create({
-  list: { gap: 12, paddingHorizontal: 16 },
-  card: { backgroundColor: theme.surface, borderRadius: 16, minHeight: 170, overflow: 'hidden', width: 310 },
+  list: { gap: CARD_GAP, paddingHorizontal: 16 },
+  card: { backgroundColor: theme.surface, borderRadius: 16, minHeight: 170, overflow: 'hidden', width: CARD_WIDTH },
   tab: {
     alignSelf: 'center',
     backgroundColor: theme.background,
@@ -131,7 +229,7 @@ const styles = StyleSheet.create({
   center: { alignItems: 'center', justifyContent: 'center', minHeight: 32, width: 76 },
   centerMain: { color: theme.text, fontSize: 18, fontWeight: '800', textAlign: 'center' },
   centerSub: { color: theme.secondaryText, fontSize: 12, marginTop: 2 },
-  liveMinute: { color: theme.accent, fontSize: 11, fontWeight: '900', marginTop: 2 },
+  liveMinute: { color: theme.accent, fontSize: 11, fontWeight: '900', marginTop: 2, textAlign: 'center' },
   offline: { color: theme.secondaryText, fontSize: 10, marginTop: 4 },
   pinButton: {
     alignItems: 'center',
@@ -141,4 +239,7 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
   pinText: { color: theme.accent, fontSize: 12, fontWeight: '800' },
+  dots: { flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 10 },
+  dot: { backgroundColor: theme.secondaryText, borderRadius: 4, height: 7, opacity: 0.5, width: 7 },
+  activeDot: { backgroundColor: theme.accent, opacity: 1, width: 19 },
 });
