@@ -28,8 +28,8 @@ type Props = {
   onPin: (match: FootballMatch, date: string) => void;
 };
 
-const CARD_WIDTH = 310;
-const CARD_GAP = 12;
+const CARD_WIDTH = 160;
+const CARD_GAP = 8;
 const STEP = CARD_WIDTH + CARD_GAP;
 const SLIDE_MS = 5000;
 
@@ -41,25 +41,50 @@ function formatLagosDate(value: string) {
   }).format(new Date(value));
 }
 
-// Live minute. Uses the provider's minute when it is sent. The free plan often
-// sends none, so then the minute is ESTIMATED from the kick-off time
-// (45 min first half, 15 min break, second half). Replaced by the real minute when sent.
-export function getLiveMinuteLabel(match: FootballMatch, nowMs: number): string {
-  if (match.minute !== null) {
-    return `LIVE ${match.minute}′`;
-  }
-  const elapsed = Math.floor((nowMs - new Date(match.startsAt).getTime()) / 60000);
+// Live clock (mm:ss). If the provider sends a minute, the clock starts from it and
+// the seconds are counted here (approximate). If it sends none, the clock is
+// ESTIMATED from the kick-off time (45 min, 15 min break, second half).
+// It is replaced by the real minute when the provider sends it.
+function pad(value: number) {
+  return value < 10 ? `0${value}` : String(value);
+}
+
+function estimateClock(startsAt: string, nowMs: number): string {
+  const elapsed = Math.floor((nowMs - new Date(startsAt).getTime()) / 1000);
   if (!Number.isFinite(elapsed) || elapsed < 1) {
-    return 'LIVE';
+    return '00:00';
   }
-  if (elapsed <= 45) {
-    return `LIVE ${elapsed}′`;
+  if (elapsed <= 45 * 60) {
+    return `${pad(Math.floor(elapsed / 60))}:${pad(elapsed % 60)}`;
   }
-  if (elapsed <= 60) {
+  if (elapsed <= 60 * 60) {
     return 'HT';
   }
-  const secondHalf = elapsed - 15;
-  return secondHalf > 90 ? 'LIVE 90+′' : `LIVE ${secondHalf}′`;
+  const second = elapsed - 15 * 60;
+  if (second > 90 * 60) {
+    return '90+';
+  }
+  return `${pad(Math.floor(second / 60))}:${pad(second % 60)}`;
+}
+
+function LiveClock({ match }: { match: FootballMatch }) {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  const [seen, setSeen] = useState({ minute: match.minute, at: nowMs });
+  useEffect(() => {
+    const tick = setInterval(() => setNowMs(Date.now()), 1000);
+    return () => clearInterval(tick);
+  }, []);
+  if (seen.minute !== match.minute) {
+    setSeen({ minute: match.minute, at: nowMs });
+  }
+  let label: string;
+  if (match.minute !== null) {
+    const seconds = Math.min(59, Math.max(0, Math.floor((nowMs - seen.at) / 1000)));
+    label = `${pad(match.minute)}:${pad(seconds)}`;
+  } else {
+    label = estimateClock(match.startsAt, nowMs);
+  }
+  return <Text style={styles.liveMinute}>{label}</Text>;
 }
 
 export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpenFootball, onPin }: Props) {
@@ -70,13 +95,6 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
   const listRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTouching, setIsTouching] = useState(false);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
-  useEffect(() => {
-    const tick = setInterval(() => setNowMs(Date.now()), 30000);
-    return () => clearInterval(tick);
-  }, []);
-
   useEffect(() => {
     if (count < 2 || isTouching || isOffline) {
       return;
@@ -142,7 +160,7 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
                   {live ? (
                     <>
                       <Text style={styles.centerMain}>{match.homeScore ?? '-'} - {match.awayScore ?? '-'}</Text>
-                      <Text style={styles.liveMinute}>{getLiveMinuteLabel(match, nowMs)}</Text>
+                      <LiveClock match={match} />
                     </>
                   ) : (
                     <>
@@ -167,7 +185,7 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
                   onPress={() => onPin(match, date)}
                   style={styles.pinButton}
                 >
-                  <Ionicons name="pin-outline" size={15} color={theme.accent} />
+                  <Ionicons name="pin-outline" size={11} color={theme.accent} />
                   <Text style={styles.pinText}>Pin live score</Text>
                 </Pressable>
               ) : null}
@@ -209,39 +227,39 @@ export function TeamBadge({ logoUrl, name, compact = false }: { logoUrl?: string
 
 const styles = StyleSheet.create({
   list: { gap: CARD_GAP, paddingHorizontal: 16 },
-  card: { backgroundColor: theme.surface, borderRadius: 16, minHeight: 170, overflow: 'hidden', width: CARD_WIDTH },
+  card: { backgroundColor: theme.surface, borderRadius: 12, minHeight: 92, overflow: 'hidden', width: CARD_WIDTH },
   tab: {
     alignSelf: 'center',
     backgroundColor: theme.background,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
-    maxWidth: 220,
-    paddingHorizontal: 18,
-    paddingVertical: 5,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    maxWidth: 130,
+    paddingHorizontal: 10,
+    paddingVertical: 2,
   },
-  tabText: { color: theme.text, fontSize: 13, fontWeight: '700' },
-  body: { alignItems: 'center', flex: 1, flexDirection: 'row', paddingHorizontal: 8 },
+  tabText: { color: theme.text, fontSize: 10, fontWeight: '700' },
+  body: { alignItems: 'center', flex: 1, flexDirection: 'row', paddingHorizontal: 4 },
   team: { alignItems: 'center', flex: 1 },
-  badgeWrap: { alignItems: 'center', height: 32, justifyContent: 'center', width: 40 },
-  badge: { alignItems: 'center', height: 32, justifyContent: 'center', width: 32 },
+  badgeWrap: { alignItems: 'center', height: 22, justifyContent: 'center', width: 28 },
+  badge: { alignItems: 'center', height: 22, justifyContent: 'center', width: 22 },
   compactBadge: { backgroundColor: theme.background, borderRadius: 17, height: 34, width: 34 },
   badgeImage: { height: '100%', width: '100%' },
-  badgeInitial: { color: theme.text, fontSize: 21, fontWeight: '900' },
-  teamName: { color: theme.text, fontSize: 12, fontWeight: '600', marginTop: 4, textAlign: 'center' },
-  center: { alignItems: 'center', justifyContent: 'center', minHeight: 32, width: 76 },
-  centerMain: { color: theme.text, fontSize: 18, fontWeight: '800', textAlign: 'center' },
-  centerSub: { color: theme.secondaryText, fontSize: 12, marginTop: 2 },
-  liveMinute: { color: theme.accent, fontSize: 11, fontWeight: '900', marginTop: 2, textAlign: 'center' },
-  offline: { color: theme.secondaryText, fontSize: 10, marginTop: 4 },
+  badgeInitial: { color: theme.text, fontSize: 14, fontWeight: '900' },
+  teamName: { color: theme.text, fontSize: 9, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center', minHeight: 22, width: 52 },
+  centerMain: { color: theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center' },
+  centerSub: { color: theme.secondaryText, fontSize: 9, marginTop: 1 },
+  liveMinute: { color: theme.accent, fontSize: 10, fontWeight: '900', marginTop: 1, textAlign: 'center' },
+  offline: { color: theme.secondaryText, fontSize: 8, marginTop: 2 },
   pinButton: {
     alignItems: 'center',
     flexDirection: 'row',
-    gap: 6,
+    gap: 4,
     justifyContent: 'center',
-    paddingBottom: 12,
+    paddingBottom: 5,
   },
-  pinText: { color: theme.accent, fontSize: 12, fontWeight: '800' },
-  dots: { flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 10 },
+  pinText: { color: theme.accent, fontSize: 9, fontWeight: '800' },
+  dots: { flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 6 },
   dot: { backgroundColor: theme.secondaryText, borderRadius: 4, height: 7, opacity: 0.5, width: 7 },
   activeDot: { backgroundColor: theme.accent, opacity: 1, width: 19 },
 });
