@@ -380,6 +380,21 @@ async function handleRequest(
     return;
   }
 
+  if (pathname === '/football/upcoming') {
+    if (request.method !== 'GET') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    if (!config.footballDataApiKey) {
+      throw new HttpError(503, 'FOOTBALL_NOT_CONFIGURED', 'Football scores are not configured.');
+    }
+    try {
+      writeJson(response, 200, await footballMatches.getUpcoming());
+    } catch (error) {
+      throw mapFootballProviderError(error);
+    }
+    return;
+  }
+
   if (pathname === '/admin/system-status') {
     if (request.method !== 'GET') {
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');

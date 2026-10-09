@@ -45,6 +45,7 @@ export class SportsProviderError extends Error {
 
 export interface SportsProvider {
   getMatches(date: string): Promise<FootballMatch[]>;
+  getMatchesRange?(dateFrom: string, dateTo: string): Promise<FootballMatch[]>;
 }
 
 export class UnconfiguredSportsProvider implements SportsProvider {

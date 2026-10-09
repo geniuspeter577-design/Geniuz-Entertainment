@@ -113,13 +113,17 @@ export class FootballDataProvider implements SportsProvider {
     private readonly timeoutMs = 8_000,
   ) {}
 
-  async getMatches(date: string) {
+  getMatches(date: string) {
+    return this.getMatchesRange(date, date);
+  }
+
+  async getMatchesRange(dateFrom: string, dateTo: string) {
     if (!this.apiKey) {
       throw new SportsProviderError('NOT_CONFIGURED');
     }
     const url = new URL('https://api.football-data.org/v4/matches');
-    url.searchParams.set('dateFrom', date);
-    url.searchParams.set('dateTo', date);
+    url.searchParams.set('dateFrom', dateFrom);
+    url.searchParams.set('dateTo', dateTo);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
     try {
@@ -142,7 +146,13 @@ export class FootballDataProvider implements SportsProvider {
       if (!isRecord(payload) || !Array.isArray(payload.matches)) {
         throw new SportsProviderError('INVALID_RESPONSE');
       }
-      return payload.matches.map(parseMatch);
+      return payload.matches.flatMap((item) => {
+        try {
+          return [parseMatch(item)];
+        } catch {
+          return [];
+        }
+      });
     } catch (error) {
       if (error instanceof SportsProviderError) {
         throw error;
