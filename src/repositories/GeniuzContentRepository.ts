@@ -145,6 +145,7 @@ function parseFootballMatches(value: unknown): FootballMatchesResponse {
       (item.competition.logoUrl !== undefined && typeof item.competition.logoUrl !== 'string') ||
       typeof item.startsAt !== 'string' ||
       !Number.isFinite(Date.parse(item.startsAt)) ||
+      (item.round !== undefined && typeof item.round !== 'string') ||
       typeof item.status !== 'string' ||
       !footballStatuses.has(item.status as FootballMatchStatus) ||
       (item.minute !== null && (!Number.isInteger(item.minute) || Number(item.minute) < 0)) ||
@@ -161,6 +162,7 @@ function parseFootballMatches(value: unknown): FootballMatchesResponse {
         ...(typeof item.competition.logoUrl === 'string' ? { logoUrl: item.competition.logoUrl } : {}),
       },
       startsAt: item.startsAt,
+      ...(typeof item.round === 'string' ? { round: item.round } : {}),
       status: item.status as FootballMatchStatus,
       minute: item.minute as number | null,
       homeTeam: parseFootballTeam(item.homeTeam),

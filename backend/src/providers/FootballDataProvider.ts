@@ -88,6 +88,9 @@ function parseMatch(value: unknown): FootballMatch {
       ...(optionalLogo(competition.emblem) ? { logoUrl: optionalLogo(competition.emblem) } : {}),
     },
     startsAt: new Date(startsAt).toISOString(),
+    ...(Number.isInteger(match.matchday) && Number(match.matchday) > 0
+      ? { round: `Matchday ${Number(match.matchday)}` }
+      : {}),
     status: mapStatus(match.status),
     minute,
     homeTeam: {

@@ -1,47 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
-import { useContentQuery } from '../hooks/useContentQuery';
-import type { FootballMatch, FootballMatchesResponse, FootballTeam } from '../models/football';
-import { getFootballMatches } from '../services/createContentService';
+import type { FootballMatch, FootballTeam } from '../models/football';
+import { useFootballMatches } from '../state/FootballMatchesContext';
 import { theme } from '../theme';
+import { formatWestAfricaKickoff, getNextFootballDates } from '../utils/footballScores';
 import { ContentNotice } from './ContentNotice';
-
-function getWestAfricaDate() {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'Africa/Lagos',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date());
-  const part = (type: 'year' | 'month' | 'day') => parts.find((value) => value.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
-}
-
-function getFootballDays() {
-  const today = new Date(`${getWestAfricaDate()}T00:00:00.000Z`);
-  return Array.from({ length: 7 }, (_, offset) => {
-    const date = new Date(today);
-    date.setUTCDate(today.getUTCDate() + offset);
-    return {
-      date: date.toISOString().slice(0, 10),
-      label: offset === 0
-        ? 'Today'
-        : new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short' }).format(date),
-      day: new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', day: '2-digit', month: 'short' }).format(date),
-    };
-  });
-}
-
-function formatKickoff(value: string) {
-  return new Intl.DateTimeFormat('en-GB', {
-    timeZone: 'Africa/Lagos',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(value));
-}
 
 function TeamMark({ team }: { team: FootballTeam }) {
   return team.logoUrl ? (
@@ -58,7 +23,7 @@ function getMatchStatus(match: FootballMatch) {
     return match.minute === null ? 'LIVE' : `LIVE · ${match.minute}′`;
   }
   if (match.status === 'scheduled') {
-    return formatKickoff(match.startsAt);
+    return formatWestAfricaKickoff(match.startsAt);
   }
   return match.status.charAt(0).toLocaleUpperCase() + match.status.slice(1);
 }
@@ -98,16 +63,13 @@ export function FootballMatchesPanel({
   isOnline: boolean;
   onRetryConnection: () => void;
 }) {
-  const [days] = useState(getFootballDays);
-  const [date, setDate] = useState(getWestAfricaDate);
-  const loadMatches = useCallback(async () => ({
-    data: await getFootballMatches(date),
-    source: 'api' as const,
-  }), [date]);
-  const query = useContentQuery<FootballMatchesResponse>(`football-matches:${date}`, loadMatches, isOnline);
+  const [days] = useState(getNextFootballDates);
+  const football = useFootballMatches();
+  const date = football.selectedDate;
+  const query = football.entries[date] ?? { matches: [], stale: false, isLoading: isOnline, error: undefined };
   const matchGroups = useMemo(
-    () => groupByStatus(query.data?.matches ?? []),
-    [query.data?.matches],
+    () => groupByStatus(query.matches),
+    [query.matches],
   );
 
   return (
@@ -115,10 +77,8 @@ export function FootballMatchesPanel({
       <View style={styles.headingRow}>
         <View>
           <Text style={styles.heading}>Matches</Text>
-          <Text style={styles.note}>Scores may be delayed</Text>
-          <Text style={styles.note}>All times in West Africa Time</Text>
         </View>
-        {query.data?.stale ? (
+        {query.stale ? (
           <Ionicons accessibilityLabel="Showing cached scores" name="time-outline" size={18} color={theme.warning} />
         ) : null}
       </View>
@@ -129,7 +89,7 @@ export function FootballMatchesPanel({
             key={day.date}
             accessibilityRole="tab"
             accessibilityState={{ selected: date === day.date }}
-            onPress={() => setDate(day.date)}
+            onPress={() => football.selectDate(day.date)}
             style={[styles.dayOption, date === day.date && styles.selectedDayOption]}
           >
             <Text style={[styles.dayLabel, date === day.date && styles.selectedDayText]}>{day.label}</Text>
@@ -151,13 +111,13 @@ export function FootballMatchesPanel({
           message="Football scores could not be loaded. Please retry."
           tone="error"
           actionLabel="Retry"
-          onAction={query.retry}
+          onAction={() => football.retryDate(date)}
         />
       ) : null}
-      {isOnline && query.data?.stale ? (
+      {isOnline && query.stale ? (
         <Text style={styles.staleMessage}>Showing the last available scores.</Text>
       ) : null}
-      {isOnline && !query.isLoading && !query.error && query.data?.matches.length === 0 ? (
+      {isOnline && !query.isLoading && !query.error && query.matches.length === 0 ? (
         <Text style={styles.emptyMessage}>No matches</Text>
       ) : null}
 
@@ -180,7 +140,7 @@ export function FootballMatchesPanel({
                   </View>
                   <View style={styles.scoreBlock}>
                     {match.status === 'scheduled' ? (
-                      <Text style={styles.kickoff}>{formatKickoff(match.startsAt)}</Text>
+                      <Text style={styles.kickoff}>{formatWestAfricaKickoff(match.startsAt)}</Text>
                     ) : (
                       <Text style={styles.score}>
                         {match.homeScore ?? '–'} <Text style={styles.scoreSeparator}>:</Text> {match.awayScore ?? '–'}
@@ -210,7 +170,6 @@ const styles = StyleSheet.create({
   section: { gap: 12, marginBottom: 18 },
   headingRow: { alignItems: 'flex-start', flexDirection: 'row', justifyContent: 'space-between' },
   heading: { color: theme.text, fontSize: 19, fontWeight: '800' },
-  note: { color: theme.secondaryText, fontSize: 12, lineHeight: 17 },
   daySelector: { gap: 8, paddingVertical: 2 },
   dayOption: {
     alignItems: 'center',

@@ -15,6 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ContentNotice } from '../../src/components/ContentNotice';
 import { ContentRail } from '../../src/components/ContentRail';
+import { FootballHomeCard } from '../../src/components/FootballHomeCard';
 import { FootballMatchesPanel } from '../../src/components/FootballMatchesPanel';
 import { HomeHeroCarousel } from '../../src/components/HomeHeroCarousel';
 import { OfflineState } from '../../src/components/OfflineState';
@@ -23,6 +24,7 @@ import { useContentQuery } from '../../src/hooks/useContentQuery';
 import type { ContentItem } from '../../src/models/content';
 import { supabaseMovieRepository } from '../../src/repositories/SupabaseMovieRepository';
 import { MockContentRepository } from '../../src/repositories/MockContentRepository';
+import { useFootballMatches } from '../../src/state/FootballMatchesContext';
 import { useLibrary } from '../../src/state/LibraryContext';
 import { useNetwork } from '../../src/state/NetworkContext';
 import { theme } from '../../src/theme';
@@ -117,6 +119,8 @@ export default function HomeScreen() {
     [],
   );
   const [selectedCategory, setSelectedCategory] = useState('Trending');
+  const football = useFootballMatches();
+  const footballToday = football.entries[football.today];
   const tabsScrollRef = useRef<ScrollView | null>(null);
   const homeScrollRef = useRef<ScrollView | null>(null);
   const navigation = useNavigation<HomeTabsNavigation>('/(tabs)');
@@ -440,6 +444,33 @@ export default function HomeScreen() {
         {noTitles && selectedCategory !== 'Football' ? <Text style={styles.emptyText}>Nothing here yet</Text> : null}
         {!catalogQuery.isLoading && !catalogQuery.data?.hasFailures && selectedCategory !== 'Trending' && selectedCategory !== 'Football' && activeCategoryItems.length === 0 ? (
           <Text style={styles.emptyText}>Nothing here yet</Text>
+        ) : null}
+
+        {selectedCategory !== 'Football' && footballToday ? (
+          footballToday.matches.length ? (
+            <>
+              <SectionHeader title="Football" />
+              <FootballHomeCard
+                matches={footballToday.matches}
+                date={football.today}
+                goalSignals={football.goalSignals}
+                isOffline={!isOnline}
+                onOpenFootball={() => setSelectedCategory('Football')}
+                onPin={(match, date) => football.pinMatch(match, date)}
+              />
+            </>
+          ) : footballToday.isLoading ? (
+            <ContentNotice message="Loading football..." />
+          ) : footballToday.error ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Retry football scores"
+              onPress={() => football.retryDate(football.today)}
+              style={{ marginHorizontal: 16, marginVertical: 8 }}
+            >
+              <Text style={{ color: '#72F06A' }}>Football scores could not load. Tap to retry</Text>
+            </Pressable>
+          ) : null
         ) : null}
 
         {recent.length ? (

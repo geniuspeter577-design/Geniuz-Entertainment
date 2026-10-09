@@ -18,6 +18,7 @@ export type FootballMatch = {
     logoUrl?: string;
   };
   startsAt: string;
+  round?: string;
   status: FootballMatchStatus;
   minute: number | null;
   homeTeam: FootballTeam;

@@ -10,6 +10,9 @@ const { createApiServer } = require('../.test-build/backend/backend/src/http/ser
 const { TMDBContentRepository } = require('../.test-build/backend/backend/src/repositories/TMDBContentRepository.js');
 const { HttpTMDBProvider } = require('../.test-build/backend/backend/src/providers/TMDBProvider.js');
 const { FootballMatchesService } = require('../.test-build/backend/backend/src/services/FootballMatchesService.js');
+const { getKickoffPresentation, getNextFootballDates, sortHomeFootballMatches } = require('../.test-build/src/utils/footballScores.js');
+const { getGoalBallCounts, normalizeFootballPinCorner, snapFootballPinCorner } = require('../.test-build/src/utils/footballPin.js');
+const { parseUserAppSettings } = require('../.test-build/src/services/TrailerAutoplayPreference.js');
 const { ContentService } = require('../.test-build/backend/backend/src/services/ContentService.js');
 
 function tmdbResponse(url) {
@@ -128,22 +131,81 @@ test('mobile Geniuz repository loads football matches through the backend route'
 test('Football Home category shows score states and notes without match stream actions', () => {
   const home = fs.readFileSync('app/(tabs)/index.tsx', 'utf8');
   const panel = fs.readFileSync('src/components/FootballMatchesPanel.tsx', 'utf8');
+  const context = fs.readFileSync('src/state/FootballMatchesContext.tsx', 'utf8');
+  const card = fs.readFileSync('src/components/FootballHomeCard.tsx', 'utf8');
+  const scoreUtils = fs.readFileSync('src/utils/footballScores.ts', 'utf8');
   assert.match(home, /selectedCategory === 'Football'[\s\S]*?<FootballMatchesPanel/);
-  assert.match(panel, /getFootballMatches\(date\)/);
+  assert.match(panel, /useFootballMatches\(\)/);
   assert.match(panel, /Loading football scores/);
   assert.match(panel, /Football scores could not be loaded/);
   assert.match(panel, /You’re offline/);
   assert.match(panel, /No matches/);
-  assert.match(panel, /Scores may be delayed/);
-  assert.match(panel, /All times in West Africa Time/);
-  assert.match(panel, /Array\.from\(\{ length: 7 \}/);
-  assert.match(panel, /onPress=\{\(\) => setDate\(day\.date\)\}/);
+  assert.match(scoreUtils, /Array\.from\(\{ length: 7 \}/);
+  assert.match(panel, /onPress=\{\(\) => football\.selectDate\(day\.date\)\}/);
   assert.match(panel, /title: 'Live'/);
   assert.match(panel, /title: 'Upcoming'/);
   assert.match(panel, /title: 'Results'/);
-  assert.match(panel, /timeZone: 'Africa\/Lagos'[\s\S]*?hour: '2-digit'/);
-  assert.match(panel, /match\.status === 'scheduled'[\s\S]*?styles\.kickoff[\s\S]*?formatKickoff\(match\.startsAt\)/);
+  assert.match(scoreUtils, /timeZone: 'Africa\/Lagos'[\s\S]*?hour: '2-digit'/);
+  assert.match(card, /getKickoffPresentation\(match\.startsAt\)/);
+  assert.match(card, /kickoff\?\.comingSoon/);
+  assert.match(home, /<FootballHomeCard/);
+  assert.match(card, /if \(liveUpcoming\.length === 0\)[\s\S]*?return null/);
+  assert.match(context, /getFootballMatches\(date\)/);
+  assert.match(context, /appState !== 'active'/);
+  assert.match(context, /}, 60_000\)/);
+  assert.match(context, /requestsRef\.current\.get\(date\)/);
+  assert.doesNotMatch(context, /football-data\.org/);
   assert.doesNotMatch(panel, /router\.push|\/watch\//);
+});
+
+test('football kickoff labels use Today only for Lagos calendar dates and Upcoming matches sort after Live', () => {
+  const now = new Date('2026-10-08T00:00:00.000Z');
+  assert.deepEqual(getKickoffPresentation('2026-10-08T17:30:00.000Z', now), { label: 'Today, 18:30', comingSoon: false });
+  assert.deepEqual(getKickoffPresentation('2026-10-09T17:30:00.000Z', now), { label: '9 Oct, 18:30', comingSoon: true });
+  assert.equal(getNextFootballDates(now).length, 7);
+  const base = {
+    competition: { id: 'league', name: 'League' },
+    minute: null,
+    homeTeam: { name: 'Home' },
+    awayTeam: { name: 'Away' },
+    homeScore: null,
+    awayScore: null,
+  };
+  const sorted = sortHomeFootballMatches([
+    { ...base, id: 'upcoming', startsAt: '2026-10-08T20:00:00Z', status: 'scheduled' },
+    { ...base, id: 'live', startsAt: '2026-10-08T19:00:00Z', status: 'live' },
+    { ...base, id: 'finished', startsAt: '2026-10-08T18:00:00Z', status: 'finished' },
+  ]);
+  assert.deepEqual(sorted.map(({ id }) => id), ['live', 'upcoming']);
+});
+
+test('football goal balls animate only score increases and never on first load or corrections', () => {
+  const current = { id: 'match', homeScore: 2, awayScore: 1 };
+  assert.deepEqual(getGoalBallCounts(undefined, current), { home: 0, away: 0 });
+  assert.deepEqual(getGoalBallCounts({ ...current }, current), { home: 0, away: 0 });
+  assert.deepEqual(getGoalBallCounts({ ...current, homeScore: 1, awayScore: 1 }, current), { home: 1, away: 0 });
+  assert.deepEqual(getGoalBallCounts({ ...current, homeScore: 2, awayScore: 0 }, current), { home: 0, away: 1 });
+  assert.deepEqual(getGoalBallCounts({ ...current, homeScore: 4, awayScore: 1 }, current), { home: 0, away: 0 });
+});
+
+test('football pin snaps to nearest corner and its corner persists in per-user app settings', () => {
+  const snapped = snapFootballPinCorner(
+    { x: 650, y: 470 },
+    { width: 800, height: 600 },
+    { width: 200, height: 100 },
+    { top: 10, right: 10, bottom: 20, left: 10 },
+  );
+  assert.equal(snapped.corner, 'bottom-right');
+  assert.deepEqual(normalizeFootballPinCorner(snapped.corner), 'bottom-right');
+  const settings = parseUserAppSettings(JSON.stringify({ footballPinCorner: snapped.corner }));
+  assert.equal(settings.footballPinCorner, 'bottom-right');
+  const pin = fs.readFileSync('src/components/FootballScorePin.tsx', 'utf8');
+  const root = fs.readFileSync('app/_layout.tsx', 'utf8');
+  assert.match(pin, /getUserAppSettings/);
+  assert.match(pin, /setUserAppSettings/);
+  assert.match(pin, /snapFootballPinCorner/);
+  assert.match(pin, /pointerEvents="box-none"/);
+  assert.match(root, /<FootballMatchesProvider>[\s\S]*?<FootballScorePin\s*\/>[\s\S]*?<\/FootballMatchesProvider>/);
 });
 
 test('transfer panel explains Member access and routes visitors to sign-in or the existing Member card', () => {
@@ -159,7 +221,7 @@ test('transfer panel explains Member access and routes visitors to sign-in or th
   assert.match(memberPage, /createMemberCheckout/);
   assert.match(memberPage, /Payment pending/);
   assert.match(memberPage, /You are a Member until/);
-  assert.match(memberPage, /eligible to earn are coming soon/);
+  assert.match(memberPage, /Post REELS and Earn in Dollars/);
   assert.doesNotMatch(memberPage, /NGN\s+900/);
   assert.match(profile, /useMembership\(\)/);
   assert.match(profile, /Member until \$\{formatMembershipDate/);
