@@ -9,7 +9,7 @@ import { formatWestAfricaKickoff } from '../utils/footballScores';
 import type { GoalBallCounts } from '../utils/footballPin';
 import { ContentNotice } from './ContentNotice';
 import { FootballGoalBalls } from './FootballGoalBalls';
-import { CelebrationLogo, goalMinuteLabel, type Celebration } from './FootballHomeCard';
+import { CelebrationLogo, LiveClock, goalMinuteLabel, type Celebration } from './FootballHomeCard';
 
 function TeamMark({ team }: { team: FootballTeam }) {
   return team.logoUrl ? (
@@ -211,8 +211,10 @@ export function FootballMatchesPanel({
                         {match.homeScore ?? '–'} <Text style={styles.scoreSeparator}>:</Text> {match.awayScore ?? '–'}
                       </Text>
                     )}
-                    {match.status !== 'scheduled' ? (
-                      <Text style={[styles.matchStatus, match.status === 'live' && styles.liveStatus]}>
+                    {match.status === 'live' ? (
+                      <LiveClock key={`${match.id}-${match.minute ?? 'x'}`} match={match} />
+                    ) : match.status !== 'scheduled' ? (
+                      <Text style={styles.matchStatus}>
                         {getMatchStatus(match)}
                       </Text>
                     ) : null}
