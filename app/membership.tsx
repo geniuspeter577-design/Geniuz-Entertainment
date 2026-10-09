@@ -150,10 +150,7 @@ export default function MembershipScreen() {
           <Benefit icon="swap-horizontal-outline" text="Send and receive files between devices" />
           <Benefit icon="eye-off-outline" text="Ad-free viewing" />
           <Benefit icon="shield-checkmark-outline" text="Member badge on your profile" />
-          <View style={styles.unavailableBenefit}>
-            <Ionicons name="time-outline" size={19} color={theme.secondaryText} />
-            <Text style={styles.unavailableText}>Reels posting and becoming eligible to earn are coming soon. Membership does not promise income.</Text>
-          </View>
+          <Benefit icon="cash-outline" text="Post REELS and Earn in Dollars" />
         </View>
       </ScrollView>
       <View style={styles.footer}>
