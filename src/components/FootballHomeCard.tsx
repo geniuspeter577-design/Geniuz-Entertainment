@@ -63,7 +63,9 @@ export function getLiveMinuteLabel(match: FootballMatch, nowMs: number): string 
 }
 
 export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpenFootball, onPin }: Props) {
-  const liveUpcoming = sortHomeFootballMatches(matches);
+  const sortedMatches = sortHomeFootballMatches(matches);
+  const liveOnly = sortedMatches.filter((match) => match.status === 'live');
+  const liveUpcoming = liveOnly.length > 0 ? liveOnly : sortedMatches;
   const count = liveUpcoming.length;
   const listRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
