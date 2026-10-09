@@ -1,12 +1,15 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { FootballMatch, FootballTeam } from '../models/football';
 import { useFootballMatches } from '../state/FootballMatchesContext';
 import { theme } from '../theme';
 import { formatWestAfricaKickoff } from '../utils/footballScores';
+import type { GoalBallCounts } from '../utils/footballPin';
 import { ContentNotice } from './ContentNotice';
+import { FootballGoalBalls } from './FootballGoalBalls';
+import { CelebrationLogo, goalMinuteLabel, type Celebration } from './FootballHomeCard';
 
 function TeamMark({ team }: { team: FootballTeam }) {
   return team.logoUrl ? (
@@ -53,6 +56,86 @@ function groupByStatus(matches: FootballMatch[]) {
       title,
       competitions: groupByCompetition(groupedMatches),
     }));
+}
+
+// Same goal celebration as the Home card, shown over a live match row.
+function GoalOverlay({ match, goal }: { match: FootballMatch; goal?: GoalBallCounts & { createdAt?: number } }) {
+  const [celebration, setCelebration] = useState<Celebration | null>(null);
+  const handled = useRef<number | null>(null);
+  const primed = useRef(false);
+  const token = goal?.createdAt;
+  const celebrationKey = celebration ? `${celebration.matchId}-${celebration.token}` : null;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!primed.current) {
+        primed.current = true;
+        handled.current = typeof token === 'number' ? token : null;
+        return;
+      }
+      if (!goal || typeof token !== 'number' || handled.current === token) {
+        return;
+      }
+      handled.current = token;
+      const homeGoals = goal.home ?? 0;
+      const awayGoals = goal.away ?? 0;
+      if (homeGoals <= 0 && awayGoals <= 0) {
+        return;
+      }
+      const team = homeGoals >= awayGoals ? 'home' : 'away';
+      setCelebration({
+        matchId: match.id,
+        team,
+        count: team === 'home' ? homeGoals : awayGoals,
+        token,
+        minute: goalMinuteLabel(match, Date.now()),
+        phase: 'goal',
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [goal, match, token]);
+
+  useEffect(() => {
+    if (!celebrationKey) {
+      return;
+    }
+    const toScorer = setTimeout(
+      () => setCelebration((current) => (current ? { ...current, phase: 'scorer' } : current)),
+      3500,
+    );
+    const done = setTimeout(() => setCelebration(null), 7000);
+    return () => {
+      clearTimeout(toScorer);
+      clearTimeout(done);
+    };
+  }, [celebrationKey]);
+
+  if (!celebration) {
+    return null;
+  }
+  const scoringTeam = celebration.team === 'away' ? match.awayTeam : match.homeTeam;
+  return (
+    <View style={styles.celebration} pointerEvents="none">
+      {celebration.phase === 'goal' ? (
+        <View style={styles.celebrationRow}>
+          <View style={styles.celebrationLogoWrap}>
+            <CelebrationLogo logoUrl={scoringTeam.logoUrl} name={scoringTeam.name} />
+            <FootballGoalBalls
+              count={celebration.count}
+              token={celebration.token}
+              direction={celebration.team === 'away' ? 'down' : undefined}
+            />
+          </View>
+          <Text style={styles.goalText}>GOAL!!!</Text>
+        </View>
+      ) : (
+        <View style={styles.celebrationRow}>
+          <Text style={styles.scorerTeam} numberOfLines={1}>{scoringTeam.name}</Text>
+          <Text style={styles.scorerMinute}>{`Goal ${celebration.minute}`}</Text>
+        </View>
+      )}
+    </View>
+  );
 }
 
 export function FootballMatchesPanel({
@@ -133,11 +216,25 @@ export function FootballMatchesPanel({
                         {getMatchStatus(match)}
                       </Text>
                     ) : null}
+                    {match.status === 'live' ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Pin ${match.homeTeam.name} versus ${match.awayTeam.name} live score`}
+                        onPress={() => football.pinMatch(match, football.today)}
+                        style={styles.pinButton}
+                      >
+                        <Ionicons name="pin-outline" size={11} color={theme.accent} />
+                        <Text style={styles.pinText}>Pin</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                   <View style={[styles.team, styles.awayTeam]}>
                     <Text style={styles.teamName} numberOfLines={2}>{match.awayTeam.name}</Text>
                     <TeamMark team={match.awayTeam} />
                   </View>
+                  {match.status === 'live' ? (
+                    <GoalOverlay match={match} goal={football.goalSignals[match.id]} />
+                  ) : null}
                 </View>
               ))}
             </View>
@@ -219,4 +316,18 @@ const styles = StyleSheet.create({
   scoreSeparator: { color: theme.secondaryText },
   matchStatus: { color: theme.secondaryText, fontSize: 10, marginTop: 2 },
   liveStatus: { color: theme.accent, fontWeight: '800' },
+  pinButton: { alignItems: 'center', flexDirection: 'row', gap: 3, marginTop: 4, paddingVertical: 2 },
+  pinText: { color: theme.accent, fontSize: 10, fontWeight: '800' },
+  celebration: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+  },
+  celebrationRow: { alignItems: 'center', flexDirection: 'row', gap: 12 },
+  celebrationLogoWrap: { alignItems: 'center', height: 50, justifyContent: 'center', width: 60 },
+  goalText: { color: theme.accent, fontSize: 24, fontWeight: '900' },
+  scorerTeam: { color: theme.text, flexShrink: 1, fontSize: 15, fontWeight: '800' },
+  scorerMinute: { color: theme.accent, fontSize: 18, fontWeight: '900' },
 });
