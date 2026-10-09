@@ -4,6 +4,9 @@ import { randomUUID } from 'node:crypto';
 import type { Config } from '../config/config';
 import { HttpError } from '../http/errors';
 import { PaystackService, PaystackServiceError } from './PaystackService';
+import { FlutterwaveGateway } from './PaymentGateway';
+import type { PaymentGateway } from './PaymentGateway';
+import { FlutterwaveService } from './FlutterwaveService';
 
 type MembershipStatusResponse = {
   status: 'visitor' | 'active' | 'grace' | 'expired' | 'refunded';
@@ -35,7 +38,7 @@ export interface MembershipOperations {
 
 export type MembershipServiceOptions = {
   adminClient?: SupabaseClient;
-  paystack?: PaystackService;
+  paystack?: PaymentGateway;
   now?: () => Date;
 };
 
@@ -59,11 +62,13 @@ export function getMembershipAccessStatus(
 }
 
 export class MembershipService implements MembershipOperations {
-  private readonly paystack: PaystackService;
+  private readonly paystack: PaymentGateway;
   private readonly now: () => Date;
 
   constructor(private readonly config: Config, private readonly options: MembershipServiceOptions = {}) {
-    this.paystack = options.paystack ?? new PaystackService(config.paystackSecretKey);
+    this.paystack = options.paystack ?? (config.paymentProvider === 'flutterwave'
+      ? new FlutterwaveGateway(new FlutterwaveService(config.flutterwaveSecretKey, config.flutterwaveRedirectUrl))
+      : new PaystackService(config.paystackSecretKey));
     this.now = options.now ?? (() => new Date());
   }
 
