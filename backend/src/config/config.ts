@@ -16,6 +16,10 @@ export type Config = {
   tmdbApiKey: string | undefined;
   footballDataApiKey?: string;
   paystackSecretKey?: string;
+  flutterwaveSecretKey?: string;
+  flutterwaveSecretHash?: string;
+  flutterwaveRedirectUrl?: string;
+  paymentProvider: 'paystack' | 'flutterwave';
   supabaseServiceRoleKey?: string;
   membershipCronSecret?: string;
   membershipPriceNgn: number;
@@ -93,6 +97,10 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env): Config
     tmdbApiKey: environment.TMDB_API_KEY?.trim() || undefined,
     footballDataApiKey: environment.FOOTBALL_DATA_API_KEY?.trim() || undefined,
     paystackSecretKey: environment.PAYSTACK_SECRET_KEY?.trim() || undefined,
+    flutterwaveSecretKey: environment.FLUTTERWAVE_SECRET_KEY?.trim() || undefined,
+    flutterwaveSecretHash: environment.FLUTTERWAVE_SECRET_HASH?.trim() || undefined,
+    flutterwaveRedirectUrl: environment.FLUTTERWAVE_REDIRECT_URL?.trim() || undefined,
+    paymentProvider: environment.PAYMENT_PROVIDER?.trim().toLowerCase() === 'flutterwave' ? 'flutterwave' : 'paystack',
     supabaseServiceRoleKey: environment.SUPABASE_SERVICE_ROLE_KEY?.trim() || undefined,
     membershipCronSecret: environment.MEMBERSHIP_CRON_SECRET?.trim() || undefined,
     membershipPriceNgn: positiveInteger(environment.MEMBERSHIP_PRICE_NGN, 900),
