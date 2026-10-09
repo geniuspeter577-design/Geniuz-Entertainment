@@ -24,6 +24,7 @@ import { FootballMatchesService } from '../services/FootballMatchesService';
 import { FootballDataProvider } from '../providers/FootballDataProvider';
 import { SportsProviderError } from '../providers/SportsProvider';
 import { isValidPaystackSignature } from '../services/PaystackService';
+import { isValidFlutterwaveHash } from '../services/FlutterwaveService';
 import { MembershipService, type MembershipOperations } from '../services/MembershipService';
 import { authenticateAdmin, authenticatePlayback, requirePublishedOrAdmin } from './auth';
 import { HttpError, mapProviderError } from './errors';
@@ -1132,6 +1133,40 @@ async function handleRequest(
       throw new HttpError(400, 'EMAIL_REQUIRED', 'Add an email address to your account before checkout.');
     }
     writeJson(response, 201, await membership.createCheckout(userId, email));
+    return;
+  }
+
+  if (pathname === '/webhooks/flutterwave') {
+    if (request.method !== 'POST') {
+      throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
+    }
+    const receivedHash = request.headers['verif-hash'];
+    const signature = typeof receivedHash === 'string' ? receivedHash : undefined;
+    if (!isValidFlutterwaveHash(signature, config.flutterwaveSecretHash)) {
+      throw new HttpError(401, 'INVALID_FLUTTERWAVE_SIGNATURE', 'The Flutterwave signature is invalid.');
+    }
+    const payload = await readJson(request);
+    const data = payload.data;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      throw new HttpError(400, 'INVALID_WEBHOOK', 'The Flutterwave event body is invalid.');
+    }
+    const transaction = data as Record<string, unknown>;
+    if (typeof transaction.id !== 'number' || typeof transaction.tx_ref !== 'string') {
+      throw new HttpError(400, 'INVALID_WEBHOOK', 'Missing Flutterwave transaction id or reference.');
+    }
+    const event = {
+      id: String(transaction.id),
+      event: payload.event === 'charge.completed'
+        ? transaction.status === 'successful'
+          ? 'charge.success'
+          : ['failed', 'cancelled'].includes(String(transaction.status))
+            ? 'charge.failed'
+            : 'charge.completed'
+        : String(payload.event ?? 'unknown'),
+      data: { reference: transaction.tx_ref },
+    };
+    const result = await membership.processWebhook(event, payload, 'flutterwave');
+    writeJson(response, 200, result);
     return;
   }
 

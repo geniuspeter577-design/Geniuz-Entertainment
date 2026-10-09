@@ -122,39 +122,17 @@ export class MembershipService implements MembershipOperations {
   async createCheckout(userId: string, email: string) {
     const admin = this.getAdminClient();
     this.requireTestPaystack();
+    const reference = `geniuz_${this.now().getTime()}_${randomUUID()}`;
     const amountKobo = this.config.membershipPriceNgn * 100;
-    const { data: existingPayment, error: lookupError } = await admin
-      .from('payments')
-      .select('reference,amount_kobo')
-      .eq('user_id', userId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (lookupError) {
-      throw new HttpError(503, 'PAYMENT_RECORD_UNAVAILABLE', 'Could not check your pending payment. Please retry.');
+    const { error: insertError } = await admin.from('payments').insert({
+      reference,
+      user_id: userId,
+      amount_kobo: amountKobo,
+      status: 'pending',
+    });
+    if (insertError) {
+      throw new HttpError(503, 'PAYMENT_RECORD_UNAVAILABLE', 'Could not start checkout. Please retry.');
     }
-
-    let reference: string;
-    if (existingPayment) {
-      if (existingPayment.amount_kobo !== amountKobo) {
-        throw new HttpError(409, 'PENDING_PAYMENT_AMOUNT_MISMATCH', 'Your pending payment needs support before you can retry.');
-      }
-      reference = existingPayment.reference;
-    } else {
-      reference = `geniuz_${this.now().getTime()}_${randomUUID()}`;
-      const { error: insertError } = await admin.from('payments').insert({
-        reference,
-        user_id: userId,
-        amount_kobo: amountKobo,
-        status: 'pending',
-      });
-      if (insertError) {
-        throw new HttpError(503, 'PAYMENT_RECORD_UNAVAILABLE', 'Could not start checkout. Please retry.');
-      }
-    }
-
     try {
       const checkout = await this.paystack.initializeTransaction({ email, amountKobo, reference });
       return { ...checkout, amountKobo, currency: 'NGN' };

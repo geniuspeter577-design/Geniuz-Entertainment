@@ -60,6 +60,13 @@ export default function MembershipScreen() {
     if (hasMemberAccess) {
       return;
     }
+    if (membership.status?.pendingPayment) {
+      const status = await membership.refresh();
+      if (status?.status === 'active' || status?.status === 'grace') {
+        close();
+      }
+      return;
+    }
     if (!membership.isOnline) {
       setCheckoutError('You’re offline. Reconnect to open secure checkout.');
       return;
@@ -68,7 +75,6 @@ export default function MembershipScreen() {
     try {
       const checkout = await createMemberCheckout();
       const checkoutUrl = new URL(checkout.authorizationUrl);
-      console.log("Checkout URL diagnostic:", { protocol: checkoutUrl.protocol, hostname: checkoutUrl.hostname });
       const isPaystackUrl =
         checkoutUrl.hostname === 'paystack.com' ||
         checkoutUrl.hostname.endsWith('.paystack.com');
@@ -76,16 +82,10 @@ export default function MembershipScreen() {
         checkoutUrl.hostname === 'flutterwave.com' ||
         checkoutUrl.hostname.endsWith('.flutterwave.com');
 
-      if (checkoutUrl.protocol !== 'https:' || (!isPaystackUrl && !isFlutterwaveUrl && !checkoutUrl.hostname.endsWith('.flutterwave.com.ng'))) {
+      if (checkoutUrl.protocol !== 'https:' || (!isPaystackUrl && !isFlutterwaveUrl)) {
         throw new Error('The secure payment link is invalid. Please retry.');
       }
-      const paymentUrl = checkoutUrl.toString();
-      const browserResult = await WebBrowser.openBrowserAsync(paymentUrl);
-
-      if (browserResult.type === 'cancel' || browserResult.type === 'dismiss') {
-        // The user closed the checkout browser; keep the membership screen open.
-      }
-
+      await WebBrowser.openBrowserAsync(checkoutUrl.toString());
       const status = await membership.refresh();
       if (status?.status === 'active' || status?.status === 'grace') {
         close();
@@ -132,19 +132,29 @@ export default function MembershipScreen() {
 
         <Text style={styles.title}>Become a Member</Text>
         <Text style={styles.price}>{priceText}</Text>
-        <Text style={[styles.priceNote, { textAlign: "center", width: "100%", alignSelf: "center" }]} numberOfLines={1} adjustsFontSizeToFit>Cancel anytime by not renewing · no automatic card charging</Text>
+        <Text style={styles.priceNote}>Cancel anytime by not renewing · no automatic card charging</Text>
+
+        {membership.isLoading ? <ContentNotice message="Loading membership details…" /> : null}
+        {!membership.isOnline ? <ContentNotice message="You’re offline. Saved membership details may be unavailable." /> : null}
+        {membership.error ? (
+          <ContentNotice
+            message={membership.error}
+            tone="error"
+            actionLabel="Retry"
+            onAction={() => void membership.refresh()}
+          />
+        ) : null}
+        {checkoutError ? <ContentNotice message={checkoutError} tone="error" /> : null}
+        {currentStatus?.pendingPayment ? (
+          <ContentNotice message="Payment pending. Your membership will activate automatically after your payment is confirmed. You can check the status below." />
+        ) : null}
 
         <View style={styles.benefits}>
           <Text style={styles.sectionTitle}>Member benefits</Text>
+          <Benefit icon="swap-horizontal-outline" text="Send and receive files between devices" />
           <Benefit icon="eye-off-outline" text="Ad-free viewing" />
           <Benefit icon="shield-checkmark-outline" text="Member badge on your profile" />
-          <Benefit icon="swap-horizontal-outline" text="Send and receive files between devices" />
-          <Benefit icon="cash-outline" text="Post REELS and earn in dollars" />
-          <Benefit icon="star-outline" text="Exclusive member status" />
-          <Benefit icon="trophy-outline" text="Premium creator recognition" />
-          <Benefit icon="lock-closed-outline" text="Access to member-only content" />
-          <Benefit icon="heart-outline" text="Support creators and the Geniuz+ community" />
-          <Benefit icon="rocket-outline" text="Early access to new features" />
+          <Benefit icon="cash-outline" text="Post REELS and Earn in Dollars" />
         </View>
       </ScrollView>
       <View style={styles.footer}>
@@ -161,15 +171,10 @@ export default function MembershipScreen() {
             style={[styles.primaryButton, (isCheckingOut || auth.isLoading || (Boolean(auth.session) && (!membership.isOnline || !membership.plan))) && styles.disabled]}
           >
             <Text style={styles.primaryButtonText}>
-              {isCheckingOut ? 'Opening secure checkout…' : !auth.session ? 'Sign in to continue' : membership.status?.pendingPayment ? 'Continue payment' : 'Get Member badge'}
+              {isCheckingOut ? 'Opening secure checkout…' : !auth.session ? 'Sign in to continue' : membership.status?.pendingPayment ? 'Check payment status' : 'Get Member badge'}
             </Text>
           </Pressable>
         )}
-        {checkoutError ? (
-          <Text style={{ color: '#D64545', fontSize: 13, textAlign: 'center' }}>
-            {checkoutError}
-          </Text>
-        ) : null}
         <Text style={styles.terms}>One-month membership. No automatic card charging. Payment status updates after provider confirmation.</Text>
       </View>
     </SafeAreaView>
@@ -200,18 +205,7 @@ const styles = StyleSheet.create({
   title: { color: theme.text, fontSize: 27, fontWeight: '900', textAlign: 'center' },
   price: { color: theme.gold, fontSize: 25, fontWeight: '900', textAlign: 'center' },
   priceNote: { color: theme.secondaryText, fontSize: 13 },
-  benefits: {
-    alignSelf: 'center',
-    width: '100%',
-    maxWidth: 520,
-    backgroundColor: theme.surface,
-    borderColor: theme.border,
-    borderRadius: 16,
-    borderWidth: 1,
-    gap: 12,
-    marginTop: 2,
-    padding: 14,
-  },
+  benefits: { alignSelf: 'stretch', backgroundColor: theme.surface, borderColor: theme.border, borderRadius: 12, borderWidth: 1, gap: 12, marginTop: 2, padding: 14 },
   sectionTitle: { color: theme.text, fontSize: 16, fontWeight: '800' },
   benefit: { alignItems: 'center', flexDirection: 'row', gap: 12 },
   benefitText: { color: theme.text, flex: 1, fontSize: 14, lineHeight: 20 },
