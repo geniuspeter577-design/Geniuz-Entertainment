@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "Geniuz+",
+    "name": "Geniuzplus",
     "slug": "geniuz-entertainment",
     "version": "1.0.0",
     "orientation": "default",
     "scheme": "geniuz",
     "userInterfaceStyle": "dark",
-    "icon": "./assets/branding/icon.png",
+    "icon": "./assets/new-logo/icon.png",
     "plugins": [
       "expo-router",
       "expo-status-bar",
@@ -23,10 +23,14 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/branding/adaptive-icon-foreground.png",
+          "image": "./assets/new-logo/splash-icon.png",
+          "backgroundColor": "#020807",
+          "imageWidth": 320,
           "resizeMode": "contain",
-          "backgroundColor": "#0E1014",
-          "imageWidth": 280
+          "dark": {
+            "image": "./assets/new-logo/splash-icon.png",
+            "backgroundColor": "#020807"
+          }
         }
       ],
       "expo-secure-store",
@@ -43,9 +47,8 @@
       "package": "com.geniuz.entertainment",
       "softwareKeyboardLayoutMode": "resize",
       "adaptiveIcon": {
-        "backgroundColor": "#0E1014",
-        "foregroundImage": "./assets/branding/adaptive-icon-foreground.png",
-        "monochromeImage": "./assets/branding/adaptive-icon-monochrome.png"
+        "backgroundColor": "#020807",
+        "foregroundImage": "./assets/new-logo/adaptive-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false
     },
@@ -54,7 +57,7 @@
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/branding/favicon.png"
+      "favicon": "./assets/new-logo/favicon.png"
     },
     "extra": {
       "router": {},
