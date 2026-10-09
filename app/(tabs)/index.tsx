@@ -449,7 +449,7 @@ export default function HomeScreen() {
         {selectedCategory !== 'Football' && footballToday ? (
           footballToday.matches.length ? (
             <>
-              <SectionHeader title="Football" />
+              <SectionHeader title="Football" onSeeAll={() => setSelectedCategory('Football')} />
               <FootballHomeCard
                 matches={footballToday.matches}
                 date={football.today}
