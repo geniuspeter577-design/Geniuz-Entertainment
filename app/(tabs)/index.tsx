@@ -120,7 +120,7 @@ export default function HomeScreen() {
   );
   const [selectedCategory, setSelectedCategory] = useState('Trending');
   const football = useFootballMatches();
-  const footballToday = football.entries[football.today];
+  const footballToday = football.upcoming;
   const tabsScrollRef = useRef<ScrollView | null>(null);
   const homeScrollRef = useRef<ScrollView | null>(null);
   const navigation = useNavigation<HomeTabsNavigation>('/(tabs)');
@@ -465,12 +465,16 @@ export default function HomeScreen() {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Retry football scores"
-              onPress={() => football.retryDate(football.today)}
+              onPress={() => football.retryUpcoming()}
               style={{ marginHorizontal: 16, marginVertical: 8 }}
             >
               <Text style={{ color: '#72F06A' }}>Football scores could not load. Tap to retry</Text>
             </Pressable>
           ) : null
+        ) : null}
+
+        {selectedCategory !== 'Football' && !footballToday.isLoading && !footballToday.error && footballToday.matches.length === 0 ? (
+          <Text style={{ color: theme.secondaryText, marginHorizontal: 16, marginVertical: 8 }}>No upcoming matches right now</Text>
         ) : null}
 
         {selectedCategory !== 'Football' && publishedItems.length ? (

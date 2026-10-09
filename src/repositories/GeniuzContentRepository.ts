@@ -238,6 +238,12 @@ export class GeniuzContentRepository implements ContentRepository {
     });
   }
 
+  async getFootballUpcoming() {
+    return parseFootballMatches(
+      await this.apiClient.get<unknown>('/football/upcoming', {}),
+    );
+  }
+
   async getFootballMatches(date: string) {
     return parseFootballMatches(
       await this.apiClient.get<unknown>('/football/matches', { date }),

@@ -41,4 +41,11 @@ export function getFootballMatches(date: string) {
   return geniuzApiRepository.getFootballMatches(date);
 }
 
+export function getFootballUpcoming() {
+  if (!geniuzApiRepository) {
+    throw new Error('Football scores are not configured.');
+  }
+  return geniuzApiRepository.getFootballUpcoming();
+}
+
 export const contentService = createContentService();

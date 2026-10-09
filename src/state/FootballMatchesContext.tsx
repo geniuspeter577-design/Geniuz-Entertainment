@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useMemo, useR
 import { AppState, type AppStateStatus } from 'react-native';
 
 import type { FootballMatch, FootballMatchesResponse } from '../models/football';
-import { getFootballMatches } from '../services/createContentService';
+import { getFootballMatches, getFootballUpcoming } from '../services/createContentService';
 import { getGoalBallCounts } from '../utils/footballPin';
 import { useNetwork } from './NetworkContext';
 import { getWestAfricaDate } from '../utils/footballScores';
@@ -29,6 +29,8 @@ type FootballContextValue = {
   retryDate: (date?: string) => void;
   pinMatch: (match: FootballMatch, date?: string) => void;
   unpinMatch: () => void;
+  upcoming: FootballDateState;
+  retryUpcoming: () => void;
 };
 
 const FootballMatchesContext = createContext<FootballContextValue | null>(null);
@@ -154,6 +156,37 @@ export function FootballMatchesProvider({ children }: React.PropsWithChildren) {
     return () => clearInterval(timer);
   }, [appState, homeHasLiveMatch, network.isOnline, requestDate, selectedDate, selectedHasLiveMatch, today]);
 
+  const [upcoming, setUpcoming] = useState<FootballDateState>({ matches: [], stale: false, isLoading: true });
+  const loadUpcoming = useCallback(async () => {
+    if (!network.isOnline) {
+      setUpcoming((previous) => ({ ...previous, isLoading: false, error: 'You’re offline. Football scores need an internet connection.' }));
+      return;
+    }
+    setUpcoming((previous) => ({ ...previous, isLoading: true, error: undefined }));
+    try {
+      const response = await getFootballUpcoming();
+      setUpcoming({ matches: response.matches, stale: response.stale, isLoading: false, lastFetchedAt: Date.now() });
+    } catch (error: unknown) {
+      setUpcoming((previous) => ({
+        ...previous,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Football scores could not be loaded.',
+      }));
+    }
+  }, [network.isOnline]);
+  useEffect(() => {
+    void loadUpcoming();
+  }, [loadUpcoming]);
+  useEffect(() => {
+    if (!network.isOnline || appState !== 'active') {
+      return undefined;
+    }
+    const timer = setInterval(() => {
+      void loadUpcoming();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [appState, loadUpcoming, network.isOnline]);
+
   const selectDate = useCallback((date: string) => {
     setSelectedDate(date);
     void requestDate(date);
@@ -181,7 +214,9 @@ export function FootballMatchesProvider({ children }: React.PropsWithChildren) {
     retryDate,
     pinMatch,
     unpinMatch: () => setPinned(null),
-  }), [entries, goalSignals, pinMatch, pinned, pinnedMatch, retryDate, selectDate, selectedDate, today]);
+    upcoming,
+    retryUpcoming: () => void loadUpcoming(),
+  }), [entries, goalSignals, loadUpcoming, pinMatch, pinned, pinnedMatch, retryDate, selectDate, selectedDate, today, upcoming]);
 
   return <FootballMatchesContext.Provider value={value}>{children}</FootballMatchesContext.Provider>;
 }

@@ -1,11 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import type { FootballMatch, FootballTeam } from '../models/football';
 import { useFootballMatches } from '../state/FootballMatchesContext';
 import { theme } from '../theme';
-import { formatWestAfricaKickoff, getNextFootballDates } from '../utils/footballScores';
+import { formatWestAfricaKickoff } from '../utils/footballScores';
 import { ContentNotice } from './ContentNotice';
 
 function TeamMark({ team }: { team: FootballTeam }) {
@@ -46,7 +46,6 @@ function groupByStatus(matches: FootballMatch[]) {
   const statuses = [
     { title: 'Live', matches: matches.filter((match) => match.status === 'live') },
     { title: 'Upcoming', matches: matches.filter((match) => match.status === 'scheduled') },
-    { title: 'Results', matches: matches.filter((match) => match.status !== 'live' && match.status !== 'scheduled') },
   ];
   return statuses
     .filter(({ matches: groupedMatches }) => groupedMatches.length > 0)
@@ -63,10 +62,8 @@ export function FootballMatchesPanel({
   isOnline: boolean;
   onRetryConnection: () => void;
 }) {
-  const [days] = useState(getNextFootballDates);
   const football = useFootballMatches();
-  const date = football.selectedDate;
-  const query = football.entries[date] ?? { matches: [], stale: false, isLoading: isOnline, error: undefined };
+  const query = football.upcoming;
   const matchGroups = useMemo(
     () => groupByStatus(query.matches),
     [query.matches],
@@ -83,21 +80,6 @@ export function FootballMatchesPanel({
         ) : null}
       </View>
 
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.daySelector}>
-        {days.map((day) => (
-          <Pressable
-            key={day.date}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: date === day.date }}
-            onPress={() => football.selectDate(day.date)}
-            style={[styles.dayOption, date === day.date && styles.selectedDayOption]}
-          >
-            <Text style={[styles.dayLabel, date === day.date && styles.selectedDayText]}>{day.label}</Text>
-            <Text style={[styles.dayDate, date === day.date && styles.selectedDayText]}>{day.day}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-
       {!isOnline ? (
         <ContentNotice
           message="You’re offline. Football scores need an internet connection."
@@ -111,7 +93,7 @@ export function FootballMatchesPanel({
           message="Football scores could not be loaded. Please retry."
           tone="error"
           actionLabel="Retry"
-          onAction={() => football.retryDate(date)}
+          onAction={() => football.retryUpcoming()}
         />
       ) : null}
       {isOnline && query.stale ? (
