@@ -65,7 +65,7 @@ function estimateClock(startsAt: string, nowMs: number): string {
   return `${pad(Math.floor(second / 60))}:${pad(second % 60)}`;
 }
 
-type Celebration = {
+export type Celebration = {
   matchId: string;
   team: 'home' | 'away';
   count: number;
@@ -74,7 +74,7 @@ type Celebration = {
   phase: 'goal' | 'scorer';
 };
 
-function goalMinuteLabel(match: FootballMatch, nowMs: number): string {
+export function goalMinuteLabel(match: FootballMatch, nowMs: number): string {
   if (match.minute !== null) {
     return `${match.minute}′`;
   }
@@ -84,7 +84,7 @@ function goalMinuteLabel(match: FootballMatch, nowMs: number): string {
 
 // Live clock mm:ss. Remounted (via key) whenever the provider minute changes,
 // so the seconds restart from the new minute. Seconds are counted here (approximate).
-function LiveClock({ match }: { match: FootballMatch }) {
+export function LiveClock({ match }: { match: FootballMatch }) {
   const [startedAt] = useState(() => Date.now());
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -338,7 +338,7 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
   );
 }
 
-function CelebrationLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
+export function CelebrationLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
   return logoUrl ? (
     <Image source={{ uri: logoUrl }} resizeMode="contain" style={styles.celebrationLogo} />
   ) : (

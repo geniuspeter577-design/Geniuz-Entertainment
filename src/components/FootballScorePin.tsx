@@ -18,7 +18,7 @@ import { useFootballMatches } from '../state/FootballMatchesContext';
 import { theme } from '../theme';
 import { getFootballPinPosition, snapFootballPinCorner, type FootballPinCorner, type PinPoint } from '../utils/footballPin';
 import { FootballGoalBalls } from './FootballGoalBalls';
-import { TeamBadge } from './FootballHomeCard';
+import { CelebrationLogo, LiveClock, TeamBadge, goalMinuteLabel, type Celebration } from './FootballHomeCard';
 
 const PIN_SIZE = { width: 252, height: 104 };
 const DEFAULT_CORNER: FootballPinCorner = 'top-right';
@@ -87,6 +87,61 @@ export function FootballScorePin() {
 
   const match = football.pinnedMatch;
   const goal = match ? football.goalSignals[match.id] : undefined;
+  const [celebration, setCelebration] = useState<Celebration | null>(null);
+  const handledGoal = useRef<Record<string, number>>({});
+  const primedFor = useRef<string | null>(null);
+  const celebrationKey = celebration ? `${celebration.matchId}-${celebration.token}` : null;
+
+  // Same goal celebration as the Home card. A newly pinned match never replays old goals.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!match) {
+        primedFor.current = null;
+        return;
+      }
+      const token = goal?.createdAt;
+      if (primedFor.current !== match.id) {
+        primedFor.current = match.id;
+        handledGoal.current[match.id] = typeof token === 'number' ? token : 0;
+        return;
+      }
+      if (match.status !== 'live' || !goal || typeof token !== 'number' || handledGoal.current[match.id] === token) {
+        return;
+      }
+      handledGoal.current[match.id] = token;
+      const homeGoals = goal.home ?? 0;
+      const awayGoals = goal.away ?? 0;
+      if (homeGoals <= 0 && awayGoals <= 0) {
+        return;
+      }
+      const team = homeGoals >= awayGoals ? 'home' : 'away';
+      setCelebration({
+        matchId: match.id,
+        team,
+        count: team === 'home' ? homeGoals : awayGoals,
+        token,
+        minute: goalMinuteLabel(match, Date.now()),
+        phase: 'goal',
+      });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [goal, match]);
+
+  // GOAL!!! for 3.5 s, then team name and minute for 3.5 s, then back to normal.
+  useEffect(() => {
+    if (!celebrationKey) {
+      return;
+    }
+    const toScorer = setTimeout(
+      () => setCelebration((current) => (current ? { ...current, phase: 'scorer' } : current)),
+      3500,
+    );
+    const done = setTimeout(() => setCelebration(null), 7000);
+    return () => {
+      clearTimeout(toScorer);
+      clearTimeout(done);
+    };
+  }, [celebrationKey]);
   if (!football.pinned || !match || !layoutReady) {
     return null;
   }
@@ -95,6 +150,9 @@ export function FootballScorePin() {
     football.selectDate(football.pinned!.date);
     router.navigate({ pathname: '/(tabs)', params: { category: 'Football' } });
   };
+
+  const celebrating = celebration && celebration.matchId === match.id ? celebration : null;
+  const scoringTeam = celebrating && celebrating.team === 'away' ? match.awayTeam : match.homeTeam;
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
@@ -105,7 +163,11 @@ export function FootballScorePin() {
       >
         <View style={styles.topLine}>
           <Text numberOfLines={1} style={styles.competition}>{match.competition.name}</Text>
-          <Text style={styles.minute}>{match.status === 'live' && match.minute !== null ? `${match.minute}′` : match.status.toLocaleUpperCase()}</Text>
+          {match.status === 'live' ? (
+            <LiveClock key={`${match.id}-${match.minute ?? 'x'}`} match={match} />
+          ) : (
+            <Text style={styles.minute}>{match.status === 'finished' ? 'FT' : match.status.toLocaleUpperCase()}</Text>
+          )}
           <Pressable accessibilityRole="button" accessibilityLabel="Close pinned score" hitSlop={7} onPress={football.unpinMatch} style={styles.close}>
             <Ionicons name="close" size={16} color={theme.text} />
           </Pressable>
@@ -127,6 +189,28 @@ export function FootballScorePin() {
             <Text numberOfLines={1} style={styles.teamName}>{match.awayTeam.name}</Text>
           </View>
         </Pressable>
+        {celebrating ? (
+          <View style={styles.celebration} pointerEvents="none">
+            {celebrating.phase === 'goal' ? (
+              <View style={styles.celebrationRow}>
+                <View style={styles.celebrationLogoWrap}>
+                  <CelebrationLogo logoUrl={scoringTeam.logoUrl} name={scoringTeam.name} />
+                  <FootballGoalBalls
+                    count={celebrating.count}
+                    token={celebrating.token}
+                    direction={celebrating.team === 'away' ? 'down' : undefined}
+                  />
+                </View>
+                <Text style={styles.goalText}>GOAL!!!</Text>
+              </View>
+            ) : (
+              <>
+                <Text style={styles.scorerTeam} numberOfLines={2}>{scoringTeam.name}</Text>
+                <Text style={styles.scorerMinute}>{`Goal ${celebrating.minute}`}</Text>
+              </>
+            )}
+          </View>
+        ) : null}
       </Animated.View>
     </View>
   );
@@ -156,5 +240,18 @@ const styles = StyleSheet.create({
   team: { alignItems: 'center', flex: 1, gap: 2, minWidth: 0 },
   badgeWrap: { alignItems: 'center', height: 36, justifyContent: 'center', position: 'relative', width: 48 },
   teamName: { color: theme.text, fontSize: 9, fontWeight: '700', maxWidth: '100%' },
+  celebration: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    backgroundColor: theme.surface,
+    borderRadius: 12,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  celebrationRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
+  celebrationLogoWrap: { alignItems: 'center', height: 50, justifyContent: 'center', width: 60 },
+  goalText: { color: theme.accent, fontSize: 24, fontWeight: '900' },
+  scorerTeam: { color: theme.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  scorerMinute: { color: theme.accent, fontSize: 18, fontWeight: '900', marginTop: 4 },
   score: { color: theme.text, fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'], minWidth: 54, textAlign: 'center' },
 });
