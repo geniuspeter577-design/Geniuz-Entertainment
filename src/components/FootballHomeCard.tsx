@@ -2,6 +2,7 @@ import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
+  LayoutAnimation,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
@@ -28,7 +29,7 @@ type Props = {
   onPin: (match: FootballMatch, date: string) => void;
 };
 
-const CARD_WIDTH = 160;
+const CARD_WIDTH = 184;
 const CARD_GAP = 8;
 const STEP = CARD_WIDTH + CARD_GAP;
 const SLIDE_MS = 5000;
@@ -41,14 +42,11 @@ function formatLagosDate(value: string) {
   }).format(new Date(value));
 }
 
-// Live clock (mm:ss). If the provider sends a minute, the clock starts from it and
-// the seconds are counted here (approximate). If it sends none, the clock is
-// ESTIMATED from the kick-off time (45 min, 15 min break, second half).
-// It is replaced by the real minute when the provider sends it.
 function pad(value: number) {
   return value < 10 ? `0${value}` : String(value);
 }
 
+// ESTIMATED clock when the provider sends no minute: 45 min, 15 min break, second half.
 function estimateClock(startsAt: string, nowMs: number): string {
   const elapsed = Math.floor((nowMs - new Date(startsAt).getTime()) / 1000);
   if (!Number.isFinite(elapsed) || elapsed < 1) {
@@ -67,19 +65,18 @@ function estimateClock(startsAt: string, nowMs: number): string {
   return `${pad(Math.floor(second / 60))}:${pad(second % 60)}`;
 }
 
+// Live clock mm:ss. Remounted (via key) whenever the provider minute changes,
+// so the seconds restart from the new minute. Seconds are counted here (approximate).
 function LiveClock({ match }: { match: FootballMatch }) {
+  const [startedAt] = useState(() => Date.now());
   const [nowMs, setNowMs] = useState(() => Date.now());
-  const [seen, setSeen] = useState({ minute: match.minute, at: nowMs });
   useEffect(() => {
     const tick = setInterval(() => setNowMs(Date.now()), 1000);
     return () => clearInterval(tick);
   }, []);
-  if (seen.minute !== match.minute) {
-    setSeen({ minute: match.minute, at: nowMs });
-  }
   let label: string;
   if (match.minute !== null) {
-    const seconds = Math.min(59, Math.max(0, Math.floor((nowMs - seen.at) / 1000)));
+    const seconds = Math.min(59, Math.max(0, Math.floor((nowMs - startedAt) / 1000)));
     label = `${pad(match.minute)}:${pad(seconds)}`;
   } else {
     label = estimateClock(match.startsAt, nowMs);
@@ -92,29 +89,39 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
   const liveOnly = sortedMatches.filter((match) => match.status === 'live');
   const liveUpcoming = liveOnly.length > 0 ? liveOnly : sortedMatches;
   const count = liveUpcoming.length;
+
   const listRef = useRef<ScrollView>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const [isTouching, setIsTouching] = useState(false);
+  const [layoutWidth, setLayoutWidth] = useState(0);
+  const [contentWidth, setContentWidth] = useState(0);
+
+  const fits = layoutWidth > 0 && contentWidth > 0 && contentWidth <= layoutWidth + 4;
+  const maxX = Math.max(0, contentWidth - layoutWidth);
+  const safeIndex = count > 0 ? activeIndex % count : 0;
+  const ordered = fits
+    ? [...liveUpcoming.slice(safeIndex), ...liveUpcoming.slice(0, safeIndex)]
+    : liveUpcoming;
+
   useEffect(() => {
     if (count < 2 || isTouching || isOffline) {
       return;
     }
     const slide = setInterval(() => {
-      const nextIndex = (activeIndex + 1) % count;
-      listRef.current?.scrollTo({ x: nextIndex * STEP, animated: true });
-      setActiveIndex(nextIndex);
+      const next = (safeIndex + 1) % count;
+      if (fits) {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+      } else {
+        listRef.current?.scrollTo({ x: Math.min(next * STEP, maxX), animated: true });
+      }
+      setActiveIndex(next);
     }, SLIDE_MS);
     return () => clearInterval(slide);
-  }, [activeIndex, count, isTouching, isOffline]);
-
-  useEffect(() => {
-    if (count > 0 && activeIndex > count - 1) {
-      setActiveIndex(count - 1);
-    }
-  }, [activeIndex, count]);
+  }, [count, fits, isOffline, isTouching, maxX, safeIndex]);
 
   const handleScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(event.nativeEvent.contentOffset.x / STEP);
+    const x = event.nativeEvent.contentOffset.x;
+    const index = maxX > 0 && x >= maxX - 2 ? count - 1 : Math.round(x / STEP);
     setActiveIndex(Math.max(0, Math.min(count - 1, index)));
     setIsTouching(false);
   };
@@ -132,10 +139,13 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
         contentContainerStyle={styles.list}
         snapToInterval={STEP}
         decelerationRate="fast"
+        onLayout={(event) => setLayoutWidth(event.nativeEvent.layout.width)}
+        onContentSizeChange={(width) => setContentWidth(width)}
         onScrollBeginDrag={() => setIsTouching(true)}
+        onScrollEndDrag={() => setTimeout(() => setIsTouching(false), 1500)}
         onMomentumScrollEnd={handleScrollEnd}
       >
-        {liveUpcoming.map((match) => {
+        {ordered.map((match) => {
           const live = match.status === 'live';
           const goals = goalSignals[match.id];
           return (
@@ -160,7 +170,7 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
                   {live ? (
                     <>
                       <Text style={styles.centerMain}>{match.homeScore ?? '-'} - {match.awayScore ?? '-'}</Text>
-                      <LiveClock match={match} />
+                      <LiveClock key={`${match.id}-${match.minute ?? 'x'}`} match={match} />
                     </>
                   ) : (
                     <>
@@ -185,7 +195,7 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
                   onPress={() => onPin(match, date)}
                   style={styles.pinButton}
                 >
-                  <Ionicons name="pin-outline" size={11} color={theme.accent} />
+                  <Ionicons name="pin-outline" size={12} color={theme.accent} />
                   <Text style={styles.pinText}>Pin live score</Text>
                 </Pressable>
               ) : null}
@@ -194,17 +204,19 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
         })}
       </ScrollView>
       {count > 1 ? (
-        <View style={styles.dots} accessibilityLabel={`Match ${activeIndex + 1} of ${count}`}>
+        <View style={styles.dots} accessibilityLabel={`Match ${safeIndex + 1} of ${count}`}>
           {liveUpcoming.map((match, index) => (
             <Pressable
               key={match.id}
               accessibilityRole="button"
               accessibilityLabel={`Show match ${index + 1}`}
               onPress={() => {
-                listRef.current?.scrollTo({ x: index * STEP, animated: true });
+                if (!fits) {
+                  listRef.current?.scrollTo({ x: Math.min(index * STEP, maxX), animated: true });
+                }
                 setActiveIndex(index);
               }}
-              style={[styles.dot, index === activeIndex && styles.activeDot]}
+              style={[styles.dot, index === safeIndex && styles.activeDot]}
             />
           ))}
         </View>
@@ -227,29 +239,29 @@ export function TeamBadge({ logoUrl, name, compact = false }: { logoUrl?: string
 
 const styles = StyleSheet.create({
   list: { gap: CARD_GAP, paddingHorizontal: 16 },
-  card: { backgroundColor: theme.surface, borderRadius: 12, minHeight: 92, overflow: 'hidden', width: CARD_WIDTH },
+  card: { backgroundColor: theme.surface, borderRadius: 12, minHeight: 106, overflow: 'hidden', width: CARD_WIDTH },
   tab: {
     alignSelf: 'center',
     backgroundColor: theme.background,
     borderBottomLeftRadius: 8,
     borderBottomRightRadius: 8,
-    maxWidth: 130,
+    maxWidth: 150,
     paddingHorizontal: 10,
     paddingVertical: 2,
   },
-  tabText: { color: theme.text, fontSize: 10, fontWeight: '700' },
+  tabText: { color: theme.text, fontSize: 11, fontWeight: '700' },
   body: { alignItems: 'center', flex: 1, flexDirection: 'row', paddingHorizontal: 4 },
   team: { alignItems: 'center', flex: 1 },
-  badgeWrap: { alignItems: 'center', height: 22, justifyContent: 'center', width: 28 },
-  badge: { alignItems: 'center', height: 22, justifyContent: 'center', width: 22 },
+  badgeWrap: { alignItems: 'center', height: 26, justifyContent: 'center', width: 32 },
+  badge: { alignItems: 'center', height: 26, justifyContent: 'center', width: 26 },
   compactBadge: { backgroundColor: theme.background, borderRadius: 17, height: 34, width: 34 },
   badgeImage: { height: '100%', width: '100%' },
-  badgeInitial: { color: theme.text, fontSize: 14, fontWeight: '900' },
-  teamName: { color: theme.text, fontSize: 9, fontWeight: '600', marginTop: 2, textAlign: 'center' },
-  center: { alignItems: 'center', justifyContent: 'center', minHeight: 22, width: 52 },
-  centerMain: { color: theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center' },
-  centerSub: { color: theme.secondaryText, fontSize: 9, marginTop: 1 },
-  liveMinute: { color: theme.accent, fontSize: 10, fontWeight: '900', marginTop: 1, textAlign: 'center' },
+  badgeInitial: { color: theme.text, fontSize: 16, fontWeight: '900' },
+  teamName: { color: theme.text, fontSize: 10, fontWeight: '600', marginTop: 2, textAlign: 'center' },
+  center: { alignItems: 'center', justifyContent: 'center', minHeight: 26, width: 58 },
+  centerMain: { color: theme.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  centerSub: { color: theme.secondaryText, fontSize: 10, marginTop: 1 },
+  liveMinute: { color: theme.accent, fontSize: 11, fontWeight: '900', marginTop: 1, textAlign: 'center' },
   offline: { color: theme.secondaryText, fontSize: 8, marginTop: 2 },
   pinButton: {
     alignItems: 'center',
@@ -258,7 +270,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingBottom: 5,
   },
-  pinText: { color: theme.accent, fontSize: 9, fontWeight: '800' },
+  pinText: { color: theme.accent, fontSize: 10, fontWeight: '800' },
   dots: { flexDirection: 'row', gap: 7, justifyContent: 'center', paddingTop: 6 },
   dot: { backgroundColor: theme.secondaryText, borderRadius: 4, height: 7, opacity: 0.5, width: 7 },
   activeDot: { backgroundColor: theme.accent, opacity: 1, width: 19 },
