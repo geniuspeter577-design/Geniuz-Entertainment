@@ -432,7 +432,7 @@ export default function HomeScreen() {
           <FootballMatchesPanel isOnline={isOnline} onRetryConnection={() => void retryConnection()} />
         ) : null}
 
-        {activeHeroItems.length ? (
+        {selectedCategory !== 'Football' && activeHeroItems.length ? (
           <HomeHeroCarousel
             items={activeHeroItems}
             isLoading={catalogQuery.isLoading}
@@ -473,51 +473,7 @@ export default function HomeScreen() {
           ) : null
         ) : null}
 
-        {recent.length ? (
-          <>
-            <SectionHeader
-              title="Continue watching"
-              onSeeAll={() => router.push({
-                pathname: '/home-list',
-                params: { kind: 'continue-watching', title: 'Continue watching' },
-              })}
-            />
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.rowList}>
-              {recent.map((entry) => (
-                <Pressable
-                  key={entry.item.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Continue ${entry.item.title}`}
-                  onPress={() =>
-                    router.push({ pathname: '/watch/[id]', params: { id: entry.item.id } })
-                  }
-                  style={styles.continueCard}
-                >
-                  <Image
-                    source={
-                      entry.item.posterUrl
-                        ? { uri: entry.item.posterUrl }
-                        : require('../../assets/icon.png')
-                    }
-                    style={styles.continuePoster}
-                    resizeMode="cover"
-                  />
-                  <View style={styles.continueMeta}>
-                    <Text style={styles.continueTitle} numberOfLines={1}>{entry.item.title}</Text>
-                    <Text style={styles.continueCaption}>
-                      {formatRuntime(entry.item)} • {entry.progress}%
-                    </Text>
-                    <View style={styles.continueTrack}>
-                      <View style={[styles.continueFill, { width: `${entry.progress}%` }]} />
-                    </View>
-                  </View>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </>
-        ) : null}
-
-        {publishedItems.length ? (
+        {selectedCategory !== 'Football' && publishedItems.length ? (
           categoryRows.map(({ key, title, items, isLoading, emptyMessage, listKind, listValue }) => (
             <ContentRail
               key={key}
