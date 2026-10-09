@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { PLAYER_SPEED_OPTIONS } from '../utils/playerControls';
+import { normalizeFootballPinCorner, type FootballPinCorner } from '../utils/footballPin';
 
 const AUTOPLAY_TRAILERS_KEY = 'geniuz:autoplay-trailers';
 const SETTINGS_KEY = '@geniuz/settings/v1';
@@ -14,6 +15,7 @@ export type UserAppSettings = {
   wifiOnlyDownloads: boolean;
   watchPreference: WatchPreference;
   subtitleLanguage: string | null;
+  footballPinCorner: FootballPinCorner | null;
 };
 
 const DEFAULT_USER_SETTINGS: UserAppSettings = {
@@ -22,6 +24,7 @@ const DEFAULT_USER_SETTINGS: UserAppSettings = {
   wifiOnlyDownloads: false,
   watchPreference: 'streaming',
   subtitleLanguage: null,
+  footballPinCorner: null,
 };
 
 function getSettingsKey(userId: string) {
@@ -59,6 +62,7 @@ export function parseUserAppSettings(value: string | null): UserAppSettings {
       typeof parsed.subtitleLanguage === 'string' && parsed.subtitleLanguage.trim().length <= 64
         ? parsed.subtitleLanguage.trim() || null
         : DEFAULT_USER_SETTINGS.subtitleLanguage,
+    footballPinCorner: normalizeFootballPinCorner(parsed.footballPinCorner),
   };
 }
 
