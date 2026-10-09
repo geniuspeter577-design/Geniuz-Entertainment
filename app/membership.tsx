@@ -70,14 +70,14 @@ export default function MembershipScreen() {
       const checkoutUrl = new URL(checkout.authorizationUrl);
       console.log("Checkout URL diagnostic:", { protocol: checkoutUrl.protocol, hostname: checkoutUrl.hostname });
       const isPaystackUrl =
-        checkoutUrl.hostname === 'paystack.com' ||
+        checkoutUrl.hostname === 'paystack.com' || checkoutUrl.hostname === 'flutterwave.com' || checkoutUrl.hostname.endsWith('.flutterwave.com') ||
         checkoutUrl.hostname.endsWith('.paystack.com');
       const isFlutterwaveUrl =
         checkoutUrl.hostname === 'flutterwave.com' ||
         checkoutUrl.hostname.endsWith('.flutterwave.com');
 
-      if (checkoutUrl.protocol !== 'https:' || (!isPaystackUrl && !isFlutterwaveUrl && !checkoutUrl.hostname.endsWith('.flutterwave.com.ng'))) {
-        throw new Error('The secure payment link is invalid. Please retry.');
+      if (checkoutUrl.protocol !== 'https:' || (!isPaystackUrl && !isFlutterwaveUrl && !checkoutUrl.hostname.endsWith('.flutterwave.com.ng') && !checkoutUrl.hostname.endsWith('.dev-flutterwave.com'))) {
+        throw new Error('Invalid payment link: ' + checkoutUrl.protocol + '//' + checkoutUrl.hostname);
       }
       const paymentUrl = checkoutUrl.toString();
       const browserResult = await WebBrowser.openBrowserAsync(paymentUrl);

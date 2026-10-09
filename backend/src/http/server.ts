@@ -350,6 +350,13 @@ async function handleRequest(
     throw new HttpError(429, 'RATE_LIMITED', 'Too many requests. Please try again shortly.');
   }
 
+  if (pathname === '/payment-complete') {
+    const page = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Payment received</title></head><body style="background:#0E1014;color:#fff;font-family:sans-serif;text-align:center;padding:48px 24px"><h2 style="color:#72F06A">Payment received</h2><p>Go back to the Geniuz+ app. Your Member status updates after the payment is confirmed.</p></body></html>';
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'X-Content-Type-Options': 'nosniff' });
+    response.end(page);
+    return;
+  }
+
   if (pathname === '/health') {
     if (request.method !== 'GET') {
       throw new HttpError(405, 'METHOD_NOT_ALLOWED', 'This method is not allowed.');
