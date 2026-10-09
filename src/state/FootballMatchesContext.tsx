@@ -201,6 +201,10 @@ export function FootballMatchesProvider({ children }: React.PropsWithChildren) {
   }, [selectedDate]);
   const pinnedMatch = pinned
     ? entries[pinned.date]?.matches.find((match) => match.id === pinned.matchId)
+      ?? upcoming.matches.find((match) => match.id === pinned.matchId)
+      ?? Object.values(entries)
+        .flatMap((entry) => entry.matches)
+        .find((match) => match.id === pinned.matchId)
     : undefined;
 
   const value = useMemo<FootballContextValue>(() => ({
