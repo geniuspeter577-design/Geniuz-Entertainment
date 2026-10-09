@@ -219,7 +219,7 @@ test('transfer panel explains Member access and routes visitors to sign-in or th
   assert.match(memberPage, /loadMemberPlan|useMembership/);
   assert.match(memberPage, /Sign in to continue/);
   assert.match(memberPage, /createMemberCheckout/);
-  assert.match(memberPage, /Payment pending/);
+  assert.match(memberPage, /Continue payment/);
   assert.match(memberPage, /You are a Member until/);
   assert.match(memberPage, /Post REELS and Earn in Dollars/);
   assert.doesNotMatch(memberPage, /NGN\s+900/);

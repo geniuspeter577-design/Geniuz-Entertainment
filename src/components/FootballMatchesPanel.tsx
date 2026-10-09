@@ -101,9 +101,9 @@ function GoalOverlay({ match, goal }: { match: FootballMatch; goal?: GoalBallCou
     }
     const toScorer = setTimeout(
       () => setCelebration((current) => (current ? { ...current, phase: 'scorer' } : current)),
-      3500,
+      5000,
     );
-    const done = setTimeout(() => setCelebration(null), 7000);
+    const done = setTimeout(() => setCelebration(null), 10000);
     return () => {
       clearTimeout(toScorer);
       clearTimeout(done);

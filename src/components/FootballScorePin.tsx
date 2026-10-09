@@ -20,7 +20,7 @@ import { getFootballPinPosition, snapFootballPinCorner, type FootballPinCorner, 
 import { FootballGoalBalls } from './FootballGoalBalls';
 import { CelebrationLogo, LiveClock, TeamBadge, goalMinuteLabel, type Celebration } from './FootballHomeCard';
 
-const PIN_SIZE = { width: 252, height: 104 };
+const PIN_SIZE = { width: 170, height: 74 };
 const DEFAULT_CORNER: FootballPinCorner = 'top-right';
 
 export function FootballScorePin() {
@@ -134,9 +134,9 @@ export function FootballScorePin() {
     }
     const toScorer = setTimeout(
       () => setCelebration((current) => (current ? { ...current, phase: 'scorer' } : current)),
-      3500,
+      5000,
     );
-    const done = setTimeout(() => setCelebration(null), 7000);
+    const done = setTimeout(() => setCelebration(null), 10000);
     return () => {
       clearTimeout(toScorer);
       clearTimeout(done);
@@ -162,14 +162,8 @@ export function FootballScorePin() {
         style={[styles.pin, { width: PIN_SIZE.width, height: PIN_SIZE.height, transform: position.getTranslateTransform() }]}
       >
         <View style={styles.topLine}>
-          <Text numberOfLines={1} style={styles.competition}>{match.competition.name}</Text>
-          {match.status === 'live' ? (
-            <LiveClock key={`${match.id}-${match.minute ?? 'x'}`} match={match} />
-          ) : (
-            <Text style={styles.minute}>{match.status === 'finished' ? 'FT' : match.status.toLocaleUpperCase()}</Text>
-          )}
           <Pressable accessibilityRole="button" accessibilityLabel="Close pinned score" hitSlop={7} onPress={football.unpinMatch} style={styles.close}>
-            <Ionicons name="close" size={16} color={theme.text} />
+            <Ionicons name="close" size={11} color={theme.text} />
           </Pressable>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${match.competition.name} in Football`} onPress={openFootball} style={styles.matchRow}>
@@ -180,7 +174,14 @@ export function FootballScorePin() {
             </View>
             <Text numberOfLines={1} style={styles.teamName}>{match.homeTeam.name}</Text>
           </View>
-          <Text style={styles.score}>{match.homeScore ?? '–'}–{match.awayScore ?? '–'}</Text>
+          <View style={styles.scoreColumn}>
+            <Text style={styles.score}>{match.homeScore ?? '–'}–{match.awayScore ?? '–'}</Text>
+            {match.status === 'live' ? (
+              <LiveClock key={`${match.id}-${match.minute ?? 'x'}`} match={match} compact />
+            ) : (
+              <Text style={styles.minute}>{match.status === 'finished' ? 'FT' : match.status.toLocaleUpperCase()}</Text>
+            )}
+          </View>
           <View style={styles.team}>
             <View style={styles.badgeWrap}>
               <TeamBadge compact logoUrl={match.awayTeam.logoUrl} name={match.awayTeam.name} />
@@ -194,7 +195,7 @@ export function FootballScorePin() {
             {celebrating.phase === 'goal' ? (
               <View style={styles.celebrationRow}>
                 <View style={styles.celebrationLogoWrap}>
-                  <CelebrationLogo logoUrl={scoringTeam.logoUrl} name={scoringTeam.name} />
+                  <CelebrationLogo logoUrl={scoringTeam.logoUrl} name={scoringTeam.name} size={24} />
                   <FootballGoalBalls
                     count={celebrating.count}
                     token={celebrating.token}
@@ -220,38 +221,39 @@ const styles = StyleSheet.create({
   pin: {
     backgroundColor: theme.surface,
     borderColor: theme.accent,
-    borderRadius: 12,
+    borderRadius: 8,
     borderWidth: 1,
     elevation: 20,
     left: 0,
-    paddingHorizontal: 10,
-    paddingTop: 8,
+    paddingHorizontal: 6,
+    paddingTop: 4,
     position: 'absolute',
     shadowColor: theme.shadow,
     shadowOpacity: 0.36,
     shadowRadius: 12,
     zIndex: 9999,
   },
-  topLine: { alignItems: 'center', flexDirection: 'row', gap: 5, height: 20 },
-  competition: { color: theme.text, flex: 1, fontSize: 10, fontWeight: '800' },
+  topLine: { alignItems: 'center', flexDirection: 'row', gap: 3, height: 16, justifyContent: 'flex-end' },
+  scoreColumn: { alignItems: 'center', justifyContent: 'center' },
+  competition: { color: theme.text, flex: 1, fontSize: 7, fontWeight: '800' },
   minute: { color: theme.accent, fontSize: 10, fontWeight: '900' },
-  close: { alignItems: 'center', height: 24, justifyContent: 'center', width: 24 },
+  close: { alignItems: 'center', height: 18, justifyContent: 'center', width: 18 },
   matchRow: { alignItems: 'center', flex: 1, flexDirection: 'row', justifyContent: 'space-around' },
-  team: { alignItems: 'center', flex: 1, gap: 2, minWidth: 0 },
-  badgeWrap: { alignItems: 'center', height: 36, justifyContent: 'center', position: 'relative', width: 48 },
+  team: { alignItems: 'center', flex: 1, gap: 1, minWidth: 0 },
+  badgeWrap: { alignItems: 'center', height: 26, justifyContent: 'center', position: 'relative', width: 32 },
   teamName: { color: theme.text, fontSize: 9, fontWeight: '700', maxWidth: '100%' },
   celebration: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
     backgroundColor: theme.surface,
-    borderRadius: 12,
+    borderRadius: 8,
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
-  celebrationRow: { alignItems: 'center', flexDirection: 'row', gap: 10 },
-  celebrationLogoWrap: { alignItems: 'center', height: 50, justifyContent: 'center', width: 60 },
-  goalText: { color: theme.accent, fontSize: 24, fontWeight: '900' },
-  scorerTeam: { color: theme.text, fontSize: 15, fontWeight: '800', textAlign: 'center' },
-  scorerMinute: { color: theme.accent, fontSize: 18, fontWeight: '900', marginTop: 4 },
-  score: { color: theme.text, fontSize: 18, fontWeight: '900', fontVariant: ['tabular-nums'], minWidth: 54, textAlign: 'center' },
+  celebrationRow: { alignItems: 'center', flexDirection: 'row', gap: 6 },
+  celebrationLogoWrap: { alignItems: 'center', height: 30, justifyContent: 'center', width: 34 },
+  goalText: { color: theme.accent, fontSize: 13, fontWeight: '900' },
+  scorerTeam: { color: theme.text, fontSize: 9, fontWeight: '800', textAlign: 'center' },
+  scorerMinute: { color: theme.accent, fontSize: 10, fontWeight: '900', marginTop: 2 },
+  score: { color: theme.text, fontSize: 16, fontWeight: '900', fontVariant: ['tabular-nums'], minWidth: 44, textAlign: 'center' },
 });

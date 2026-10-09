@@ -62,7 +62,7 @@ export default function ProfileScreen() {
   const hasMemberAccess = membership.status?.status === 'active' || membership.status?.status === 'grace';
   const memberCardSubtitle = membership.isLoading || auth.isLoading
     ? 'Loading membership status…'
-    : membership.status?.pendingPayment
+    : membership.status?.pendingPayment && !hasMemberAccess
       ? 'Payment pending'
       : membership.status?.status === 'active'
         ? `Member until ${formatMembershipDate(membership.status.currentPeriodEnd)}`

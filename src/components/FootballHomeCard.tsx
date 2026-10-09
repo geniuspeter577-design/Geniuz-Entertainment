@@ -84,7 +84,7 @@ export function goalMinuteLabel(match: FootballMatch, nowMs: number): string {
 
 // Live clock mm:ss. Remounted (via key) whenever the provider minute changes,
 // so the seconds restart from the new minute. Seconds are counted here (approximate).
-export function LiveClock({ match }: { match: FootballMatch }) {
+export function LiveClock({ match, compact = false }: { match: FootballMatch; compact?: boolean }) {
   const [startedAt] = useState(() => Date.now());
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -98,7 +98,7 @@ export function LiveClock({ match }: { match: FootballMatch }) {
   } else {
     label = estimateClock(match.startsAt, nowMs);
   }
-  return <Text style={styles.liveMinute}>{label}</Text>;
+  return <Text style={compact ? [styles.liveMinute, { fontSize: 8, marginTop: 0 }] : styles.liveMinute}>{label}</Text>;
 }
 
 export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpenFootball, onPin }: Props) {
@@ -199,9 +199,9 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
     }
     const toScorer = setTimeout(
       () => setCelebration((current) => (current ? { ...current, phase: 'scorer' } : current)),
-      3500,
+      5000,
     );
-    const done = setTimeout(() => setCelebration(null), 7000);
+    const done = setTimeout(() => setCelebration(null), 10000);
     return () => {
       clearTimeout(toScorer);
       clearTimeout(done);
@@ -338,9 +338,9 @@ export function FootballHomeCard({ matches, date, goalSignals, isOffline, onOpen
   );
 }
 
-export function CelebrationLogo({ logoUrl, name }: { logoUrl?: string; name: string }) {
+export function CelebrationLogo({ logoUrl, name, size }: { logoUrl?: string; name: string; size?: number }) {
   return logoUrl ? (
-    <Image source={{ uri: logoUrl }} resizeMode="contain" style={styles.celebrationLogo} />
+    <Image source={{ uri: logoUrl }} resizeMode="contain" style={size ? { height: size, width: size } : styles.celebrationLogo} />
   ) : (
     <Text style={styles.celebrationInitial}>{name.slice(0, 1).toLocaleUpperCase()}</Text>
   );
@@ -375,7 +375,7 @@ const styles = StyleSheet.create({
   team: { alignItems: 'center', flex: 1 },
   badgeWrap: { alignItems: 'center', height: 26, justifyContent: 'center', width: 32 },
   badge: { alignItems: 'center', height: 26, justifyContent: 'center', width: 26 },
-  compactBadge: { backgroundColor: theme.background, borderRadius: 17, height: 34, width: 34 },
+  compactBadge: { backgroundColor: theme.background, borderRadius: 10, height: 20, width: 20 },
   badgeImage: { height: '100%', width: '100%' },
   badgeInitial: { color: theme.text, fontSize: 16, fontWeight: '900' },
   teamName: { color: theme.text, fontSize: 10, fontWeight: '600', marginTop: 2, textAlign: 'center' },
