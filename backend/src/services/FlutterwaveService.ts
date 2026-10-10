@@ -45,7 +45,7 @@ export class FlutterwaveService {
   ) {}
 
   get isTestModeConfigured() {
-    return Boolean(this.secretKey?.startsWith('FLWSECK_TEST-') && this.redirectUrl);
+    return Boolean((this.secretKey?.startsWith('FLWSECK_TEST-') || this.secretKey?.startsWith('FLWSECK-')) && this.redirectUrl);
   }
 
   async initializeTransaction(input: {
